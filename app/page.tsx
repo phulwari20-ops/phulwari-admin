@@ -45,7 +45,13 @@ import {
   Gift,
   Upload,
   Save,
-  FileText
+  FileText,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Lock,
+  LogOut,
+  Mail
 } from 'lucide-react'
 
 export default function AdminDashboardPage() {
@@ -223,6 +229,100 @@ export default function AdminDashboardPage() {
     category: 'Notice',
     target_audience: 'all'
   })
+
+  // Admin Login & Session State
+  const [adminUser, setAdminUser] = useState<any | null>(null)
+  const [adminAuthChecked, setAdminAuthChecked] = useState<boolean>(false)
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('')
+  const [adminPwInput, setAdminPwInput] = useState<string>('')
+  const [showAdminPw, setShowAdminPw] = useState<boolean>(false)
+  const [adminLoginError, setAdminLoginError] = useState<string>('')
+  const [adminUsersList, setAdminUsersList] = useState<any[]>([
+    { id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator' }
+  ])
+
+  // Add New Admin Modal State
+  const [isAddAdminOpen, setIsAddAdminOpen] = useState<boolean>(false)
+  const [newAdminForm, setNewAdminForm] = useState({ name: '', email: '', password: '' })
+  const [addAdminMsg, setAddAdminMsg] = useState<string>('')
+
+  // Check admin session on mount
+  useEffect(() => {
+    try {
+      const savedAdminsStr = localStorage.getItem('phulwari_admin_users')
+      if (savedAdminsStr) {
+        setAdminUsersList(JSON.parse(savedAdminsStr))
+      }
+
+      const sessionStr = localStorage.getItem('phulwari_admin_session')
+      if (sessionStr) {
+        setAdminUser(JSON.parse(sessionStr))
+      }
+    } catch (e) {}
+    setAdminAuthChecked(true)
+  }, [])
+
+  // Admin Login Handler
+  const handleAdminLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setAdminLoginError('')
+
+    const cleanEmail = adminEmailInput.trim().toLowerCase()
+    const cleanPw = adminPwInput.trim()
+
+    // Match master credentials OR any created admin in adminUsersList
+    const match = adminUsersList.find((adm: any) => 
+      adm.email?.trim().toLowerCase() === cleanEmail && adm.password === cleanPw
+    ) || (cleanEmail === 'phulwari20@gmail.com' && cleanPw === 'Phulwari@1295' ? {
+      id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator'
+    } : null)
+
+    if (match) {
+      setAdminUser(match)
+      try {
+        localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
+      } catch (err) {}
+    } else {
+      setAdminLoginError('Invalid Admin Email or Password. Please check your credentials.')
+    }
+  }
+
+  // Admin Logout Handler
+  const handleAdminLogout = () => {
+    setAdminUser(null)
+    try {
+      localStorage.removeItem('phulwari_admin_session')
+    } catch (e) {}
+  }
+
+  // Add New Admin Handler
+  const handleAddAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newAdminForm.email || !newAdminForm.password) return
+
+    const newAdminObj = {
+      id: `adm-${Date.now()}`,
+      name: newAdminForm.name.trim() || 'Co-Admin',
+      email: newAdminForm.email.trim().toLowerCase(),
+      password: newAdminForm.password.trim()
+    }
+
+    const updated = [newAdminObj, ...adminUsersList]
+    setAdminUsersList(updated)
+
+    try {
+      localStorage.setItem('phulwari_admin_users', JSON.stringify(updated))
+      const supabase = createClient()
+      await supabase.from('admin_users').upsert([newAdminObj])
+    } catch (err) {}
+
+    setAddAdminMsg(`✅ New Admin "${newAdminForm.email}" created successfully!`)
+    setNewAdminForm({ name: '', email: '', password: '' })
+    setTimeout(() => {
+      setAddAdminMsg('')
+      setIsAddAdminOpen(false)
+    }, 2000)
+  }
 
   useEffect(() => {
     loadAllAdminData()
@@ -800,6 +900,79 @@ export default function AdminDashboardPage() {
   const badgeStatus = isLight ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
   const tipBannerBg = isLight ? 'bg-blue-50/70 border-blue-200 text-blue-800' : 'bg-blue-950/60 border-blue-900 text-blue-200'
 
+  if (!adminUser && adminAuthChecked) {
+    return (
+      <div className={`min-h-screen ${bgMain} flex items-center justify-center p-4 transition-colors duration-200`}>
+        <div className={`max-w-md w-full ${bgCard} rounded-3xl p-8 space-y-6 shadow-2xl border relative`}>
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-blue-600/10 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-blue-500/20">
+              <ShieldCheck className="w-9 h-9" />
+            </div>
+            <h1 className={`text-xl font-extrabold ${textPrimary}`}>Phulwari Admin ERP</h1>
+            <p className={`text-xs ${textSecondary}`}>Sign in to manage student admissions, fee ledgers & gallery</p>
+          </div>
+
+          {adminLoginError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-2xl text-xs font-bold text-center">
+              {adminLoginError}
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLoginSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className={`font-bold ${textSecondary} block mb-1.5`}>Admin Email Address</label>
+              <div className="relative">
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. admin@phulwari.com"
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  className={`w-full border rounded-2xl pl-10 pr-4 py-3 font-semibold outline-none transition ${
+                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className={`font-bold ${textSecondary} block mb-1.5`}>Password</label>
+              <div className="relative">
+                <input
+                  type={showAdminPw ? 'text' : 'password'}
+                  required
+                  placeholder="••••••••"
+                  value={adminPwInput}
+                  onChange={(e) => setAdminPwInput(e.target.value)}
+                  className={`w-full border rounded-2xl pl-10 pr-10 py-3 font-mono font-bold outline-none transition ${
+                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPw(!showAdminPw)}
+                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  {showAdminPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/30 transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Sign In to Admin ERP</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`min-h-screen ${bgMain} font-sans flex flex-col md:flex-row transition-colors duration-200`}>
       
@@ -923,6 +1096,26 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className={`pt-3 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'} space-y-2`}>
+          <button
+            onClick={() => setIsAddAdminOpen(true)}
+            className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
+            title="Register a new Admin User"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+            {!isSidebarCollapsed && <span>Add New Admin</span>}
+          </button>
+
+          <button
+            onClick={handleAdminLogout}
+            className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+              isLight ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100' : 'bg-rose-950/40 border-rose-900 text-rose-400 hover:bg-rose-900/60'
+            }`}
+            title="Logout of Admin ERP"
+          >
+            <LogOut className="w-3.5 h-3.5 shrink-0" />
+            {!isSidebarCollapsed && <span>Logout ({adminUser?.email?.split('@')[0] || 'Admin'})</span>}
+          </button>
+
           <button
             onClick={() => setIsSidebarCollapsed(prev => !prev)}
             className={`hidden md:flex w-full items-center justify-center p-2 rounded-xl border text-xs font-bold transition cursor-pointer ${
@@ -2722,6 +2915,81 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD NEW ADMIN USER */}
+      {isAddAdminOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
+                <ShieldCheck className="w-5 h-5 text-blue-500" /> Register Co-Admin User
+              </h3>
+              <button onClick={() => setIsAddAdminOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addAdminMsg && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-bold text-center">
+                {addAdminMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleAddAdminSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className={`font-bold ${textSecondary}`}>Admin Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Co-Administrator"
+                  value={newAdminForm.name}
+                  onChange={(e) => setNewAdminForm({ ...newAdminForm, name: e.target.value })}
+                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className={`font-bold ${textSecondary}`}>Admin Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="admin2@phulwari.com"
+                  value={newAdminForm.email}
+                  onChange={(e) => setNewAdminForm({ ...newAdminForm, email: e.target.value })}
+                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className={`font-bold ${textSecondary}`}>Assign Admin Password</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. SecurePass123"
+                  value={newAdminForm.password}
+                  onChange={(e) => setNewAdminForm({ ...newAdminForm, password: e.target.value })}
+                  className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-blue-700' : 'bg-slate-950 border-slate-800 text-blue-400'
+                  }`}
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button type="button" onClick={() => setIsAddAdminOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
+                  Cancel
+                </button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 cursor-pointer">
+                  Save & Authorize Admin
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
