@@ -1307,13 +1307,13 @@ export default function AdminDashboardPage() {
                 <select
                   value={selectedClass}
                   onChange={(e) => setSelectedClass(e.target.value)}
-                  className={`text-xs px-3 py-2 rounded-xl border outline-none font-semibold ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+                  className={`text-xs px-3 py-2 rounded-xl border outline-none font-semibold cursor-pointer max-h-48 overflow-y-auto ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-800 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                   }`}
                 >
-                  <option value="All">All Classes (Playgroup - Class 12)</option>
+                  <option value="All" className={isLight ? 'bg-white text-slate-900 py-1' : 'bg-slate-900 text-slate-100 py-1'}>All Classes (Playgroup - Class 12)</option>
                   {classOptions.map(cls => (
-                    <option key={cls} value={cls}>{cls}</option>
+                    <option key={cls} value={cls} className={isLight ? 'bg-white text-slate-900 py-1' : 'bg-slate-900 text-slate-100 py-1'}>{cls}</option>
                   ))}
                 </select>
 
@@ -1321,13 +1321,13 @@ export default function AdminDashboardPage() {
                 <select
                   value={selectedSection}
                   onChange={(e) => setSelectedSection(e.target.value)}
-                  className={`text-xs px-3 py-2 rounded-xl border outline-none font-semibold ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+                  className={`text-xs px-3 py-2 rounded-xl border outline-none font-semibold cursor-pointer max-h-48 overflow-y-auto ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-800 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                   }`}
                 >
-                  <option value="All">All Sections (A - E)</option>
+                  <option value="All" className={isLight ? 'bg-white text-slate-900 py-1' : 'bg-slate-900 text-slate-100 py-1'}>All Sections (A - E)</option>
                   {sectionOptions.map(sec => (
-                    <option key={sec} value={sec}>Section {sec}</option>
+                    <option key={sec} value={sec} className={isLight ? 'bg-white text-slate-900 py-1' : 'bg-slate-900 text-slate-100 py-1'}>Section {sec}</option>
                   ))}
                 </select>
               </div>
@@ -2637,12 +2637,14 @@ export default function AdminDashboardPage() {
                   <select
                     value={newStudentForm.class_name}
                     onChange={(e) => setNewStudentForm({ ...newStudentForm, class_name: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                    className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none cursor-pointer max-h-48 overflow-y-auto ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                     }`}
                   >
                     {classOptions.map(cls => (
-                      <option key={cls} value={cls}>{cls}</option>
+                      <option key={cls} value={cls} className={isLight ? 'bg-white text-slate-900 font-semibold py-1.5' : 'bg-slate-900 text-slate-100 font-semibold py-1.5'}>
+                        {cls}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -2652,12 +2654,14 @@ export default function AdminDashboardPage() {
                   <select
                     value={newStudentForm.section_name}
                     onChange={(e) => setNewStudentForm({ ...newStudentForm, section_name: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                    className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none cursor-pointer max-h-48 overflow-y-auto ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                     }`}
                   >
                     {sectionOptions.map(sec => (
-                      <option key={sec} value={sec}>Section {sec}</option>
+                      <option key={sec} value={sec} className={isLight ? 'bg-white text-slate-900 font-semibold py-1.5' : 'bg-slate-900 text-slate-100 font-semibold py-1.5'}>
+                        Section {sec}
+                      </option>
                     ))}
                   </select>
                 </div>
