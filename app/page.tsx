@@ -127,6 +127,10 @@ export default function AdminDashboardPage() {
     try {
       const supabase = createClient()
 
+      const timeoutPromise = new Promise((resolve) =>
+        setTimeout(() => resolve([{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }]), 1200)
+      )
+
       const [
         { data: stData },
         { data: btData },
@@ -134,13 +138,16 @@ export default function AdminDashboardPage() {
         { data: bkData },
         { data: anData },
         { data: attData }
-      ] = await Promise.all([
-        supabase.from('students').select('*, batches(*)').order('created_at', { ascending: false }),
-        supabase.from('batches').select('*').order('created_at', { ascending: false }),
-        supabase.from('fees').select('*, students(full_name, admission_id, class_name, section_name)').order('created_at', { ascending: false }),
-        supabase.from('bookings').select('*').order('created_at', { ascending: false }),
-        supabase.from('announcements').select('*').order('created_at', { ascending: false }),
-        supabase.from('attendance').select('*, students(full_name, admission_id, class_name, section_name)').order('date', { ascending: false })
+      ]: any = await Promise.race([
+        Promise.all([
+          supabase.from('students').select('*, batches(*)').order('created_at', { ascending: false }),
+          supabase.from('batches').select('*').order('created_at', { ascending: false }),
+          supabase.from('fees').select('*, students(full_name, admission_id, class_name, section_name)').order('created_at', { ascending: false }),
+          supabase.from('bookings').select('*').order('created_at', { ascending: false }),
+          supabase.from('announcements').select('*').order('created_at', { ascending: false }),
+          supabase.from('attendance').select('*, students(full_name, admission_id, class_name, section_name)').order('date', { ascending: false })
+        ]),
+        timeoutPromise
       ])
 
       if (stData && stData.length > 0) {
