@@ -552,7 +552,7 @@ export default function AdminDashboardPage() {
       localStorage.setItem('phulwari_admin_students', JSON.stringify(updatedList))
     } catch (err) {}
 
-    // 2. Compatible Supabase Cloud Database Insert
+    // 2. Compatible Supabase Cloud Database Insert with explicit console logs
     try {
       const dbPayload = {
         id: studentUuid,
@@ -565,14 +565,35 @@ export default function AdminDashboardPage() {
         address: newStudentForm.address.trim(),
         status: 'active'
       }
-      const supabase = createClient()
-      const { error } = await supabase.from('students').insert([dbPayload])
-      if (error) {
-        console.warn('⚠️ Supabase Student Insert Warning:', error.message)
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ftnbzukwjvgxdnkrvuer.supabase.co'
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_GFV9g9M3vPdFlOtFZ_dnEA_bR2Cm0HV'
+
+      console.log('📡 [SUPABASE STUDENT INSERT REQUEST]: POST ' + supabaseUrl + '/rest/v1/students')
+      console.log('📦 [SUPABASE STUDENT INSERT PAYLOAD]:', dbPayload)
+
+      const res = await fetch(`${supabaseUrl}/rest/v1/students`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify([dbPayload])
+      })
+
+      console.log(`📡 [SUPABASE STUDENT INSERT RESPONSE STATUS]: ${res.status}`)
+      if (res.ok) {
+        const responseData = await res.json()
+        console.log('✅ [SUPABASE STUDENT INSERT SUCCESS BODY]:', responseData)
       } else {
-        console.log('✅ New student successfully inserted to Supabase Cloud DB!')
+        const errorData = await res.text()
+        console.error('❌ [SUPABASE STUDENT INSERT FAILED]:', errorData)
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('❌ [SUPABASE STUDENT INSERT EXCEPTION]:', err)
+    }
 
     setIsAddStudentOpen(false)
   }
