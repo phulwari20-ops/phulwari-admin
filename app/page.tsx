@@ -367,10 +367,14 @@ export default function AdminDashboardPage() {
   }, [activeTab])
 
   // Real-Time API Fetcher for Admin Gallery
+  // Real-Time API Fetcher for Admin Gallery
   const fetchAdminGallery = async () => {
-    console.log('📡 [ADMIN GALLERY API REQUEST]: GET http://localhost:3000/api/gallery (Fetching Live Dynamic Gallery Photos)...')
+    const isProd = typeof window !== 'undefined' && (window.location.hostname.includes('phulwari.co.in') || window.location.hostname.includes('vercel.app'))
+    const apiUrl = isProd ? 'https://phulwari.co.in/api/gallery' : 'http://localhost:3000/api/gallery'
+
+    console.log(`📡 [ADMIN GALLERY API REQUEST]: GET ${apiUrl} (Fetching Live Dynamic Gallery Photos)...`)
     try {
-      const res = await fetch('http://localhost:3000/api/gallery', { cache: 'no-store' })
+      const res = await fetch(apiUrl, { cache: 'no-store' })
       if (res.ok) {
         const json = await res.json()
         if (json.data && json.data.length > 0) {
@@ -389,7 +393,7 @@ export default function AdminDashboardPage() {
         }
       }
     } catch (e) {
-      console.warn('⚠️ [ADMIN GALLERY API FALLBACK]: Public API offline, fetching directly from Supabase REST API...')
+      console.warn('⚠️ [ADMIN GALLERY API FALLBACK]: Public API offline or blocked by CORS, fetching directly from Supabase REST API...')
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ftnbzukwjvgxdnkrvuer.supabase.co'
@@ -516,8 +520,16 @@ export default function AdminDashboardPage() {
   // REGISTER NEW STUDENT (NEVER DISAPPEARS)
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const generateUuid = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+      return 'f' + Date.now().toString(16).padStart(12, '0') + '-4000-8000-000000000000'
+    }
+
+    const studentUuid = generateUuid()
+
     const newStudentObj = {
-      id: `st-${Date.now()}`,
+      id: studentUuid,
       admission_id: newStudentForm.admission_id.trim(),
       password: newStudentForm.password.trim(),
       full_name: newStudentForm.full_name.trim(),
@@ -540,10 +552,26 @@ export default function AdminDashboardPage() {
       localStorage.setItem('phulwari_admin_students', JSON.stringify(updatedList))
     } catch (err) {}
 
-    // 2. Background Safe Supabase Insert (Clean Payload Without Relational Joins)
+    // 2. Compatible Supabase Cloud Database Insert
     try {
+      const dbPayload = {
+        id: studentUuid,
+        admission_id: newStudentForm.admission_id.trim(),
+        password: newStudentForm.password.trim(),
+        full_name: newStudentForm.full_name.trim(),
+        parent_name: newStudentForm.parent_name.trim(),
+        parent_phone: newStudentForm.parent_phone.trim(),
+        parent_email: newStudentForm.parent_email.trim(),
+        address: newStudentForm.address.trim(),
+        status: 'active'
+      }
       const supabase = createClient()
-      await supabase.from('students').insert([newStudentObj])
+      const { error } = await supabase.from('students').insert([dbPayload])
+      if (error) {
+        console.warn('⚠️ Supabase Student Insert Warning:', error.message)
+      } else {
+        console.log('✅ New student successfully inserted to Supabase Cloud DB!')
+      }
     } catch (err) {}
 
     setIsAddStudentOpen(false)
