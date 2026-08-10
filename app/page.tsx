@@ -472,9 +472,14 @@ export default function AdminDashboardPage() {
       if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
     } catch (e) {}
 
-    // Initial student state from localStorage or default
-    if (localStudents.length > 0) setStudents(localStudents)
-    else setStudents(defaultInitialStudents)
+    // Combine defaultInitialStudents with localStudents to ensure all 3 default students (Aarav, Ananya, Rohan) are always present
+    const combinedLocal = [...defaultInitialStudents]
+    localStudents.forEach(ls => {
+      if (!combinedLocal.some(s => s.id === ls.id || s.admission_id === ls.admission_id)) {
+        combinedLocal.push(ls)
+      }
+    })
+    setStudents(combinedLocal)
 
     if (localGallery.length > 0) setGalleryImages(localGallery)
     if (localFees.length > 0) setFees(localFees)
@@ -494,7 +499,7 @@ export default function AdminDashboardPage() {
       const { data: dbStudents } = await supabase.from('students').select('*')
       if (dbStudents && dbStudents.length > 0) {
         const merged = [...dbStudents]
-        localStudents.forEach(ls => {
+        combinedLocal.forEach(ls => {
           if (!merged.some(ds => ds.id === ls.id || ds.admission_id === ls.admission_id)) {
             merged.push(ls)
           }
