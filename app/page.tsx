@@ -323,11 +323,22 @@ export default function AdminDashboardPage() {
     }, 2000)
   }
 
-  // Delete Admin Handler
+  // Delete Admin Handler (Master Admin Only Guard)
   const handleDeleteAdmin = async (adminId: string) => {
+    const isCurrentSessionMaster = adminUser?.email?.toLowerCase() === 'phulwari20@gmail.com' || adminUser?.id === 'master-adm'
+    if (!isCurrentSessionMaster) {
+      alert('🔒 Access Denied: Only the Main Master Admin (phulwari20@gmail.com) is authorized to delete admin accounts.')
+      return
+    }
+
     const target = adminUsersList.find(a => a.id === adminId)
     if (target?.email?.toLowerCase() === 'phulwari20@gmail.com') {
       alert('Master Administrator account cannot be deleted.')
+      return
+    }
+
+    if (adminUser?.email?.toLowerCase() === target?.email?.toLowerCase()) {
+      alert('You cannot delete your own active logged-in admin account.')
       return
     }
 
@@ -3037,6 +3048,7 @@ export default function AdminDashboardPage() {
                 {adminUsersList.map((adm) => {
                   const isMaster = adm.email?.toLowerCase() === 'phulwari20@gmail.com'
                   const isCurrentSession = adminUser?.email?.toLowerCase() === adm.email?.toLowerCase()
+                  const isCurrentSessionMaster = adminUser?.email?.toLowerCase() === 'phulwari20@gmail.com' || adminUser?.id === 'master-adm'
 
                   return (
                     <div
@@ -3063,7 +3075,7 @@ export default function AdminDashboardPage() {
                           {isMaster ? 'Master Admin' : 'Co-Admin'}
                         </span>
 
-                        {!isMaster && (
+                        {!isMaster && isCurrentSessionMaster && (
                           <button
                             onClick={() => handleDeleteAdmin(adm.id)}
                             className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
