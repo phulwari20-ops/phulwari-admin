@@ -721,19 +721,21 @@ export default function AdminDashboardPage() {
 
     const matchesSearch = !q || sName.includes(q) || sId.includes(q) || pName.includes(q)
 
-    // Normalize class string comparison (e.g. "Nursery", "Class 10", "10")
-    const sClassNorm = (s.class_name || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    // Normalize class string comparison (e.g. "Nursery", "Class 10", "10") with fail-safe fallback
+    const rawClass = (s.class_name || 'Nursery').trim()
+    const sClassNorm = rawClass.toLowerCase().replace(/[^a-z0-9]/g, '')
     const targetClassNorm = selectedClass.toLowerCase().replace(/[^a-z0-9]/g, '')
     const matchesClass = selectedClass === 'All' || 
                          sClassNorm === targetClassNorm || 
                          (sClassNorm.length > 0 && targetClassNorm.length > 0 && (sClassNorm.includes(targetClassNorm) || targetClassNorm.includes(sClassNorm)))
 
-    // Normalize section string comparison (e.g. "Section A", "A")
-    const sSecNorm = (s.section_name || '').toLowerCase().replace('section', '').trim()
-    const targetSecNorm = selectedSection.toLowerCase().replace('section', '').trim()
+    // Normalize section string comparison (e.g. "Section A", "A") with fail-safe fallback
+    const rawSection = (s.section_name || 'A').trim()
+    const sSecNorm = rawSection.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const targetSecNorm = selectedSection.toLowerCase().replace(/[^a-z0-9]/g, '')
     const matchesSection = selectedSection === 'All' || 
                            sSecNorm === targetSecNorm || 
-                           (sSecNorm.length > 0 && targetSecNorm.length > 0 && sSecNorm.endsWith(targetSecNorm))
+                           (sSecNorm.length > 0 && targetSecNorm.length > 0 && (sSecNorm.includes(targetSecNorm) || targetSecNorm.includes(sSecNorm)))
 
     return matchesSearch && matchesClass && matchesSection
   })
