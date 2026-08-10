@@ -320,8 +320,28 @@ export default function AdminDashboardPage() {
     setNewAdminForm({ name: '', email: '', password: '' })
     setTimeout(() => {
       setAddAdminMsg('')
-      setIsAddAdminOpen(false)
     }, 2000)
+  }
+
+  // Delete Admin Handler
+  const handleDeleteAdmin = async (adminId: string) => {
+    const target = adminUsersList.find(a => a.id === adminId)
+    if (target?.email?.toLowerCase() === 'phulwari20@gmail.com') {
+      alert('Master Administrator account cannot be deleted.')
+      return
+    }
+
+    const updated = adminUsersList.filter(a => a.id !== adminId)
+    setAdminUsersList(updated)
+
+    try {
+      localStorage.setItem('phulwari_admin_users', JSON.stringify(updated))
+      const supabase = createClient()
+      await supabase.from('admin_users').delete().eq('id', adminId)
+    } catch (err) {}
+
+    setAddAdminMsg(`✅ Admin account deleted successfully!`)
+    setTimeout(() => setAddAdminMsg(''), 2500)
   }
 
   useEffect(() => {
@@ -1102,7 +1122,7 @@ export default function AdminDashboardPage() {
             title="Register a new Admin User"
           >
             <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            {!isSidebarCollapsed && <span>Add New Admin</span>}
+            {!isSidebarCollapsed && <span>Manage Admin Users</span>}
           </button>
 
           <button
@@ -1168,6 +1188,21 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Active Logged-in Admin Identity Profile Card */}
+            {adminUser && (
+              <div className={`px-3 py-1.5 rounded-2xl border flex items-center gap-2 text-xs font-semibold shadow-sm shrink-0 ${
+                isLight ? 'bg-blue-50/80 border-blue-200 text-blue-900' : 'bg-slate-900 border-slate-800 text-blue-300'
+              }`}>
+                <div className="w-7 h-7 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+                  {adminUser.name?.charAt(0) || 'A'}
+                </div>
+                <div className="text-left leading-tight hidden sm:block">
+                  <p className="font-bold truncate max-w-[130px]">{adminUser.name || 'Admin'}</p>
+                  <p className="text-[10px] text-blue-500 font-mono truncate max-w-[130px]">{adminUser.email}</p>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'students' && (
               <button
                 onClick={() => {
@@ -2919,13 +2954,13 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* MODAL: ADD NEW ADMIN USER */}
+      {/* MODAL: MANAGE ADMIN USERS (CREATE & DELETE ADMNIS) */}
       {isAddAdminOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative`}>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                <ShieldCheck className="w-5 h-5 text-blue-500" /> Register Co-Admin User
+                <ShieldCheck className="w-5 h-5 text-blue-500" /> Admin User Management & Access Control
               </h3>
               <button onClick={() => setIsAddAdminOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
@@ -2938,58 +2973,117 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            <form onSubmit={handleAddAdminSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Admin Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Co-Administrator"
-                  value={newAdminForm.name}
-                  onChange={(e) => setNewAdminForm({ ...newAdminForm, name: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                  }`}
-                />
-              </div>
+            {/* Create New Admin Form */}
+            <div className={`p-4 rounded-2xl border ${bgSubCard} space-y-3`}>
+              <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Create New Admin Account</h4>
+              <form onSubmit={handleAddAdminSubmit} className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Admin Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Co-Administrator"
+                      value={newAdminForm.name}
+                      onChange={(e) => setNewAdminForm({ ...newAdminForm, name: e.target.value })}
+                      className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                      }`}
+                    />
+                  </div>
 
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Admin Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="admin2@phulwari.com"
-                  value={newAdminForm.email}
-                  onChange={(e) => setNewAdminForm({ ...newAdminForm, email: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                  }`}
-                />
-              </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Admin Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="admin2@phulwari.com"
+                      value={newAdminForm.email}
+                      onChange={(e) => setNewAdminForm({ ...newAdminForm, email: e.target.value })}
+                      className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Assign Admin Password</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. SecurePass123"
-                  value={newAdminForm.password}
-                  onChange={(e) => setNewAdminForm({ ...newAdminForm, password: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-blue-700' : 'bg-slate-950 border-slate-800 text-blue-400'
-                  }`}
-                />
-              </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Assign Password</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. SecurePass123"
+                    value={newAdminForm.password}
+                    onChange={(e) => setNewAdminForm({ ...newAdminForm, password: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
+                      isLight ? 'bg-white border-slate-300 text-blue-700' : 'bg-slate-900 border-slate-800 text-blue-400'
+                    }`}
+                  />
+                </div>
 
-              <div className="pt-2 flex items-center justify-end space-x-3">
-                <button type="button" onClick={() => setIsAddAdminOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
-                  Cancel
-                </button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 cursor-pointer">
-                  Save & Authorize Admin
-                </button>
+                <div className="pt-1 flex items-center justify-end">
+                  <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 cursor-pointer">
+                    + Create & Authorize Admin
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* List of Existing Admins with Delete Button */}
+            <div className="space-y-3 pt-2">
+              <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Active Authorized Admin Accounts ({adminUsersList.length})</h4>
+
+              <div className="space-y-2">
+                {adminUsersList.map((adm) => {
+                  const isMaster = adm.email?.toLowerCase() === 'phulwari20@gmail.com'
+                  const isCurrentSession = adminUser?.email?.toLowerCase() === adm.email?.toLowerCase()
+
+                  return (
+                    <div
+                      key={adm.id || adm.email}
+                      className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${bgSubCard}`}
+                    >
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-9 h-9 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                          {adm.name?.charAt(0) || 'A'}
+                        </div>
+                        <div className="min-w-0 text-xs">
+                          <p className={`font-bold truncate ${textPrimary}`}>
+                            {adm.name || 'Admin User'}{' '}
+                            {isCurrentSession && <span className="text-[10px] text-blue-500 font-mono font-bold">(You)</span>}
+                          </p>
+                          <p className={`text-[11px] font-mono truncate ${textSecondary}`}>{adm.email}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${
+                          isMaster ? 'bg-purple-500/10 text-purple-600 border-purple-500/30' : 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                        }`}>
+                          {isMaster ? 'Master Admin' : 'Co-Admin'}
+                        </span>
+
+                        {!isMaster && (
+                          <button
+                            onClick={() => handleDeleteAdmin(adm.id)}
+                            className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                            title="Delete Admin Account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </form>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button onClick={() => setIsAddAdminOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs cursor-pointer">
+                Close Admin Manager
+              </button>
+            </div>
           </div>
         </div>
       )}
