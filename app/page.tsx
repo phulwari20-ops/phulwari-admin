@@ -1184,10 +1184,40 @@ export default function AdminDashboardPage() {
       try { localStorage.setItem('phulwari_announcements', JSON.stringify(updated)) } catch (e) {}
       return updated
     })
+
     try {
-      const supabase = createClient()
-      await supabase.from('announcements').insert([newNotice])
-    } catch (err) {}
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      
+      const dbNotice = {
+        id: newNotice.id,
+        title: newNotice.title,
+        content: newNotice.content,
+        category: newNotice.category,
+        target_audience: newNotice.target_audience,
+        date: newNotice.date
+      }
+      
+      const res = await fetch(`${supabaseUrl}/rest/v1/announcements`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify([dbNotice])
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error('❌ [NOTICE INSERT FAILED]:', JSON.stringify(errorData))
+      } else {
+        console.log('✅ [NOTICE INSERT SUCCESS]')
+      }
+    } catch (err) {
+      console.error('Notice catch error:', err)
+    }
 
     setIsAddNoticeOpen(false)
     setNoticeForm({ title: '', content: '', category: 'Notice', target_audience: 'all' })
