@@ -526,10 +526,15 @@ export default function AdminDashboardPage() {
       setStudents(normalized)
 
       // Fetch / Sync Teachers from DB or localStorage
-      const { data: dbTeachers } = await supabase.from('teachers').select('*').catch(() => ({ data: null }))
-      if (dbTeachers && dbTeachers.length > 0) {
-        setTeachers(dbTeachers)
-      } else {
+      try {
+        const { data: dbTeachers } = await supabase.from('teachers').select('*')
+        if (dbTeachers && dbTeachers.length > 0) {
+          setTeachers(dbTeachers)
+        } else {
+          const localT = localStorage.getItem('phulwari_teachers')
+          if (localT) setTeachers(JSON.parse(localT))
+        }
+      } catch (_) {
         const localT = localStorage.getItem('phulwari_teachers')
         if (localT) setTeachers(JSON.parse(localT))
       }
@@ -541,15 +546,24 @@ export default function AdminDashboardPage() {
         { id: 'an-103', title: 'Parent-Teacher Interaction Session', content: 'Quarterly review and activity progress meeting scheduled for Saturday. Detailed batch slots are available in ERP portal.', category: 'Notice', target_audience: 'all', date: '2026-08-08' }
       ]
 
-      const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).catch(() => ({ data: null }))
-      if (dbAnnouncements && dbAnnouncements.length > 0) {
-        setAnnouncements(dbAnnouncements)
-      } else {
+      try {
+        const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
+        if (dbAnnouncements && dbAnnouncements.length > 0) {
+          setAnnouncements(dbAnnouncements)
+        } else {
+          const localAnn = localStorage.getItem('phulwari_announcements')
+          if (localAnn) {
+            const parsed = JSON.parse(localAnn)
+            if (parsed && parsed.length > 0) setAnnouncements(parsed)
+            else setAnnouncements(defaultAnnouncementsList)
+          } else {
+            setAnnouncements(defaultAnnouncementsList)
+          }
+        }
+      } catch (_) {
         const localAnn = localStorage.getItem('phulwari_announcements')
         if (localAnn) {
-          const parsed = JSON.parse(localAnn)
-          if (parsed && parsed.length > 0) setAnnouncements(parsed)
-          else setAnnouncements(defaultAnnouncementsList)
+          try { setAnnouncements(JSON.parse(localAnn)) } catch (__) { setAnnouncements(defaultAnnouncementsList) }
         } else {
           setAnnouncements(defaultAnnouncementsList)
         }
@@ -833,10 +847,12 @@ export default function AdminDashboardPage() {
       try { localStorage.setItem('phulwari_announcements', JSON.stringify(updated)) } catch (e) {}
       return updated
     })
-    try {
-      const supabase = createClient()
-      supabase.from('announcements').insert([feeNotice]).catch(() => {})
-    } catch (e) {}
+    ;(async () => {
+      try {
+        const supabase = createClient()
+        await supabase.from('announcements').insert([feeNotice])
+      } catch (e) {}
+    })()
   }
 
   const fetchAdminGallery = async () => {
@@ -1122,9 +1138,9 @@ export default function AdminDashboardPage() {
     try {
       const supabase = createClient()
       if (editingTeacher) {
-        await supabase.from('teachers').update(newTeacher).eq('id', editingTeacher.id).catch(() => {})
+        await supabase.from('teachers').update(newTeacher).eq('id', editingTeacher.id)
       } else {
-        await supabase.from('teachers').insert([newTeacher]).catch(() => {})
+        await supabase.from('teachers').insert([newTeacher])
       }
     } catch (e) {}
 
@@ -1143,7 +1159,7 @@ export default function AdminDashboardPage() {
     })
     try {
       const supabase = createClient()
-      await supabase.from('teachers').delete().eq('id', teacherId).catch(() => {})
+      await supabase.from('teachers').delete().eq('id', teacherId)
     } catch (e) {}
   }
 
@@ -2923,7 +2939,7 @@ export default function AdminDashboardPage() {
                 <input
                   type="text"
                   required
-                  value={editingBatch.age_group}
+                  value={editingBatch.age_group || ''}
                   onChange={(e) => setEditingBatch({ ...editingBatch, age_group: e.target.value })}
                   className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
                     isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
@@ -2937,7 +2953,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     required
-                    value={editingBatch.start_time}
+                    value={editingBatch.start_time || ''}
                     onChange={(e) => setEditingBatch({ ...editingBatch, start_time: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
@@ -2950,7 +2966,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     required
-                    value={editingBatch.end_time}
+                    value={editingBatch.end_time || ''}
                     onChange={(e) => setEditingBatch({ ...editingBatch, end_time: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
@@ -2965,7 +2981,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     required
-                    value={editingBatch.days}
+                    value={editingBatch.days || ''}
                     onChange={(e) => setEditingBatch({ ...editingBatch, days: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
@@ -2978,7 +2994,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="number"
                     required
-                    value={editingBatch.capacity}
+                    value={editingBatch.capacity ?? ''}
                     onChange={(e) => setEditingBatch({ ...editingBatch, capacity: Number(e.target.value) })}
                     className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
