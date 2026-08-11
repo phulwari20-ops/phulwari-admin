@@ -440,187 +440,191 @@ export default function AdminDashboardPage() {
   const loadAllAdminData = async () => {
     setLoading(true)
 
-    let localStudents: any[] = []
-    let localBatches: any[] = []
-    let localFees: any[] = []
-
-    try {
-      const savedSt = localStorage.getItem('phulwari_admin_students')
-      if (savedSt) localStudents = JSON.parse(savedSt)
-
-      const savedBt = localStorage.getItem('phulwari_admin_batches')
-      if (savedBt) localBatches = JSON.parse(savedBt)
-
-      const savedFe = localStorage.getItem('phulwari_admin_fees')
-      if (savedFe) localFees = JSON.parse(savedFe)
-
-      const savedPkg = localStorage.getItem('phulwari_party_packages')
-      if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
-    } catch (e) {}
-
-    const combinedBatches = [...defaultInitialBatches]
-    localBatches.forEach(lb => {
-      if (!combinedBatches.some(b => b.id === lb.id || b.batch_name === lb.batch_name)) {
-        combinedBatches.push(lb)
-      }
-    })
-    setBatches(combinedBatches)
-
-    const combinedStudents = [...defaultInitialStudents]
-    localStudents.forEach(ls => {
-      if (!combinedStudents.some(s => s.id === ls.id || s.admission_id === ls.admission_id)) {
-        combinedStudents.push(ls)
-      }
-    })
-    setStudents(combinedStudents)
-
-    if (localFees.length > 0) {
-      setFees(localFees)
-    } else {
-      setFees([
-        { id: 'f1', student_id: 'st-001', batch_id: '11111111-1111-1111-1111-111111111111', title: 'Batch Fee (August 2026)', amount: 3500, discount: 500, net_amount: 3000, due_date: '2026-08-10', status: 'paid', payment_method: 'UPI / Online', receipt_no: 'REC-2026-0891', month: 'August 2026', students: { full_name: 'Aarav Sharma', admission_id: 'PH-2026-001' } },
-        { id: 'f2', student_id: 'st-002', batch_id: '22222222-2222-2222-2222-222222222222', title: 'Batch Renewal Fee', amount: 4999, discount: 0, net_amount: 4999, due_date: '2026-08-16', status: 'pending', payment_method: null, receipt_no: null, month: 'August 2026', students: { full_name: 'Ananya Verma', admission_id: 'PH-2026-002' } },
-        { id: 'f3', student_id: 'st-003', batch_id: '11111111-1111-1111-1111-111111111111', title: 'Batch Fee (August 2026)', amount: 3500, discount: 0, net_amount: 3500, due_date: '2026-08-14', status: 'pending', payment_method: null, receipt_no: null, month: 'August 2026', students: { full_name: 'Rohan Gupta', admission_id: 'PH-2026-003' } }
-      ])
-    }
-
-    // Instantly show UI (<50ms load)
-    setLoading(false)
-
-    // Try Supabase fetch in background
     try {
       const supabase = createClient()
-      const { data: dbBatches } = await supabase.from('batches').select('*')
-      let activeBatches = combinedBatches
+
+      // 1. Fetch Batches — DB ONLY, no localStorage fallback
+      const { data: dbBatches, error: batchError } = await supabase.from('batches').select('*')
+      if (batchError) {
+        console.error('❌ [BATCHES FETCH ERROR]:', batchError)
+      }
       if (dbBatches && dbBatches.length > 0) {
-        const mergedBatches = [...dbBatches]
-        combinedBatches.forEach(cb => {
-          if (!mergedBatches.some(b => b.id === cb.id || b.batch_name?.toLowerCase().trim() === cb.batch_name?.toLowerCase().trim())) {
-            mergedBatches.push(cb)
-          }
-        })
-        activeBatches = mergedBatches
-        setBatches(mergedBatches)
+        setBatches(dbBatches)
+        console.log(`✅ [BATCHES] Loaded ${dbBatches.length} batches from DB`)
+      } else {
+        setBatches([])
+        console.log('ℹ️ [BATCHES] No batches found in DB')
       }
+      const activeBatches = dbBatches || []
 
-      const { data: dbStudents } = await supabase.from('students').select('*')
-      let activeStudents = combinedStudents
+      // 2. Fetch Students — DB ONLY
+      const { data: dbStudents, error: studentError } = await supabase.from('students').select('*')
+      if (studentError) {
+        console.error('❌ [STUDENTS FETCH ERROR]:', studentError)
+      }
       if (dbStudents && dbStudents.length > 0) {
-        const mergedStudents = [...dbStudents]
-        combinedStudents.forEach(cs => {
-          if (!mergedStudents.some(s => s.id === cs.id || s.admission_id === cs.admission_id)) {
-            mergedStudents.push(cs)
+        // Normalize batch_name from batch_id for display
+        const normalized = dbStudents.map((st: any) => {
+          const matchedBt = activeBatches.find((b: any) => b.id === st.batch_id)
+          return {
+            ...st,
+            batch_name: matchedBt?.batch_name || st.batch_name || 'Unassigned'
           }
         })
-        activeStudents = mergedStudents
+        setStudents(normalized)
+        console.log(`✅ [STUDENTS] Loaded ${dbStudents.length} students from DB`)
+      } else {
+        setStudents([])
+        console.log('ℹ️ [STUDENTS] No students found in DB')
       }
 
-      const normalized = activeStudents.map((st: any) => {
-        const matchedBt = activeBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim())) || activeBatches[0]
-        return {
-          ...st,
-          batch_id: st.batch_id || matchedBt?.id || '11111111-1111-1111-1111-111111111111',
-          batch_name: st.batch_name || matchedBt?.batch_name || 'Mother & Toddler Program'
-        }
-      })
-      setStudents(normalized)
-
-      // Fetch / Sync Teachers from DB or localStorage
+      // 3. Fetch Fees — DB only (no join, fees table has no FK to students)
       try {
-        const { data: dbTeachers } = await supabase.from('teachers').select('*')
-        if (dbTeachers && dbTeachers.length > 0) {
-          setTeachers(dbTeachers)
-        } else {
-          const localT = localStorage.getItem('phulwari_teachers')
-          if (localT) setTeachers(JSON.parse(localT))
+        const { data: dbFees, error: feesError } = await supabase.from('fees').select('*')
+        if (feesError) {
+          console.error('❌ [FEES FETCH ERROR]:', feesError)
         }
-      } catch (_) {
+        if (dbFees && dbFees.length > 0) {
+          // Manually enrich fees with student info from already-fetched students
+          const enriched = dbFees.map((fee: any) => {
+            const matchedStudent = (dbStudents || []).find((s: any) => s.id === fee.student_id || s.admission_id === fee.admission_id)
+            return {
+              ...fee,
+              students: matchedStudent ? {
+                full_name: matchedStudent.full_name,
+                admission_id: matchedStudent.admission_id,
+                class_name: matchedStudent.class_name,
+                section_name: matchedStudent.section_name
+              } : fee.students
+            }
+          })
+          setFees(enriched)
+          console.log(`✅ [FEES] Loaded ${dbFees.length} fee records from DB`)
+        } else {
+          const savedFe = localStorage.getItem('phulwari_admin_fees')
+          if (savedFe) try { setFees(JSON.parse(savedFe)) } catch (e) {}
+        }
+      } catch (feesEx) {
+        console.error('❌ [FEES EXCEPTION]:', feesEx)
+        const savedFe = localStorage.getItem('phulwari_admin_fees')
+        if (savedFe) try { setFees(JSON.parse(savedFe)) } catch (e) {}
+      }
+
+      // 4. Teachers — table does not exist in Supabase yet, use localStorage only
+      try {
         const localT = localStorage.getItem('phulwari_teachers')
         if (localT) setTeachers(JSON.parse(localT))
-      }
+      } catch (_) {}
 
-      // Fetch / Sync Announcements from DB or localStorage with robust defaults
+      // 5. Fetch Announcements — DB first with defaults fallback
       const defaultAnnouncementsList = [
         { id: 'an-101', title: 'Monthly Fee Renewal Reminder - August 2026', content: 'Dear Parents, kindly settle the monthly activity fee dues for August 2026 at the earliest to ensure uninterrupted sessions.', category: 'Fee Notice', target_audience: 'all', date: '2026-08-01' },
         { id: 'an-102', title: 'Independence Day Special Cultural Celebration', content: 'We invite all children and parents to join our Independence Day celebration on August 15th from 09:30 AM onwards.', category: 'Event', target_audience: 'all', date: '2026-08-10' },
         { id: 'an-103', title: 'Parent-Teacher Interaction Session', content: 'Quarterly review and activity progress meeting scheduled for Saturday. Detailed batch slots are available in ERP portal.', category: 'Notice', target_audience: 'all', date: '2026-08-08' }
       ]
-
       try {
         const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
         if (dbAnnouncements && dbAnnouncements.length > 0) {
           setAnnouncements(dbAnnouncements)
         } else {
-          const localAnn = localStorage.getItem('phulwari_announcements')
-          if (localAnn) {
-            const parsed = JSON.parse(localAnn)
-            if (parsed && parsed.length > 0) setAnnouncements(parsed)
-            else setAnnouncements(defaultAnnouncementsList)
-          } else {
-            setAnnouncements(defaultAnnouncementsList)
-          }
-        }
-      } catch (_) {
-        const localAnn = localStorage.getItem('phulwari_announcements')
-        if (localAnn) {
-          try { setAnnouncements(JSON.parse(localAnn)) } catch (__) { setAnnouncements(defaultAnnouncementsList) }
-        } else {
           setAnnouncements(defaultAnnouncementsList)
         }
+      } catch (_) {
+        setAnnouncements(defaultAnnouncementsList)
       }
+
+      // 6. Party Packages from localStorage
+      try {
+        const savedPkg = localStorage.getItem('phulwari_party_packages')
+        if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
+      } catch (e) {}
+
     } catch (err) {
+      console.error('❌ [LOAD ERROR]:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // Create New Batch (Image 3 UI Alignment)
+  // Create New Batch
   const handleCreateBatch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newBatchForm.batch_name.trim()) return
 
-    const daysStr = newBatchForm.days_schedule.length === 7 
-      ? 'Monday to Sunday' 
+    const daysStr = newBatchForm.days_schedule.length === 7
+      ? 'Monday to Sunday'
       : newBatchForm.days_schedule.join(', ')
 
-    const newBatchObj = {
-      id: `bt-${Date.now()}`,
+    const batchUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+    const startTime = newBatchForm.batch_time?.split(' - ')[0]?.trim() || ''
+    const endTime = newBatchForm.batch_time?.split(' - ')[1]?.trim() || ''
+
+    // Only send columns that exist in the Supabase batches table
+    const dbPayload = {
+      id: batchUuid,
       batch_name: newBatchForm.batch_name.trim(),
-      category: newBatchForm.category,
-      subcategory: newBatchForm.subcategory,
-      location: newBatchForm.location,
-      batch_time: newBatchForm.batch_time,
-      days: daysStr,
-      days_schedule: newBatchForm.days_schedule,
-      validity_days: parseInt(newBatchForm.validity_days) || 30,
-      fee_amount: parseFloat(newBatchForm.fee_amount) || 0,
       age_group: newBatchForm.age_group,
-      capacity: parseInt(newBatchForm.capacity) || 20,
-      status: 'active'
+      start_time: startTime,
+      end_time: endTime,
+      days: daysStr,
+      capacity: parseInt(newBatchForm.capacity) || 20
     }
 
-    const updated = [newBatchObj, ...batches]
-    setBatches(updated)
+    console.log('📡 [BATCH INSERT] Sending to Supabase:', dbPayload)
 
     try {
-      localStorage.setItem('phulwari_admin_batches', JSON.stringify(updated))
-      const supabase = createClient()
-      await supabase.from('batches').insert([newBatchObj])
-    } catch (err) {}
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      if (!supabaseUrl || !supabaseKey) throw new Error('Supabase config missing')
 
-    setNewBatchForm({
-      category: 'Activities',
-      subcategory: 'Toddler Program',
-      location: 'Kidwaipuri Main Branch',
-      batch_name: '',
-      batch_time: '10:30 AM - 11:30 AM',
-      days_schedule: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-      validity_days: '30',
-      fee_amount: '3500',
-      age_group: '1 - 3 Years',
-      capacity: '20'
-    })
-    setIsAddBatchOpen(false)
+      const res = await fetch(`${supabaseUrl}/rest/v1/batches`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify([dbPayload])
+      })
+
+      if (res.ok) {
+        const savedBatch = await res.json()
+        const inserted = savedBatch[0] || dbPayload
+        console.log('✅ [BATCH INSERT SUCCESS]:', inserted)
+
+        // Only update UI AFTER DB confirms success
+        setBatches(prev => [inserted, ...prev])
+
+        // Reset form and close
+        setNewBatchForm({
+          category: 'Activities',
+          subcategory: 'Toddler Program',
+          location: 'Kidwaipuri Main Branch',
+          batch_name: '',
+          batch_time: '10:30 AM - 11:30 AM',
+          days_schedule: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+          validity_days: '30',
+          fee_amount: '3500',
+          age_group: '1 - 3 Years',
+          capacity: '20'
+        })
+        setIsAddBatchOpen(false)
+      } else {
+        const errText = await res.text()
+        console.error('❌ [BATCH INSERT FAILED]:', errText)
+        let friendlyMsg = 'Failed to save batch to database.'
+        try {
+          const parsed = JSON.parse(errText)
+          if (parsed.message) friendlyMsg = `DB Error: ${parsed.message}`
+        } catch (_) {}
+        alert(`❌ Could not create batch.\n${friendlyMsg}`)
+      }
+    } catch (err) {
+      console.error('❌ [BATCH INSERT EXCEPTION]:', err)
+      alert('❌ Network error while creating batch. Please check your connection.')
+    }
   }
 
   // Register New Student (Linked to Batches)
@@ -3158,8 +3162,8 @@ export default function AdminDashboardPage() {
 
       {/* MODAL: COMPREHENSIVE STUDENT ERP (FEE HISTORY LEDGER + SUBMIT FEE + DISCOUNT) */}
       {selectedERPStudent && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto relative`}>
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-bold text-lg shadow-md shadow-blue-600/20">
@@ -3256,6 +3260,7 @@ export default function AdminDashboardPage() {
                       required
                       value={feeForm.amount}
                       onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })}
+                      style={{ cursor: 'text' }}
                       className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
                         isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
                       }`}
