@@ -67,6 +67,9 @@ import {
   Cake,
   ExternalLink
 } from 'lucide-react'
+import TeachersTab from '../components/TeachersTab'
+import GalleryTab from '../components/GalleryTab'
+import PackagesTab from '../components/PackagesTab'
 
 export default function AdminDashboardPage() {
   // Theme Toggle
@@ -2140,6 +2143,7 @@ export default function AdminDashboardPage() {
                         setFeeForm({
                           title: 'Monthly Activity Fee (August 2026)',
                           amount: '3500',
+                          discount_type: 'amount',
                           discount: '500',
                           due_date: '2026-08-10',
                           status: 'paid',
@@ -2522,317 +2526,53 @@ export default function AdminDashboardPage() {
 
         {/* TAB: GALLERY MANAGEMENT */}
         {activeTab === 'gallery' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <ImageIcon className="w-5 h-5 text-blue-500" /> Dynamic Gallery Photo Manager ({galleryImages.length} Photos)
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Upload photos directly from your device (computer or phone) to publish live!</p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleDeviceImageUpload}
-                  className="hidden"
-                  id="device-photo-input"
-                />
-
-                <button
-                  onClick={fetchAdminGallery}
-                  className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-                  title="Fetch latest photos from API & Database"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Sync API Data</span>
-                </button>
-
-                <label
-                  htmlFor="device-photo-input"
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Choose Photo from Device</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {galleryImages
-                .slice((galleryPage - 1) * galleryPerPage, galleryPage * galleryPerPage)
-                .map((img) => (
-                  <div
-                    key={img.id}
-                    onClick={() => setSelectedAdminGalleryImg(img)}
-                    className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2.5 ${bgSubCard} group cursor-pointer hover:border-blue-500/50 transition`}
-                  >
-                    <div className="aspect-square rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 relative">
-                      <img
-                        src={img.url}
-                        alt={img.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition"
-                        onError={(e: any) => {
-                          e.target.src = '/phulwari_logo.webp'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <h4 className={`text-xs font-bold truncate ${textPrimary}`}>{img.title}</h4>
-                      <p className={`text-[10px] font-mono ${textSecondary} truncate`}>{img.url.startsWith('data:') ? 'Device Base64 Image' : img.url}</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeletingGalleryImg(img)
-                      }}
-                      className="w-full py-1.5 bg-rose-600/10 text-rose-500 border border-rose-500/20 hover:bg-rose-600 hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete</span>
-                    </button>
-                  </div>
-                ))}
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-              <span className={`text-xs font-semibold ${textSecondary}`}>
-                Showing photos {Math.min((galleryPage - 1) * galleryPerPage + 1, galleryImages.length)} - {Math.min(galleryPage * galleryPerPage, galleryImages.length)} of {galleryImages.length}
-              </span>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  disabled={galleryPage === 1}
-                  onClick={() => setGalleryPage(prev => Math.max(prev - 1, 1))}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
-                    galleryPage === 1 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
-                  }`}
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Prev Page</span>
-                </button>
-
-                <span className={`text-xs font-mono font-bold px-3 py-1 border rounded-xl ${badgeClass}`}>
-                  Page {galleryPage} of {Math.ceil(galleryImages.length / galleryPerPage) || 1}
-                </span>
-
-                <button
-                  disabled={galleryPage >= Math.ceil(galleryImages.length / galleryPerPage)}
-                  onClick={() => setGalleryPage(prev => Math.min(prev + 1, Math.ceil(galleryImages.length / galleryPerPage)))}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
-                    galleryPage >= Math.ceil(galleryImages.length / galleryPerPage) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
-                  }`}
-                >
-                  <span>Next Page</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
+          <GalleryTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            badgeClass={badgeClass}
+            galleryImages={galleryImages}
+            galleryPage={galleryPage}
+            galleryPerPage={galleryPerPage}
+            setGalleryPage={setGalleryPage}
+            handleDeviceImageUpload={handleDeviceImageUpload}
+            fetchAdminGallery={fetchAdminGallery}
+            setSelectedAdminGalleryImg={setSelectedAdminGalleryImg}
+            setDeletingGalleryImg={setDeletingGalleryImg}
+          />
         )}
 
         {/* TAB: CLEAN PARTY PACKAGES & PRICING CONFIGURATION */}
         {activeTab === 'packages' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <Gift className="w-5 h-5 text-pink-500" /> Birthday & Party Packages Configuration
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Manage party prices, dynamic package titles, and features published on the main website.</p>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleAddNewPackage}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Package</span>
-                </button>
-
-                <button
-                  onClick={handleSavePartyPackages}
-                  className="px-5 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-pink-600/20 transition cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Save & Publish Prices Live</span>
-                </button>
-              </div>
-            </div>
-
-            {pkgSaveStatus && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold animate-fadeIn">
-                {pkgSaveStatus}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {partyPackages.map((pkg) => (
-                <div key={pkg.id} className={`p-5 rounded-2xl border space-y-4 ${bgSubCard}`}>
-                  <div className="flex items-center justify-between">
-                    <input
-                      type="text"
-                      value={pkg.name}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setPartyPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, name: val } : p))
-                      }}
-                      className={`text-sm font-bold bg-transparent border-b border-dashed border-slate-300 dark:border-slate-700 outline-none ${textPrimary} w-full mr-2`}
-                    />
-                    <button
-                      onClick={() => handleDeletePackage(pkg.id)}
-                      className="p-1.5 bg-rose-600/10 text-rose-500 hover:bg-rose-600 hover:text-white rounded-lg transition"
-                      title="Delete Package"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Package Tagline</label>
-                    <input
-                      type="text"
-                      value={pkg.tagline}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setPartyPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, tagline: val } : p))
-                      }}
-                      className={`w-full text-xs font-semibold px-3 py-2 rounded-xl border outline-none ${
-                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
-                      }`}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Configured Display Price</label>
-                    <input
-                      type="text"
-                      value={pkg.price}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setPartyPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, price: val } : p))
-                      }}
-                      className={`w-full text-xs font-mono font-bold px-3 py-2 rounded-xl border outline-none ${
-                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
-                      }`}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Includes / Features</label>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. Celebration Space, Basic Decoration, Music & Entertainment"
-                      value={pkg.includes}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setPartyPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, includes: val } : p))
-                      }}
-                      className={`w-full text-xs font-medium px-3 py-2 rounded-xl border outline-none ${
-                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
-                      }`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <PackagesTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            partyPackages={partyPackages}
+            setPartyPackages={setPartyPackages}
+            handleAddNewPackage={handleAddNewPackage}
+            handleSavePartyPackages={handleSavePartyPackages}
+            pkgSaveStatus={pkgSaveStatus}
+            handleDeletePackage={handleDeletePackage}
+          />
         )}
 
         {/* TAB: TEACHER & FACULTY MANAGEMENT */}
         {activeTab === 'teachers' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <UserPlus className="w-5 h-5 text-indigo-500" /> Teacher & Faculty Staff Management
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Manage educators, assign active batches, track phone & email contacts, and update status live.</p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setEditingTeacher(null)
-                  setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' })
-                  setIsAddTeacherOpen(true)
-                }}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add New Teacher</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teachers.map((tch) => (
-                <div key={tch.id} className={`relative p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 space-y-5 ${bgSubCard} shadow-sm hover:shadow-xl hover:border-indigo-400/50 transition-all duration-300 group`}>
-                  
-                  {/* Status Badge - Absolute Top Right */}
-                  <div className="absolute top-5 right-5">
-                    <span className={`text-[10px] px-3 py-1 rounded-full font-extrabold tracking-wider uppercase border shadow-sm ${
-                      tch.status === 'Active' ? 'bg-gradient-to-r from-emerald-400/10 to-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
-                    }`}>
-                      {tch.status}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20 transform group-hover:scale-105 transition-transform duration-300">
-                      {tch.name ? tch.name.charAt(0) : 'T'}
-                    </div>
-                    <div>
-                      <h4 className={`text-lg font-black tracking-tight ${textPrimary}`}>{tch.name}</h4>
-                      <p className={`text-xs font-semibold text-indigo-500 dark:text-indigo-400 mt-0.5`}>{tch.specialization}</p>
-                    </div>
-                  </div>
-
-                  <div className={`text-xs font-medium space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800/80`}>
-                    <div className="flex flex-col">
-                      <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Assigned Batch</span>
-                      <strong className={`text-sm ${textPrimary}`}>{tch.assigned_batch}</strong>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col">
-                        <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Phone</span>
-                        <strong className={textPrimary}>{tch.phone}</strong>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Join Date</span>
-                        <strong className={textPrimary}>{tch.join_date}</strong>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col">
-                      <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Email Address</span>
-                      <strong className="text-blue-600 dark:text-blue-400 truncate">{tch.email}</strong>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingTeacher(tch)
-                        setTeacherForm({ name: tch.name, email: tch.email, phone: tch.phone, specialization: tch.specialization, assigned_batch: tch.assigned_batch, status: tch.status })
-                        setIsAddTeacherOpen(true)
-                      }}
-                      className="flex-1 py-2.5 bg-slate-100 hover:bg-indigo-600 hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <Edit3 className="w-4 h-4" /> Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTeacher(tch.id)}
-                      className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-600 hover:text-white dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <Trash2 className="w-4 h-4" /> Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TeachersTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            teachers={teachers}
+            setEditingTeacher={setEditingTeacher}
+            setTeacherForm={setTeacherForm}
+            setIsAddTeacherOpen={setIsAddTeacherOpen}
+            handleDeleteTeacher={handleDeleteTeacher}
+          />
         )}
 
         {/* TAB 5: BATCHES & TIMINGS (WITH DYNAMIC EDITING) */}
@@ -2904,42 +2644,15 @@ export default function AdminDashboardPage() {
 
         {/* TAB 7: ANNOUNCEMENTS & NOTICES (WITH DELETE OPTION) */}
         {activeTab === 'announcements' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className={`text-sm font-bold ${textPrimary}`}>Notices & Circular Broadcaster</h3>
-              <button
-                onClick={() => setIsAddNoticeOpen(true)}
-                className="px-3.5 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Publish New Notice</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {announcements.map((an, i) => (
-                <div key={i} className={`p-4 rounded-xl border space-y-2 ${bgSubCard}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-purple-600/20 text-purple-400 border border-purple-800 rounded-full">
-                      {an.category || 'General Notice'}
-                    </span>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs text-slate-400 font-mono">{an.date || 'August 2026'}</span>
-                      <button
-                        onClick={() => handleDeleteNotice(an.id)}
-                        className="p-1.5 bg-rose-600/10 text-rose-500 hover:bg-rose-600 hover:text-white rounded-lg transition"
-                        title="Delete Notice"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <h4 className={`text-xs font-bold ${textPrimary}`}>{an.title}</h4>
-                  <p className={`text-xs ${textSecondary}`}>{an.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <NoticesTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            announcements={announcements}
+            setIsAddNoticeOpen={setIsAddNoticeOpen}
+            handleDeleteNotice={handleDeleteNotice}
+          />
         )}
       </main>
 
