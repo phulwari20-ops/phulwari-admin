@@ -70,6 +70,15 @@ import {
 import TeachersTab from '../components/TeachersTab'
 import GalleryTab from '../components/GalleryTab'
 import PackagesTab from '../components/PackagesTab'
+import NoticesTab from '../components/NoticesTab'
+import DashboardTab from '../components/DashboardTab'
+import StudentsTab from '../components/StudentsTab'
+import StudentListTab from '../components/StudentListTab'
+import AttendanceTab from '../components/AttendanceTab'
+import CalendarTab from '../components/CalendarTab'
+import FeesTab from '../components/FeesTab'
+import BatchesTab from '../components/BatchesTab'
+import BookingsTab from '../components/BookingsTab'
 
 export default function AdminDashboardPage() {
   // Theme Toggle
@@ -1761,272 +1770,27 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* TAB 0: ADVANCED ERP ANALYTICS DASHBOARD (IMAGE 4 UI MATCH) */}
+        {/* TAB 0: ADVANCED ERP ANALYTICS DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* 6 Stat Cards Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 12.5%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p>
-                  <p className={`text-xl font-bold ${textPrimary}`}>{students.length || 6}</p>
-                </div>
-              </div>
-
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 4.3%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Total Batches</p>
-                  <p className={`text-xl font-bold ${textPrimary}`}>{batches.length || 3}</p>
-                </div>
-              </div>
-
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 18.6%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p>
-                  <p className={`text-xl font-bold ${textPrimary}`}>₹{(totalPaidFees + totalPendingFees) || 485750}</p>
-                </div>
-              </div>
-
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center">
-                    <IndianRupee className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 20.1%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Fees Collected</p>
-                  <p className="text-xl font-bold text-emerald-500">₹{totalPaidFees || 352400}</p>
-                </div>
-              </div>
-
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">↓ 8.7%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Pending Fees</p>
-                  <p className="text-xl font-bold text-rose-500">₹{totalPendingFees || 133350}</p>
-                </div>
-              </div>
-
-              <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-                    <UserCheck className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 6.2%</span>
-                </div>
-                <div>
-                  <p className={`text-[11px] font-semibold ${textSecondary}`}>Today's Attendance</p>
-                  <p className="text-xl font-bold text-blue-500">92.4%</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Fee Collection Overview Chart & Fees Status Donut */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className={`lg:col-span-2 ${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className={`text-base font-bold ${textPrimary}`}>Fee Collection Overview</h3>
-                    <p className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 352400).toLocaleString()}</p>
-                    <span className="text-xs text-emerald-500 font-bold">↑ 20.1% from last month</span>
-                  </div>
-                  <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}>
-                    <option>This Month</option>
-                    <option>Last Month</option>
-                  </select>
-                </div>
-
-                {/* Smooth SVG Line Chart */}
-                <div className="h-56 w-full pt-4">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 500 150">
-                    <defs>
-                      <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-                    <path d="M 0,130 Q 80,110 160,80 T 320,40 T 500,20 L 500,150 L 0,150 Z" fill="url(#blueGradient)" />
-                    <path d="M 0,130 Q 80,110 160,80 T 320,40 T 500,20" fill="none" stroke="#3B82F6" strokeWidth="3" />
-                    <path d="M 0,140 Q 100,125 200,100 T 400,60 T 500,45" fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeDasharray="4 4" />
-                    <circle cx="160" cy="80" r="5" fill="#3B82F6" />
-                    <circle cx="320" cy="40" r="5" fill="#3B82F6" />
-                    <circle cx="500" cy="20" r="5" fill="#3B82F6" />
-                  </svg>
-                  <div className={`flex justify-between text-[10px] font-bold ${textSecondary} pt-2`}>
-                    <span>May 1</span><span>May 6</span><span>May 11</span><span>May 16</span><span>May 21</span><span>May 26</span><span>May 31</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fees Status Donut */}
-              <div className={`${bgCard} p-6 rounded-3xl border shadow-sm flex flex-col justify-between`}>
-                <div className="flex items-center justify-between pb-2">
-                  <h3 className={`text-base font-bold ${textPrimary}`}>Fees Status</h3>
-                  <span className={`text-xs ${textSecondary}`}>Live Ratio</span>
-                </div>
-                <div className="relative flex items-center justify-center my-4">
-                  <svg className="w-44 h-44 transform -rotate-90" viewBox="0 0 36 36">
-                    <path className="text-emerald-500" strokeWidth="4.5" strokeDasharray={`${paidRatioPercentage}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path className="text-amber-500" strokeWidth="4.5" strokeDasharray={`${pendingRatioPercentage}, 100`} strokeDashoffset={`-${paidRatioPercentage}`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                  </svg>
-                  <div className="absolute text-center">
-                    <p className={`text-[10px] font-bold uppercase ${textSecondary}`}>Total</p>
-                    <p className={`text-base font-extrabold ${textPrimary}`}>₹{totalRevenueCombined.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="space-y-2 text-xs font-semibold">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Collected</span>
-                    <span className={textPrimary}>₹{totalPaidFees.toLocaleString()} ({paidRatioPercentage}%)</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Pending</span>
-                    <span className={textPrimary}>₹{totalPendingFees.toLocaleString()} ({pendingRatioPercentage}%)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 3: Attendance Bar Chart & Students by Batch Donut */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className={`lg:col-span-2 ${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className={`text-base font-bold ${textPrimary}`}>Attendance Overview</h3>
-                    <p className="text-xl font-extrabold text-blue-600">92.4% <span className="text-xs text-emerald-500 font-bold">↑ 6.2% from last week</span></p>
-                  </div>
-                  <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}>
-                    <option>This Week</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-6 items-end gap-4 h-48 pt-6">
-                  {[{ day: 'Mon', p: 100 }, { day: 'Tue', p: 95 }, { day: 'Wed', p: 89 }, { day: 'Thu', p: 93 }, { day: 'Fri', p: 91 }, { day: 'Sat', p: 94 }].map(bar => (
-                    <div key={bar.day} className="flex flex-col items-center gap-2 h-full justify-end">
-                      <span className="text-[10px] font-bold text-blue-500">{bar.p}%</span>
-                      <div className="w-full bg-blue-600 rounded-t-xl transition-all" style={{ height: `${bar.p}%` }} />
-                      <span className={`text-xs font-bold ${textSecondary}`}>{bar.day}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Students by Batch */}
-              <div className={`${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
-                <h3 className={`text-base font-bold ${textPrimary}`}>Students by Batch</h3>
-                <div className="space-y-3 pt-2">
-                  {studentsByBatchDistribution.map((item, idx) => {
-                    const colors = ['bg-pink-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500', 'bg-teal-500']
-                    return (
-                      <div key={item.batch_name} className="space-y-1">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span className="flex items-center gap-2">
-                            <span className={`w-2.5 h-2.5 rounded-full ${colors[idx % colors.length]}`} />
-                            <span className={textPrimary}>{item.batch_name}</span>
-                          </span>
-                          <span className={textSecondary}>{item.count} Students</span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className={`h-full ${colors[idx % colors.length]}`} style={{ width: `${Math.max(15, item.percentage)}%` }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 4: Recent Fee Collections & Recent Admissions */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className={`lg:col-span-2 ${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
-                <div className="flex items-center justify-between">
-                  <h3 className={`text-base font-bold ${textPrimary}`}>Recent Fee Collections</h3>
-                  <button onClick={() => setActiveTab('fees')} className="text-xs font-bold text-blue-500 hover:underline">View All</button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className={`border-b font-bold ${textSecondary}`}>
-                        <th className="py-2.5 px-3">Receipt No</th>
-                        <th className="py-2.5 px-3">Student Name</th>
-                        <th className="py-2.5 px-3">Batch</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Date</th>
-                        <th className="py-2.5 px-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800'}`}>
-                      {fees.slice(0, 5).map(f => (
-                        <tr key={f.id} className="hover:bg-blue-50/40 transition">
-                          <td className="py-3 px-3 font-mono font-bold text-blue-500">{f.receipt_no || 'RCPT-2026-101'}</td>
-                          <td className={`py-3 px-3 font-bold ${textPrimary}`}>{f.students?.full_name || 'Aarav Sharma'}</td>
-                          <td className="py-3 px-3 font-semibold">{f.students?.batch_name || 'Mother & Toddler'}</td>
-                          <td className="py-3 px-3 font-bold text-emerald-500">₹{f.amount}</td>
-                          <td className={`py-3 px-3 ${textSecondary}`}>{f.date || '2026-08-01'}</td>
-                          <td className="py-3 px-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Success</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Quick Actions & Recent Admissions */}
-              <div className={`${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
-                <h3 className={`text-base font-bold ${textPrimary}`}>Quick Actions</h3>
-                <div className="space-y-2">
-                  <button onClick={() => setActiveTab('batches')} className={`w-full p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${bgSubCard} hover:border-blue-500 transition`}>
-                    <span className="flex items-center gap-2"><Plus className="w-4 h-4 text-blue-500" /> Create New Batch</span>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </button>
-                  <button onClick={() => setIsAddStudentOpen(true)} className={`w-full p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${bgSubCard} hover:border-blue-500 transition`}>
-                    <span className="flex items-center gap-2"><UserPlus className="w-4 h-4 text-emerald-500" /> Add New Student</span>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </button>
-                  <button onClick={() => setActiveTab('fees')} className={`w-full p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${bgSubCard} hover:border-blue-500 transition`}>
-                    <span className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-amber-500" /> Collect Fee</span>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </button>
-                  <button onClick={() => setActiveTab('attendance')} className={`w-full p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${bgSubCard} hover:border-blue-500 transition`}>
-                    <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-purple-500" /> Mark Attendance</span>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer System Metrics Bar */}
-            <div className={`${bgCard} p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-slate-500`}>
-              <div className="flex items-center gap-2"><span>Total Teachers:</span> <span className={textPrimary}>48 Active</span></div>
-              <div className="flex items-center gap-2"><span>Total Programs:</span> <span className={textPrimary}>36 Active</span></div>
-              <div className="flex items-center gap-2"><span>Activity Halls:</span> <span className={textPrimary}>18 Halls</span></div>
-              <div className="flex items-center gap-2"><span>Gallery Photos:</span> <span className={textPrimary}>{galleryImages.length} Photos</span></div>
-              <div className="flex items-center gap-2"><span>System Status:</span> <span className="text-emerald-500 font-extrabold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Online</span></div>
-            </div>
-          </div>
+          <DashboardTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            students={students}
+            batches={batches}
+            totalPaidFees={totalPaidFees}
+            totalPendingFees={totalPendingFees}
+            paidRatioPercentage={paidRatioPercentage}
+            pendingRatioPercentage={pendingRatioPercentage}
+            totalRevenueCombined={totalRevenueCombined}
+            studentsByBatchDistribution={studentsByBatchDistribution}
+            fees={fees}
+            setActiveTab={setActiveTab}
+            setIsAddStudentOpen={setIsAddStudentOpen}
+            galleryImages={galleryImages}
+          />
         )}
 
         {/* HIDE STUDENT KPI CARDS AND FILTER BAR WHEN IN PARTY PACKAGES TAB AS REQUESTED */}
@@ -2112,416 +1876,96 @@ export default function AdminDashboardPage() {
           </>
         )}
 
-        {/* TAB 1: STUDENT MANAGEMENT TABLE (CLEAN SINGLE ERP BUTTON) */}
+        {/* TAB 1: STUDENT MANAGEMENT */}
         {activeTab === 'students' && (
-          <div className={`${bgCard} rounded-2xl overflow-hidden`}>
-            <div className={`p-4 border-b flex items-center justify-between text-xs font-semibold ${tipBannerBg}`}>
-              <span>💡 Click "Open ERP" button to open fee management, payment ledger, password reset, or student profile.</span>
-              <span className="font-mono text-blue-600 font-bold">{filteredStudents.length} Active Students</span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className={`${tableHeaderBg} border-b font-bold uppercase tracking-wider`}>
-                    <th className="py-4 px-6 w-32">Admission ID</th>
-                    <th className="py-4 px-6 min-w-[180px]">Student Name</th>
-                    <th className="py-4 px-6 w-44">Assigned Batch</th>
-                    <th className="py-4 px-6 w-36">Assigned Password</th>
-                    <th className="py-4 px-6 min-w-[160px]">Parent / Guardian</th>
-                    <th className="py-4 px-6 w-36">Contact Phone</th>
-                    <th className="py-4 px-6 text-right w-36">ERP Action</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
-                  {filteredStudents.map((st) => (
-                    <tr
-                      key={st.id}
-                      onClick={() => {
-                        setSelectedERPStudent(st)
-                        setErpModalTab('collect_fee')
-                        setFeeForm({
-                          title: 'Monthly Activity Fee (August 2026)',
-                          amount: '3500',
-                          discount_type: 'amount',
-                          discount: '500',
-                          due_date: '2026-08-10',
-                          status: 'paid',
-                          payment_method: 'UPI / Online',
-                          receipt_no: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`
-                        })
-                      }}
-                      className={`${isLight ? 'hover:bg-blue-50/70' : 'hover:bg-slate-800/60'} transition cursor-pointer`}
-                    >
-                      <td className="py-4 px-6 font-mono text-blue-500 font-bold">{st.admission_id}</td>
-                      <td className="py-4 px-6 font-semibold flex items-center gap-2.5">
-                        <div className="w-7 h-7 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center font-bold text-xs shrink-0">
-                          {st.full_name?.charAt(0)}
-                        </div>
-                        <span className="truncate">{st.full_name}</span>
-                      </td>
-                      <td className="py-4 px-6 font-semibold">
-                        <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border ${badgeClass}`}>
-                          {st.batch_name || batches.find(b => b.id === st.batch_id)?.batch_name || 'Mother & Toddler Program'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 font-mono font-bold">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-mono border ${badgePassword}`}>
-                          {st.password}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">{st.parent_name}</td>
-                      <td className="py-4 px-6 font-mono text-slate-400">{st.parent_phone}</td>
-                      <td className="py-4 px-6 text-right">
-                        <button className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 ml-auto transition shadow-sm cursor-pointer">
-                          <Receipt className="w-3.5 h-3.5" />
-                          <span>Open ERP</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <StudentsTab
+            bgCard={bgCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            tipBannerBg={tipBannerBg}
+            tableHeaderBg={tableHeaderBg}
+            badgeClass={badgeClass}
+            badgePassword={badgePassword}
+            filteredStudents={filteredStudents}
+            batches={batches}
+            setSelectedERPStudent={setSelectedERPStudent}
+            setErpModalTab={setErpModalTab}
+            setFeeForm={setFeeForm}
+          />
         )}
 
-        {/* TAB 1.5: DEDICATED STUDENT LIST & EXPORT DIRECTORY */}
+        {/* TAB 1.5: STUDENT LIST */}
         {activeTab === 'student_list' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-5 shadow-sm`}>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <Users className="w-5 h-5 text-blue-500" /> Student Directory & Export Center
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Full directory of enrolled students categorized by assigned dynamic batches.</p>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setIsExportModalOpen(true)}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-emerald-600/20 transition cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>📥 Export Options (CSV / PDF)</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className={`${tableHeaderBg} border-b font-bold uppercase tracking-wider`}>
-                    <th className="py-3.5 px-4">Admission ID</th>
-                    <th className="py-3.5 px-4">Student Name</th>
-                    <th className="py-3.5 px-4">Assigned Batch Name</th>
-                    <th className="py-3.5 px-4">Batch ID</th>
-                    <th className="py-3.5 px-4">Parent Name</th>
-                    <th className="py-3.5 px-4">Contact Phone</th>
-                    <th className="py-3.5 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
-                  {filteredStudents.map((st) => (
-                    <tr key={st.id} className="hover:bg-blue-50/50 transition">
-                      <td className="py-3.5 px-4 font-mono text-blue-500 font-bold">{st.admission_id}</td>
-                      <td className="py-3.5 px-4 font-bold">{st.full_name}</td>
-                      <td className="py-3.5 px-4 font-semibold">
-                        <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border ${badgeClass}`}>
-                          {st.batch_name || batches.find(b => b.id === st.batch_id)?.batch_name || 'Mother & Toddler Program'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-400 text-[10px] truncate max-w-[120px]">{st.batch_id || '11111111-1111-1111-1111-111111111111'}</td>
-                      <td className="py-3.5 px-4 font-semibold">{st.parent_name}</td>
-                      <td className="py-3.5 px-4 font-mono">{st.parent_phone}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Active</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <StudentListTab
+            bgCard={bgCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            tableHeaderBg={tableHeaderBg}
+            badgeClass={badgeClass}
+            filteredStudents={filteredStudents}
+            batches={batches}
+            setIsExportModalOpen={setIsExportModalOpen}
+          />
         )}
 
-        {/* TAB 2: DAILY ATTENDANCE MARKER */}
+        {/* TAB 2: ATTENDANCE */}
         {activeTab === 'attendance' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-4`}>
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-sm font-bold ${textPrimary}`}>Daily & Past Attendance Marker</h3>
-                <p className={`text-xs ${textSecondary}`}>Mark or update student attendance accurately for any date.</p>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 text-xs">
-                  <span className={`font-semibold ${textSecondary}`}>Select Date:</span>
-                  <input
-                    type="date"
-                    value={attendanceDate}
-                    onChange={(e) => setAttendanceDate(e.target.value)}
-                    className={`border rounded-xl px-3 py-1.5 font-mono font-bold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
-
-                <button
-                  onClick={() => setActiveTab('calendar')}
-                  className="px-4 py-2 bg-blue-600/10 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-semibold flex items-center gap-2 hover:bg-blue-600/20 transition cursor-pointer"
-                >
-                  <CalendarDays className="w-4 h-4" />
-                  <span>View Attendance Calendar</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {filteredStudents.map((st) => {
-                const currentAtt = attendance.find(a => (a.student_id === st.id || a.students?.admission_id === st.admission_id) && a.date === attendanceDate)
-                const isPresent = currentAtt?.status === 'present'
-                const isAbsent = currentAtt?.status === 'absent'
-
-                return (
-                  <div key={st.id} className={`p-4 rounded-xl border flex items-center justify-between ${bgSubCard}`}>
-                    <div>
-                      <h4 className={`text-xs font-bold ${textPrimary}`}>{st.full_name} <span className="text-blue-500 font-mono">({st.admission_id})</span></h4>
-                      <p className={`text-[11px] ${textSecondary}`}>Batch: {st.batch_name || 'Mother & Toddler Program'} | Parent: {st.parent_name}</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, 'present')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shadow-sm ${
-                          isPresent ? 'bg-emerald-600 text-white font-extrabold' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/20'
-                        }`}
-                      >
-                        Present
-                      </button>
-                      <button
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, 'absent')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
-                          isAbsent ? 'bg-rose-600 text-white font-extrabold' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-500/20'
-                        }`}
-                      >
-                        Absent
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <AttendanceTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            filteredStudents={filteredStudents}
+            attendance={attendance}
+            attendanceDate={attendanceDate}
+            setAttendanceDate={setAttendanceDate}
+            setActiveTab={setActiveTab}
+            handleMarkAttendance={handleMarkAttendance}
+          />
         )}
 
-        {/* TAB 3: DYNAMIC ATTENDANCE CALENDAR */}
+        {/* TAB 3: ATTENDANCE CALENDAR */}
         {activeTab === 'calendar' && (
-          <div className="space-y-6">
-            <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-                <div>
-                  <h3 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                    <CalendarDays className="w-5 h-5 text-blue-500" /> {monthName} {currentYear} Attendance Calendar
-                  </h3>
-                  <p className={`text-xs ${textSecondary}`}>Showing records for: <strong className="text-blue-500 font-bold">Batch: {selectedBatchId}</strong></p>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handlePrevMonth}
-                    className={`p-2.5 border rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200' : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    <span>Prev</span>
-                  </button>
-                  <span className={`text-xs font-mono font-bold px-3 py-1 border rounded-xl ${badgeClass}`}>
-                    {monthName} {currentYear}
-                  </span>
-                  <button
-                    onClick={handleNextMonth}
-                    className={`p-2.5 border rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-bold ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200' : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-7 gap-3 text-center">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
-                  <div key={i} className={`text-xs font-bold py-2 ${textSecondary} uppercase tracking-wider`}>
-                    {d}
-                  </div>
-                ))}
-
-                {calendarDays.map((day) => (
-                  <button
-                    key={day.dayNum}
-                    onClick={() => setSelectedCalendarDate(day.dateStr)}
-                    className={`p-3 rounded-2xl border flex flex-col items-center justify-between h-24 transition cursor-pointer text-left ${
-                      isLight
-                        ? 'bg-slate-50 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 shadow-sm'
-                        : 'bg-slate-950 border-slate-800/80 hover:border-blue-500 hover:bg-slate-900'
-                    }`}
-                  >
-                    <span className={`text-xs font-bold ${textPrimary}`}>{day.dayNum} {monthName.substring(0,3)}</span>
-                    <div className="space-y-1 w-full text-center">
-                      <span className={`block text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${badgeStatus}`}>
-                        {day.presentCount > 0 ? `${day.presentCount} Present` : '2 Present'}
-                      </span>
-                      {day.absentCount > 0 && (
-                        <span className="block text-[10px] font-bold text-rose-400 bg-rose-950/80 border border-rose-800 px-1.5 py-0.5 rounded-md">
-                          {day.absentCount} Absent
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <CalendarTab
+            bgCard={bgCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            badgeClass={badgeClass}
+            badgeStatus={badgeStatus}
+            monthName={monthName}
+            currentYear={currentYear}
+            selectedBatchId={selectedBatchId}
+            calendarDays={calendarDays}
+            handlePrevMonth={handlePrevMonth}
+            handleNextMonth={handleNextMonth}
+            setSelectedCalendarDate={setSelectedCalendarDate}
+          />
         )}
 
-        {/* TAB 4: COMPREHENSIVE CLASS & MONTHLY FEE MANAGEMENT DASHBOARD */}
+        {/* TAB 4: FEES MANAGEMENT */}
         {activeTab === 'fees' && (
-          <div className="space-y-6">
-            <div className={`${bgCard} rounded-2xl p-6 space-y-5`}>
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-                <div>
-                  <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                    <CreditCard className="w-5 h-5 text-blue-500" /> Class & Monthly Fee Management Dashboard
-                  </h3>
-                  <p className={`text-xs ${textSecondary}`}>Track pending dues, collected fees, discounts, and fee status for all students by month.</p>
-                </div>
-
-                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
-                  <button
-                    onClick={() => setIsClassFeeModalOpen(true)}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer whitespace-nowrap"
-                  >
-                    <IndianRupee className="w-4 h-4" />
-                    <span>View & Edit All Class Fees</span>
-                  </button>
-
-                  <select
-                    value={feeSelectedMonth}
-                    onChange={(e) => setFeeSelectedMonth(e.target.value)}
-                    className={`text-xs px-3.5 py-2 rounded-xl border outline-none font-bold shrink-0 ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  >
-                    <option value="August 2026">August 2026</option>
-                    <option value="September 2026">September 2026</option>
-                    <option value="July 2026">July 2026</option>
-                    <option value="June 2026">June 2026</option>
-                  </select>
-
-                  <div className="flex items-center space-x-1 border rounded-xl p-1 bg-slate-100 dark:bg-slate-950 shrink-0">
-                    {['All', 'PAID', 'PENDING'].map(st => (
-                      <button
-                        key={st}
-                        onClick={() => setFeeStatusFilter(st as any)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                          feeStatusFilter === st ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
-                        }`}
-                      >
-                        {st}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Student Fee Status List */}
-              <div className="flex flex-col space-y-3 pt-2">
-                {filteredStudents.map((st) => {
-                  const studentFee = fees.find(f => (f.student_id === st.id || f.students?.admission_id === st.admission_id) && (f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth)))
-                  const isPaid = studentFee?.status === 'paid'
-
-                  if (feeStatusFilter === 'PAID' && !isPaid) return null
-                  if (feeStatusFilter === 'PENDING' && isPaid) return null
-
-                  return (
-                    <div
-                      key={st.id}
-                      onClick={() => {
-                        setSelectedERPStudent(st)
-                        setErpModalTab('fee_history')
-                      }}
-                      className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition ${bgSubCard} hover:border-blue-500/50`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-mono font-extrabold uppercase border whitespace-nowrap w-24 text-center ${
-                          isPaid ? badgeStatus : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800'
-                        }`}>
-                          {isPaid ? `PAID ₹${studentFee?.net_amount || 3000}` : 'PENDING'}
-                        </span>
-                        <div>
-                          <h4 className={`text-sm font-bold ${textPrimary} flex items-center gap-2`}>
-                            {st.full_name} 
-                            <span className="text-[11px] font-mono text-blue-500 font-bold">{st.admission_id}</span>
-                          </h4>
-                          <p className={`text-xs ${textSecondary}`}>Batch: {st.batch_name || 'Mother & Toddler Program'} | Parent: {st.parent_name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3 text-xs border-t sm:border-t-0 border-slate-200 dark:border-slate-800 pt-3 sm:pt-0 w-full sm:w-auto sm:flex-1 sm:justify-end">
-                        <div className="flex flex-wrap items-center justify-end gap-3 w-full 2xl:w-auto">
-                          <span className={textSecondary}>Month: <strong>{feeSelectedMonth}</strong></span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleSendWhatsAppFeeReminder(
-                                  st.full_name,
-                                  st.admission_id,
-                                  st.parent_phone,
-                                  feeSelectedMonth,
-                                  studentFee?.net_amount || 3500,
-                                  '2026-08-15'
-                                )
-                              }}
-                              className="px-3 py-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-emerald-300 dark:border-emerald-800 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
-                              title="Send WhatsApp & Student Portal Notification"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                              WhatsApp Notice
-                            </button>
-                            
-                            <a
-                              href={`tel:${(st.parent_phone || '').replace(/[^0-9+]/g, '')}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="px-2.5 py-1.5 bg-blue-500/10 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-300 dark:border-blue-800 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
-                              title="Call Parent"
-                            >
-                              📞 Call
-                            </a>
-
-                            <a
-                              href={`sms:${(st.parent_phone || '').replace(/[^0-9+]/g, '')}?body=${encodeURIComponent(`Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${studentFee?.net_amount || 3500} is pending for ${st.full_name}. Please clear the dues as soon as possible.\n\nRegards,\nLPA`)}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="px-2.5 py-1.5 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-300 dark:border-indigo-800 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
-                              title="Send SMS Reminder"
-                            >
-                              ✉️ SMS
-                            </a>
-                          </div>
-                        </div>
-                        <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center justify-end gap-1 whitespace-nowrap 2xl:ml-2">
-                          View Ledger & Receipt <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+          <FeesTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            badgeStatus={badgeStatus}
+            filteredStudents={filteredStudents}
+            fees={fees}
+            feeSelectedMonth={feeSelectedMonth}
+            setFeeSelectedMonth={setFeeSelectedMonth}
+            feeStatusFilter={feeStatusFilter}
+            setFeeStatusFilter={setFeeStatusFilter}
+            setIsClassFeeModalOpen={setIsClassFeeModalOpen}
+            setSelectedERPStudent={setSelectedERPStudent}
+            setErpModalTab={setErpModalTab}
+            handleSendWhatsAppFeeReminder={handleSendWhatsAppFeeReminder}
+          />
         )}
 
         {/* TAB: GALLERY MANAGEMENT */}
@@ -2575,71 +2019,29 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* TAB 5: BATCHES & TIMINGS (WITH DYNAMIC EDITING) */}
+        {/* TAB 5: BATCHES */}
         {activeTab === 'batches' && (
-          <div className="space-y-4">
-            <div className={`${bgCard} p-6 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <Clock className="w-5 h-5 text-blue-500" /> Batches & Class Timings
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Manage batch timings, age groups, validity, and student capacities.</p>
-              </div>
-
-              <button
-                onClick={() => setIsAddBatchOpen(true)}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add New Batch</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {batches.map((bt) => (
-                <div key={bt.id} className={`${bgCard} p-6 rounded-2xl space-y-3`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-sm font-bold ${textPrimary}`}>{bt.batch_name}</h3>
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-mono border ${badgeClass}`}>{bt.age_group}</span>
-                      <button
-                        onClick={() => setEditingBatch(bt)}
-                        className="p-1.5 bg-blue-600/10 text-blue-500 rounded-lg hover:bg-blue-600 hover:text-white transition"
-                        title="Edit Batch Details"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className={`text-xs ${textSecondary} space-y-1 font-mono`}>
-                    <p>Timing: <strong className={textPrimary}>{bt.start_time} - {bt.end_time}</strong></p>
-                    <p>Days: <strong className={textPrimary}>{bt.days}</strong></p>
-                    <p>Capacity: <strong className="text-blue-500">{bt.capacity} Students</strong></p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <BatchesTab
+            bgCard={bgCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            badgeClass={badgeClass}
+            batches={batches}
+            setIsAddBatchOpen={setIsAddBatchOpen}
+            setEditingBatch={setEditingBatch}
+          />
         )}
 
         {/* TAB 6: BOOKINGS */}
         {activeTab === 'bookings' && (
-          <div className={`${bgCard} rounded-2xl p-6 space-y-4`}>
-            <h3 className={`text-sm font-bold ${textPrimary}`}>Online Registrations & Bookings</h3>
-            <div className="space-y-3">
-              {bookings.map((bk, idx) => (
-                <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between ${bgSubCard}`}>
-                  <div>
-                    <h4 className={`text-xs font-bold ${textPrimary}`}>{bk.child_name} ({bk.booking_type})</h4>
-                    <p className={`text-[11px] ${textSecondary}`}>Parent: {bk.parent_name} | Phone: {bk.phone}</p>
-                  </div>
-                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full uppercase font-bold border ${badgePassword}`}>
-                    {bk.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <BookingsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            badgePassword={badgePassword}
+            bookings={bookings}
+          />
         )}
 
         {/* TAB 7: ANNOUNCEMENTS & NOTICES (WITH DELETE OPTION) */}
@@ -3168,6 +2570,7 @@ export default function AdminDashboardPage() {
                                 setFeeForm({
                                   title: `Monthly Activity Fee (${mName})`,
                                   amount: '3500',
+                                  discount_type: 'amount',
                                   discount: '500',
                                   due_date: '2026-08-10',
                                   status: 'paid',
