@@ -151,8 +151,8 @@ export default function BlogsTab({
       console.error('Failed to save blog:', err);
       // Local storage fallback
       const updatedList = editingBlog 
-        ? blogs.map(b => b.id === editingBlog.id ? { ...b, ...dataToSave } : b)
-        : [{ id: `b-${Date.now()}`, ...dataToSave, views: 0, created_at: new Date().toISOString() }, ...blogs];
+        ? blogs.map(b => b.id === editingBlog.id ? { ...b, ...dbPayload } : b)
+        : [{ id: `b-${Date.now()}`, ...dbPayload, views: 0, created_at: new Date().toISOString() }, ...blogs];
       
       setBlogs(updatedList);
       localStorage.setItem('phulwari_blogs_fallback', JSON.stringify(updatedList));
