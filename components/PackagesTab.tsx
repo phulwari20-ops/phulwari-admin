@@ -130,6 +130,20 @@ export default function PackagesTab({
                 }`}
               />
             </div>
+            
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id={`pkg-visible-${pkg.id}`}
+                checked={pkg.is_visible !== false} // Default to true if not present
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setPartyPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, is_visible: val } : p));
+                }}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor={`pkg-visible-${pkg.id}`} className={`text-xs font-bold ${textPrimary} cursor-pointer`}>Show on Website (Frontend)</label>
+            </div>
           </div>
         ))}
       </div>

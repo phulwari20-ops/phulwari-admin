@@ -15,18 +15,21 @@ interface StudentsTabProps {
   setSelectedERPStudent: (st: any) => void;
   setErpModalTab: (tab: any) => void;
   setFeeForm: (form: any) => void;
+  loadAllAdminData?: () => void;
 }
 
 export default function StudentsTab({
   bgCard, textPrimary, textSecondary, isLight, tipBannerBg, tableHeaderBg,
   badgeClass, badgePassword, filteredStudents, batches,
-  setSelectedERPStudent, setErpModalTab, setFeeForm
+  setSelectedERPStudent, setErpModalTab, setFeeForm, loadAllAdminData
 }: StudentsTabProps) {
   return (
     <div className={`${bgCard} rounded-2xl overflow-hidden`}>
       <div className={`p-4 border-b flex items-center justify-between text-xs font-semibold ${tipBannerBg}`}>
-        <span>💡 Click &quot;Open ERP&quot; button to open fee management, payment ledger, password reset, or student profile.</span>
-        <span className="font-mono text-blue-600 font-bold">{filteredStudents.length} Active Students</span>
+        <div className="flex items-center gap-3">
+          <span>💡 Click &quot;Open ERP&quot; button to open fee management, payment ledger, password reset, or student profile.</span>
+        </div>
+        <span className="font-mono text-blue-600 font-bold shrink-0">{filteredStudents.length} Active Students</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">

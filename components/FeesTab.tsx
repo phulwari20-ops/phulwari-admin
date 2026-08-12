@@ -101,7 +101,7 @@ export default function FeesTab({
                 <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3 text-xs border-t sm:border-t-0 border-slate-200 dark:border-slate-800 pt-3 sm:pt-0 w-full sm:w-auto sm:flex-1 sm:justify-end">
                   <div className="flex flex-wrap items-center justify-end gap-3 w-full 2xl:w-auto">
                     <span className={textSecondary}>Month: <strong>{feeSelectedMonth}</strong></span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2 mt-1 sm:mt-0">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -110,7 +110,7 @@ export default function FeesTab({
                         }}
                         className="px-3 py-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-emerald-300 dark:border-emerald-800 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Notice
+                        <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
                       </button>
                       <a
                         href={`tel:${(st.parent_phone || '').replace(/[^0-9+]/g, '')}`}
@@ -118,7 +118,7 @@ export default function FeesTab({
                         className="px-2.5 py-1.5 bg-blue-500/10 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-300 dark:border-blue-800 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
                       >📞 Call</a>
                       <a
-                        href={`sms:${(st.parent_phone || '').replace(/[^0-9+]/g, '')}?body=${encodeURIComponent(`Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${studentFee?.net_amount || 3500} is pending for ${st.full_name}. Please clear the dues as soon as possible.\n\nRegards,\nLPA`)}`}
+                        href={`sms:${(st.parent_phone || '').replace(/[^0-9+]/g, '')}?body=${encodeURIComponent(`Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${studentFee?.net_amount || 3500} is pending for ${st.full_name}. Please clear the dues as soon as possible.\n\nRegards,\nPhulwari Mother & Child Activity Centre`)}`}
                         onClick={(e) => e.stopPropagation()}
                         className="px-2.5 py-1.5 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-300 dark:border-indigo-800 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
                       >✉️ SMS</a>

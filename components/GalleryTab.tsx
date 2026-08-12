@@ -15,6 +15,7 @@ interface GalleryTabProps {
   fetchAdminGallery: () => void;
   setSelectedAdminGalleryImg: (img: any) => void;
   setDeletingGalleryImg: (img: any) => void;
+  isUploadingGallery?: boolean;
 }
 
 export default function GalleryTab({
@@ -30,7 +31,8 @@ export default function GalleryTab({
   handleDeviceImageUpload,
   fetchAdminGallery,
   setSelectedAdminGalleryImg,
-  setDeletingGalleryImg
+  setDeletingGalleryImg,
+  isUploadingGallery = false
 }: GalleryTabProps) {
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
@@ -49,6 +51,7 @@ export default function GalleryTab({
             onChange={handleDeviceImageUpload}
             className="hidden"
             id="device-photo-input"
+            disabled={isUploadingGallery}
           />
 
           <button
@@ -60,13 +63,20 @@ export default function GalleryTab({
             <span>Sync API Data</span>
           </button>
 
-          <label
-            htmlFor="device-photo-input"
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition cursor-pointer"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Choose Photo from Device</span>
-          </label>
+          {isUploadingGallery ? (
+            <div className="px-4 py-2.5 bg-blue-600/50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition cursor-not-allowed">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>Uploading &amp; Compressing...</span>
+            </div>
+          ) : (
+            <label
+              htmlFor="device-photo-input"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Choose Photo from Device</span>
+            </label>
+          )}
         </div>
       </div>
 

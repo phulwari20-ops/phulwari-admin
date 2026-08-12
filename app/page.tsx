@@ -79,6 +79,9 @@ import CalendarTab from '../components/CalendarTab'
 import FeesTab from '../components/FeesTab'
 import BatchesTab from '../components/BatchesTab'
 import BookingsTab from '../components/BookingsTab'
+import BlogsTab from '../components/BlogsTab'
+import ReviewsTab from '../components/ReviewsTab'
+import BirthdayAlertsTab from '../components/BirthdayAlertsTab'
 
 export default function AdminDashboardPage() {
   // Theme Toggle
@@ -93,7 +96,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'blogs' | 'reviews' | 'birthdays'>('dashboard')
   const [loading, setLoading] = useState(true)
 
   // PWA Support
@@ -235,23 +238,11 @@ export default function AdminDashboardPage() {
   const [bookings, setBookings] = useState<any[]>([])
   const [announcements, setAnnouncements] = useState<any[]>([])
 
-  // Dynamic Gallery State
-  const defaultGallery = [
-    { id: 'g2', url: '/galary2.webp', title: 'Activity Room', category: 'Activities' },
-    { id: 'g3', url: '/galary3.webp', title: 'Toddler Play Area', category: 'Play' },
-    { id: 'g4', url: '/galary4.webp', title: 'Art & Craft Workshop', category: 'Art' },
-    { id: 'g5', url: '/galary5.webp', title: 'Gymnastics Class', category: 'Fitness' },
-    { id: 'g6', url: '/galary6.webp', title: 'Kids Dance & Music', category: 'Dance' },
-    { id: 'g7', url: '/galary7.webp', title: 'Roller Skating Track', category: 'Sports' },
-    { id: 'g8', url: '/galary8.webp', title: 'MMA & Martial Arts', category: 'Sports' },
-    { id: 'g9', url: '/galary9.webp', title: 'Birthday Celebration Hall', category: 'Parties' },
-    { id: 'g10', url: '/galary10.webp', title: 'Summer Camp Fun', category: 'Camps' }
-  ]
-
-  const [galleryImages, setGalleryImages] = useState<any[]>(defaultGallery)
+  const [galleryImages, setGalleryImages] = useState<any[]>([])
   const [galleryPage, setGalleryPage] = useState<number>(1)
   const galleryPerPage = 8
   const [selectedAdminGalleryImg, setSelectedAdminGalleryImg] = useState<any>(null)
+  const [isUploadingGallery, setIsUploadingGallery] = useState<boolean>(false)
   const [deletingGalleryImg, setDeletingGalleryImg] = useState<any>(null)
 
   // Dynamic Party Packages State (Matching Image 1 UI)
@@ -551,6 +542,9 @@ export default function AdminDashboardPage() {
         if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
       } catch (e) {}
 
+      // 7. Load Gallery Images from DB
+      await fetchAdminGallery()
+
     } catch (err) {
       console.error('❌ [LOAD ERROR]:', err)
     } finally {
@@ -580,7 +574,8 @@ export default function AdminDashboardPage() {
       start_time: startTime,
       end_time: endTime,
       days: daysStr,
-      capacity: parseInt(newBatchForm.capacity) || 20
+      capacity: parseInt(newBatchForm.capacity) || 20,
+      is_visible: true
     }
 
     console.log('📡 [BATCH INSERT] Sending to Supabase:', dbPayload)
@@ -669,37 +664,26 @@ export default function AdminDashboardPage() {
       status: 'active'
     }
 
-    // 1. Instant State & LocalStorage Save (100% Reliable, Zero Data Loss)
-    const updatedList = [newStudentObj, ...students]
-    setStudents(updatedList)
+    const dbPayload = {
+      id: studentUuid,
+      admission_id: newStudentObj.admission_id,
+      password: newStudentObj.password,
+      full_name: newStudentObj.full_name,
+      dob: newStudentObj.dob,
+      gender: newStudentObj.gender,
+      blood_group: newStudentObj.blood_group,
+      batch_id: newStudentObj.batch_id || '11111111-1111-1111-1111-111111111111',
+      parent_name: newStudentObj.parent_name,
+      parent_phone: newStudentObj.parent_phone,
+      parent_email: newStudentObj.parent_email,
+      address: newStudentObj.address,
+      status: 'active'
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
     try {
-      localStorage.setItem('phulwari_admin_students', JSON.stringify(updatedList))
-    } catch (err) {}
-
-    // 2. Compatible Supabase Cloud Database Insert with explicit console logs
-    try {
-      const dbPayload = {
-        id: studentUuid,
-        admission_id: newStudentForm.admission_id.trim(),
-        password: newStudentForm.password.trim(),
-        full_name: newStudentForm.full_name.trim(),
-        dob: newStudentForm.dob,
-        gender: newStudentForm.gender,
-        blood_group: newStudentForm.blood_group,
-        batch_id: selectedBatchObj?.id || newStudentForm.batch_id || '11111111-1111-1111-1111-111111111111',
-        parent_name: newStudentForm.parent_name.trim(),
-        parent_phone: newStudentForm.parent_phone.trim(),
-        parent_email: newStudentForm.parent_email.trim(),
-        address: newStudentForm.address.trim(),
-        status: 'active'
-      }
-
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-      console.log('📡 [SUPABASE STUDENT INSERT REQUEST]: POST ' + supabaseUrl + '/rest/v1/students')
-      console.log('📦 [SUPABASE STUDENT INSERT PAYLOAD]:', dbPayload)
-
       const res = await fetch(`${supabaseUrl}/rest/v1/students`, {
         method: 'POST',
         headers: {
@@ -711,19 +695,39 @@ export default function AdminDashboardPage() {
         body: JSON.stringify([dbPayload])
       })
 
-      console.log(`📡 [SUPABASE STUDENT INSERT RESPONSE STATUS]: ${res.status}`)
       if (res.ok) {
         const responseData = await res.json()
-        console.log('✅ [SUPABASE STUDENT INSERT SUCCESS BODY]:', responseData)
-      } else {
-        const errorData = await res.text()
-        console.error('❌ [SUPABASE STUDENT INSERT FAILED]:', errorData)
-      }
-    } catch (err) {
-      console.error('❌ [SUPABASE STUDENT INSERT EXCEPTION]:', err)
-    }
+        const inserted = responseData[0] || newStudentObj
+        const enriched = {
+          ...inserted,
+          batch_name: selectedBatchObj?.batch_name || inserted.batch_name
+        }
 
-    setIsAddStudentOpen(false)
+        const updatedList = [enriched, ...students]
+        setStudents(updatedList)
+        try {
+          localStorage.setItem('phulwari_admin_students', JSON.stringify(updatedList))
+        } catch (err) {}
+
+        setIsAddStudentOpen(false)
+        alert('Student created successfully!')
+      } else {
+        const errorText = await res.text()
+        let errMsg = 'Failed to save student record to database.'
+        try {
+          const parsed = JSON.parse(errorText)
+          if (parsed.message) {
+            errMsg = parsed.message
+            if (parsed.code === '23505') {
+              errMsg = `Admission ID '${newStudentObj.admission_id}' already exists. Please choose a different ID.`
+            }
+          }
+        } catch (_) {}
+        alert(errMsg)
+      }
+    } catch (err: any) {
+      alert(`Network error: ${err.message || err}`)
+    }
   }
 
   // DELETE STUDENT RECORD FROM SUPABASE AND LOCAL STORAGE
@@ -844,7 +848,7 @@ export default function AdminDashboardPage() {
     const cleanPhone = (parentPhone || '').replace(/[^0-9]/g, '')
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone || '919876543210'
 
-    const message = `Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${dueAmount} is pending for ${stName}. Please clear the dues as soon as possible.\n\nRegards,\nLPA`
+    const message = `Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${dueAmount} is pending for ${stName}. Please clear the dues as soon as possible.\n\nRegards,\nPhulwari Mother & Child Activity Centre`
 
     const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`
     window.open(waUrl, '_blank')
@@ -881,10 +885,54 @@ export default function AdminDashboardPage() {
         })
         if (res.ok) {
           const data = await res.json()
-          if (data && data.length > 0) setGalleryImages(data)
+          if (data && data.length > 0) {
+            setGalleryImages(data.map((item: any) => ({
+              ...item,
+              url: item.image_url || item.url
+            })))
+          } else {
+            setGalleryImages([])
+          }
         }
       }
     } catch (e) {}
+  }
+
+  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.src = base64Str
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height)
+            height = maxHeight
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/jpeg', 0.7))
+        } else {
+          resolve(base64Str)
+        }
+      }
+      img.onerror = () => {
+        resolve(base64Str)
+      }
+    })
   }
 
   // Device File Image Picker Upload Handler
@@ -892,52 +940,41 @@ export default function AdminDashboardPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setIsUploadingGallery(true)
     const reader = new FileReader()
     reader.onload = async (event) => {
       const base64Url = event.target?.result as string
       if (base64Url) {
-        const newPhoto = {
-          id: `g-${Date.now()}`,
-          url: base64Url,
-          title: file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo',
-          category: 'Activities'
-        }
+        const titleText = file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo';
 
-        const updated = [newPhoto, ...galleryImages]
-        setGalleryImages(updated)
         try {
-          localStorage.setItem('phulwari_shared_gallery', JSON.stringify(updated))
-        } catch (err) {}
+          const compressedBase64 = await compressImage(base64Url)
 
-        // Post to zero-token public API route on main frontend app if dynamic client URL is present
-        try {
-          const clientBaseUrl = process.env.NEXT_PUBLIC_CLIENT_URL
-          if (clientBaseUrl) {
-            fetch(`${clientBaseUrl}/api/gallery`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(newPhoto)
-            }).catch(() => {})
-          }
-        } catch (e) {}
-
-        // Post directly to Supabase REST API with public anon headers
-        try {
+          // Post directly to Supabase REST API with public anon headers
           const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
           const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
           if (supabaseUrl && supabaseKey) {
-            await fetch(`${supabaseUrl}/rest/v1/gallery`, {
+            const res = await fetch(`${supabaseUrl}/rest/v1/gallery`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'apikey': supabaseKey,
                 'Authorization': `Bearer ${supabaseKey}`
               },
-              body: JSON.stringify({ url: base64Url, title: newPhoto.title, category: 'Activities' })
+              body: JSON.stringify({ image_url: compressedBase64, title: titleText, category: 'Activities' })
             })
-            console.log('✅ Photo saved to Supabase database!')
+            if (res.ok) {
+              console.log('✅ Photo saved to Supabase database!')
+              await fetchAdminGallery();
+            }
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error(err)
+        } finally {
+          setIsUploadingGallery(false)
+        }
+      } else {
+        setIsUploadingGallery(false)
       }
     }
     reader.readAsDataURL(file)
@@ -946,40 +983,26 @@ export default function AdminDashboardPage() {
   const confirmDeleteGalleryImage = async () => {
     if (!deletingGalleryImg) return
     const img = deletingGalleryImg
-    const updated = galleryImages.filter(g => g.id !== img.id && g.url !== img.url)
-    setGalleryImages(updated)
 
-    try {
-      localStorage.setItem('phulwari_shared_gallery', JSON.stringify(updated))
-    } catch (err) {}
-
-    // 1. Send DELETE to zero-token public API route if configured
-    try {
-      const clientBaseUrl = process.env.NEXT_PUBLIC_CLIENT_URL
-      if (clientBaseUrl) {
-        fetch(`${clientBaseUrl}/api/gallery`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: img.id, url: img.url })
-        }).catch(() => {})
-      }
-    } catch (e) {}
-
-    // 2. Safe REST DELETE query to Supabase without throwing 400 Bad Request
+    // Safe REST DELETE query to Supabase
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
       if (supabaseUrl && supabaseKey) {
         const isCleanUuid = typeof img.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(img.id)
-        const deleteQueryParam = isCleanUuid ? `id=eq.${img.id}` : `url=eq.${encodeURIComponent(img.url)}`
+        const deleteQueryParam = isCleanUuid ? `id=eq.${img.id}` : `image_url=eq.${encodeURIComponent(img.url || img.image_url)}`
 
-        await fetch(`${supabaseUrl}/rest/v1/gallery?${deleteQueryParam}`, {
+        const res = await fetch(`${supabaseUrl}/rest/v1/gallery?${deleteQueryParam}`, {
           method: 'DELETE',
           headers: {
             'apikey': supabaseKey,
             'Authorization': `Bearer ${supabaseKey}`
           }
         })
+        if (res.ok) {
+          console.log('✅ Photo deleted from Supabase database!')
+          await fetchAdminGallery();
+        }
       }
     } catch (err) {}
 
@@ -1036,7 +1059,14 @@ export default function AdminDashboardPage() {
               'Authorization': `Bearer ${supabaseKey}`,
               'Prefer': 'resolution=merge-duplicates'
             },
-            body: JSON.stringify({ id: pkg.id, name: pkg.name, price: pkg.price, tagline: pkg.tagline, includes: pkg.includes })
+            body: JSON.stringify({ 
+              id: pkg.id, 
+              name: pkg.name, 
+              price: pkg.price, 
+              tagline: pkg.tagline, 
+              includes: pkg.includes,
+              is_visible: pkg.is_visible !== false
+            })
           }).catch(() => {})
         }
       }
@@ -1052,7 +1082,8 @@ export default function AdminDashboardPage() {
       name: '',
       tagline: '',
       price: '',
-      includes: ''
+      includes: '',
+      is_visible: true
     }
     setPartyPackages(prev => [newPkg, ...prev])
   }
@@ -1289,6 +1320,81 @@ export default function AdminDashboardPage() {
     setEditingBatch(null)
   }
 
+  // Delete Batch
+  const handleDeleteBatch = async (batchId: string, batchName: string) => {
+    // Check if students are enrolled in this batch
+    const enrolledStudents = students.filter(s => s.batch_id === batchId)
+    if (enrolledStudents.length > 0) {
+      alert(`Cannot delete batch '${batchName}' because ${enrolledStudents.length} student(s) are currently enrolled in it. Please reassign or remove these students first.`)
+      return
+    }
+
+    if (!confirm(`Are you sure you want to permanently delete the batch '${batchName}'?`)) return
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('batches')
+        .delete()
+        .eq('id', batchId)
+      
+      if (error) throw error
+
+      setBatches(prev => prev.filter(b => b.id !== batchId))
+      alert('Batch deleted successfully.')
+    } catch (err: any) {
+      alert(`Failed to delete batch: ${err.message}`)
+    }
+  }
+
+  // Toggle Batch Visibility
+  const handleToggleBatchVisibility = async (batchId: string, currentVisibility: boolean) => {
+    const newVisibility = !currentVisibility
+    setBatches(prev => prev.map(b => b.id === batchId ? { ...b, is_visible: newVisibility } : b))
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('batches')
+        .update({ is_visible: newVisibility })
+        .eq('id', batchId)
+      
+      if (error) throw error
+    } catch (err: any) {
+      alert(`Failed to update batch visibility: ${err.message}`)
+      setBatches(prev => prev.map(b => b.id === batchId ? { ...b, is_visible: currentVisibility } : b))
+    }
+  }
+
+  const birthdayAlertsCount = useMemo(() => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const tDate = new Date(currentYear, today.getMonth(), today.getDate());
+    
+    let count = 0;
+    students.forEach(st => {
+      if (!st.dob) return;
+      const dob = new Date(st.dob);
+      if (isNaN(dob.getTime())) return;
+      
+      const bDate = new Date(currentYear, dob.getMonth(), dob.getDate());
+      let diffTime = bDate.getTime() - tDate.getTime();
+      let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        const bdayNextYear = new Date(currentYear + 1, dob.getMonth(), dob.getDate());
+        const tDateNext = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        diffTime = bdayNextYear.getTime() - tDateNext.getTime();
+        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+      
+      if (diffDays >= 0 && diffDays <= 7) {
+        count++;
+      }
+    });
+    return count;
+  }, [students]);
+
   // DYNAMIC BATCHES LIST FOR FILTER DROPDOWN (COMBINES CONFIGURED BATCHES + ENROLLED STUDENT BATCHES)
   const allAvailableBatches = useMemo(() => {
     const list: any[] = [...batches]
@@ -1332,11 +1438,26 @@ export default function AdminDashboardPage() {
   const totalEnrolled = filteredStudents.length
   const totalStudentsCount = students.length
   const totalBatchesCount = allAvailableBatches.length
-  const totalPaidFees = fees.filter(f => f.status === 'paid').reduce((sum, f) => sum + Number(f.net_amount || f.amount), 0)
-  const totalPendingFees = fees.filter(f => f.status === 'pending').reduce((sum, f) => sum + Number(f.amount), 0)
+  const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
+  let totalPaidFees = 0
+  let totalPendingFees = 0
+  
+  students.forEach(st => {
+    const stFee = currentMonthFees.find(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+    if (stFee && stFee.status === 'paid') {
+      totalPaidFees += Number(stFee.net_amount || stFee.amount || 0)
+    } else if (stFee && stFee.status === 'pending') {
+      totalPendingFees += Number(stFee.net_amount || stFee.amount || 0)
+    } else {
+      const batch = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.trim().toLowerCase() === st.batch_name.trim().toLowerCase()))
+      const feeAmount = classFees[batch?.batch_name || 'Mother & Toddler Program'] || 3500
+      totalPendingFees += Number(feeAmount)
+    }
+  })
+  
   const totalRevenueCombined = totalPaidFees + totalPendingFees
-  const paidRatioPercentage = totalRevenueCombined > 0 ? ((totalPaidFees / totalRevenueCombined) * 100).toFixed(1) : '72.6'
-  const pendingRatioPercentage = totalRevenueCombined > 0 ? ((totalPendingFees / totalRevenueCombined) * 100).toFixed(1) : '27.4'
+  const paidRatioPercentage = totalRevenueCombined > 0 ? ((totalPaidFees / totalRevenueCombined) * 100).toFixed(1) : '0.0'
+  const pendingRatioPercentage = totalRevenueCombined > 0 ? ((totalPendingFees / totalRevenueCombined) * 100).toFixed(1) : '0.0'
 
   // Dynamic Students by Batch Distribution
   const studentsByBatchDistribution = useMemo(() => {
@@ -1588,6 +1709,9 @@ export default function AdminDashboardPage() {
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
               { id: 'announcements', label: 'Notices Broadcaster', icon: Bell, count: announcements.length },
               { id: 'bookings', label: 'Registrations & Bookings', icon: Award, count: bookings.length },
+              { id: 'blogs', label: 'Blogs CMS Editor', icon: FileText },
+              { id: 'reviews', label: 'Parent Reviews & Ratings', icon: Star },
+              { id: 'birthdays', label: 'Birthday Alerts', icon: Cake, count: birthdayAlertsCount },
             ].map(item => {
               const Icon = item.icon
               const active = activeTab === item.id
@@ -1691,6 +1815,9 @@ export default function AdminDashboardPage() {
               {activeTab === 'batches' && 'Batches & Class Timings'}
               {activeTab === 'bookings' && 'Party & Camp Registrations'}
               {activeTab === 'announcements' && 'Notices & Circular Broadcaster'}
+              {activeTab === 'blogs' && 'Blog Posts & Articles CMS Editor'}
+              {activeTab === 'reviews' && 'Parent Reviews & Testimonials Manager'}
+              {activeTab === 'birthdays' && 'Student Birthdays & Celebration Alerts'}
             </h2>
             <p className={`text-xs ${textSecondary}`}>Phulwari Mother & Child Activity Centre ERP System</p>
           </div>
@@ -1793,8 +1920,8 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* HIDE STUDENT KPI CARDS AND FILTER BAR WHEN IN PARTY PACKAGES TAB AS REQUESTED */}
-        {activeTab !== 'packages' && activeTab !== 'dashboard' && (
+        {/* HIDE STUDENT KPI CARDS AND FILTER BAR WHEN IN PARTY PACKAGES, BLOGS, REVIEWS AND BIRTHDAYS TABS AS REQUESTED */}
+        {activeTab !== 'packages' && activeTab !== 'blogs' && activeTab !== 'reviews' && activeTab !== 'birthdays' && activeTab !== 'dashboard' && (
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -1860,17 +1987,28 @@ export default function AdminDashboardPage() {
                 </select>
               </div>
 
-              <div className="relative w-full sm:w-72">
-                <Search className={`w-4 h-4 absolute left-3.5 top-3 pointer-events-none ${textSecondary}`} />
-                <input
-                  type="text"
-                  placeholder="Search by Name, Admission ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full text-xs rounded-xl pl-10 pr-4 py-2 border outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-100'
+              <div className="relative w-full sm:w-72 flex items-center gap-2">
+                <button 
+                  onClick={() => loadAllAdminData()}
+                  className={`p-2 rounded-xl transition font-bold flex items-center justify-center cursor-pointer shrink-0 border shadow-sm ${
+                    isLight ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300' : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
                   }`}
-                />
+                  title="Refresh and sync data from Supabase DB"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <div className="relative w-full">
+                  <Search className={`w-4 h-4 absolute left-3.5 top-3 pointer-events-none ${textSecondary}`} />
+                  <input
+                    type="text"
+                    placeholder="Search by Name, Admission ID..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`w-full text-xs rounded-xl pl-10 pr-4 py-2 border outline-none ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-100'
+                    }`}
+                  />
+                </div>
               </div>
             </div>
           </>
@@ -1892,6 +2030,7 @@ export default function AdminDashboardPage() {
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
             setFeeForm={setFeeForm}
+            loadAllAdminData={loadAllAdminData}
           />
         )}
 
@@ -1984,6 +2123,7 @@ export default function AdminDashboardPage() {
             fetchAdminGallery={fetchAdminGallery}
             setSelectedAdminGalleryImg={setSelectedAdminGalleryImg}
             setDeletingGalleryImg={setDeletingGalleryImg}
+            isUploadingGallery={isUploadingGallery}
           />
         )}
 
@@ -2019,7 +2159,7 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* TAB 5: BATCHES */}
+        {/* TAB 8: BATCHES & TIMINGS CONFIGURATION */}
         {activeTab === 'batches' && (
           <BatchesTab
             bgCard={bgCard}
@@ -2029,6 +2169,20 @@ export default function AdminDashboardPage() {
             batches={batches}
             setIsAddBatchOpen={setIsAddBatchOpen}
             setEditingBatch={setEditingBatch}
+            handleDeleteBatch={handleDeleteBatch}
+            handleToggleBatchVisibility={handleToggleBatchVisibility}
+          />
+        )}
+
+        {/* TAB: BIRTHDAY ALERTS */}
+        {activeTab === 'birthdays' && (
+          <BirthdayAlertsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            students={students}
           />
         )}
 
@@ -2054,6 +2208,30 @@ export default function AdminDashboardPage() {
             announcements={announcements}
             setIsAddNoticeOpen={setIsAddNoticeOpen}
             handleDeleteNotice={handleDeleteNotice}
+          />
+        )}
+
+        {/* TAB: BLOGS MANAGEMENT */}
+        {activeTab === 'blogs' && (
+          <BlogsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            badgeClass={badgeClass}
+          />
+        )}
+
+        {/* TAB: REVIEWS MANAGEMENT */}
+        {activeTab === 'reviews' && (
+          <ReviewsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            badgeClass={badgeClass}
           />
         )}
       </main>
