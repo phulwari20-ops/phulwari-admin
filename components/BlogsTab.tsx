@@ -21,11 +21,12 @@ export default function BlogsTab({
 }: BlogsTabProps) {
   const [blogs, setBlogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'list' | 'add'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'list' | 'add' | 'view'>('dashboard');
   const [errorMsg, setErrorMsg] = useState('');
   
   // Blog Form State
   const [editingBlog, setEditingBlog] = useState<any | null>(null);
+  const [viewingBlog, setViewingBlog] = useState<any | null>(null);
   const [blogForm, setBlogForm] = useState({
     title: '',
     slug: '',
@@ -176,6 +177,27 @@ export default function BlogsTab({
     }
   };
 
+  const handleViewBlog = async (b: any) => {
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.from('blogs').select('*').eq('id', b.id).single();
+      if (!error && data) {
+        setViewingBlog(data);
+        setActiveSubTab('view');
+      } else {
+        // Fallback for local
+        setViewingBlog(b);
+        setActiveSubTab('view');
+      }
+    } catch (err) {
+      setViewingBlog(b);
+      setActiveSubTab('view');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Stats calculation
   const totalBlogs = blogs.length;
   const publishedBlogs = blogs.filter(b => b.status === 'published').length;
@@ -306,6 +328,13 @@ export default function BlogsTab({
                     </span>
                   </td>
                   <td className="py-3 px-2 flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleViewBlog(b)}
+                      className="p-1 bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-500 rounded transition cursor-pointer"
+                      title="View Post Details"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => { setEditingBlog(b); setActiveSubTab('add'); }}
                       className="p-1 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-500 rounded transition cursor-pointer"
@@ -535,6 +564,52 @@ export default function BlogsTab({
             </button>
           </div>
         </form>
+      )}
+
+      {/* SUB TAB 4: VIEW BLOG */}
+      {activeSubTab === 'view' && viewingBlog && (
+        <div className={`rounded-xl border ${bgSubCard} overflow-hidden`}>
+          <div className="relative h-64 w-full bg-slate-900">
+            <img 
+              src={viewingBlog.banner_image || viewingBlog.featured_image || '/phulwari_logo.webp'} 
+              className="w-full h-full object-cover opacity-70"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+            <div className="absolute bottom-6 left-6 right-6">
+              <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-bold tracking-wider uppercase mb-3 inline-block">
+                {viewingBlog.category}
+              </span>
+              <h2 className="text-3xl font-black text-white leading-tight">{viewingBlog.title}</h2>
+              <div className="flex items-center gap-4 mt-4 text-slate-300 text-xs">
+                <span className="flex items-center gap-1.5"><Eye className="w-4 h-4" /> {viewingBlog.views || 0} Views</span>
+                <span>By {viewingBlog.author_name}</span>
+                <span>{new Date(viewingBlog.created_at).toLocaleDateString()}</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${viewingBlog.status === 'published' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {viewingBlog.status.toUpperCase()}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-8">
+            <div className={`prose max-w-none ${isLight ? 'prose-slate' : 'prose-invert'} prose-sm md:prose-base`} dangerouslySetInnerHTML={{ __html: viewingBlog.content || '<p>No content provided.</p>' }} />
+            
+            <div className="mt-12 pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <button 
+                onClick={() => { setViewingBlog(null); setActiveSubTab('list'); }}
+                className={`px-5 py-2 rounded-xl font-bold cursor-pointer ${isLight ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+              >
+                Back to List
+              </button>
+              <button
+                onClick={() => { setEditingBlog(viewingBlog); setActiveSubTab('add'); }}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Edit className="w-4 h-4" /> Edit Blog
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

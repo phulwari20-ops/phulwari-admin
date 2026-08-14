@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserX, RefreshCw } from 'lucide-react';
+import { UserX, RefreshCw, Trash2 } from 'lucide-react';
 
 interface DeactivatedTabProps {
   bgCard: string;
@@ -9,11 +9,12 @@ interface DeactivatedTabProps {
   isLight: boolean;
   deactivatedStudents: any[];
   onReactivate: (id: string) => void;
+  onPermanentDelete?: (id: string, name: string) => void;
 }
 
 export default function DeactivatedTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight,
-  deactivatedStudents, onReactivate
+  deactivatedStudents, onReactivate, onPermanentDelete
 }: DeactivatedTabProps) {
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-4 shadow-sm`}>
@@ -48,13 +49,29 @@ export default function DeactivatedTab({
                   <td className="py-3.5 px-4 font-semibold">{st.parent_name}</td>
                   <td className="py-3.5 px-4 font-mono">{st.parent_phone}</td>
                   <td className="py-3.5 px-4 text-right">
-                    <button
-                      onClick={() => onReactivate(st.id)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition shadow-md shadow-blue-500/10 flex items-center gap-1.5 ml-auto text-[10px] cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Reactivate</span>
-                    </button>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => onReactivate(st.id)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition shadow-md shadow-blue-500/10 flex items-center gap-1.5 text-[10px] cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Reactivate</span>
+                      </button>
+                      {onPermanentDelete && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`⚠️ Permanently delete "${st.full_name}" (${st.admission_id})?\n\nThis action CANNOT be undone. All records will be erased.`)) {
+                              onPermanentDelete(st.id, st.full_name)
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-bold rounded-xl transition shadow-md shadow-rose-500/10 flex items-center gap-1.5 text-[10px] cursor-pointer"
+                          title="Permanently delete this student record"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Permanently</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -65,3 +82,4 @@ export default function DeactivatedTab({
     </div>
   );
 }
+

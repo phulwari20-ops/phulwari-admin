@@ -668,6 +668,17 @@ export default function AdminDashboardPage() {
     }
   }
 
+  const handlePermanentDeleteDeactivated = async (id: string, name: string) => {
+    try {
+      const supabase = createClient()
+      await supabase.from('students').delete().eq('id', id)
+      setStudents(prev => prev.filter(s => s.id !== id))
+      alert(`✅ "${name}" has been permanently deleted.`)
+    } catch (err) {
+      alert('❌ Error deleting student. Please try again.')
+    }
+  }
+
   const handleDeactivateStudent = async (id: string) => {
     if (!confirm('⚠️ Are you sure you want to deactivate this student? They will be hidden from attendance & dues lists.')) return
     const supabase = createClient()
@@ -1042,72 +1053,221 @@ export default function AdminDashboardPage() {
     let allFormsHtml = ''
     filteredStudents.forEach((st, index) => {
       allFormsHtml += `
-        <div style="page-break-after: ${index === filteredStudents.length - 1 ? 'auto' : 'always'};">
-          <div class="header">
-            <img src="/Logo-png.png" class="logo" alt="Phulwari Logo" />
-            <div class="title">Parent Registration & Consent Form</div>
-            <div class="subtitle">M/32, Road No. 25, Sri Krishna Nagar, Patna — 800001 | Phone: +91 91552 25888</div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">1. Child's Information</div>
-            <div class="grid">
-              <div class="item"><div class="label">Full Name</div><div class="val">${st.full_name}</div></div>
-              <div class="item"><div class="label">Admission ID</div><div class="val">${st.admission_id}</div></div>
-              <div class="item"><div class="label">Date of Birth</div><div class="val">${st.dob || 'N/A'}</div></div>
-              <div class="item"><div class="label">Gender</div><div class="val">${st.gender || 'N/A'}</div></div>
-              <div class="item"><div class="label">Blood Group</div><div class="val">${st.blood_group || 'N/A'}</div></div>
-              <div class="item"><div class="label">Category</div><div class="val">${st.category || 'Child Activity'}</div></div>
-              <div class="item full-width"><div class="label">Address</div><div class="val">${st.address || 'N/A'}, ${st.city || 'Patna'}, ${st.state || 'Bihar'} - ${st.pin_code || '800001'}</div></div>
+        <div style="page-break-after: ${index === filteredStudents.length - 1 ? 'auto' : 'always'}; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0;">
+          
+          <!-- Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 1;">
+              <img src="https://phulwari.co.in/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
+              <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
+            </div>
+            
+            <div style="flex: 2; text-align: center;">
+              <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
+              <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
+            </div>
+            
+            <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
+              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
+              </div>
+              <div style="margin-top: 4px;">📞 +91 6207368839</div>
+              <div>✉️ phulwari02@gmail.com</div>
+              <div>🌐 www.phulwari.co.in</div>
+              <div>📸 @phulwari.activitycentre</div>
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">2. Parent & Contact Information</div>
-            <div class="grid">
-              <div class="item"><div class="label">Parent / Guardian Name</div><div class="val">${st.parent_name} (${st.parent_relationship || 'Father'})</div></div>
-              <div class="item"><div class="label">Occupation</div><div class="val">${st.parent_occupation || 'N/A'}</div></div>
-              <div class="item"><div class="label">Primary Phone</div><div class="val">${st.parent_phone}</div></div>
-              <div class="item"><div class="label">Alternate Phone</div><div class="val">${st.parent_alt_phone || 'N/A'}</div></div>
-              <div class="item full-width"><div class="label">Email Address</div><div class="val">${st.parent_email || 'N/A'}</div></div>
+          <!-- Top Boxes -->
+          <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Admission No.:</strong>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.admission_id}</span>
+            </div>
+            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Date:</strong>
+              <div style="flex: 1; display: flex; justify-content: space-between; text-align: center;">
+                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
+                <span>/</span>
+                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
+                <span>/</span>
+                <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
+              </div>
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">3. Program & Schedule Details</div>
-            <div class="grid">
-              <div class="item"><div class="label">Enrolled Program Batch</div><div class="val">${st.batch_name || 'Mother & Toddler Program'}</div></div>
-              <div class="item"><div class="label">Preferred Time Slot</div><div class="val">${st.preferred_time_slot || 'Morning'}</div></div>
-              <div class="item"><div class="label">Weekly Schedule (Days)</div><div class="val">${st.custom_days || 'Standard Batch Days'}</div></div>
-              <div class="item"><div class="label">Total / Consumed Classes</div><div class="val">${st.classes_total || 12} Classes / ${st.classes_consumed || 0} Used</div></div>
+          <!-- 1. CHILD'S DETAILS -->
+          <div style="border: 2px solid #E11D48; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">1. CHILD'S DETAILS</div>
+            
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Child's Full Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.full_name}</span>
+              <span style="white-space: nowrap;">Date of Birth:</span>
+              <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${st.dob || ''}</span>
+            </div>
+            
+            <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Gender:</span>
+              <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
+              <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
+              <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
+              <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">City:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.city || 'Patna'}</span>
+              <span style="white-space: nowrap;">State:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.state || 'Bihar'}</span>
+              <span style="white-space: nowrap;">PIN Code:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.pin_code || '800001'}</span>
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">4. Medical Emergency Profile</div>
-            <div class="grid">
-              <div class="item"><div class="label">Emergency Contact</div><div class="val">${st.emergency_contact_name || 'N/A'} (${st.emergency_relationship || 'N/A'})</div></div>
-              <div class="item"><div class="label">Emergency Phone</div><div class="val">${st.emergency_phone || 'N/A'}</div></div>
-              <div class="item"><div class="label">Medical Conditions</div><div class="val">${st.has_medical_condition ? (st.medical_condition_details || 'Yes') : 'None Declared'}</div></div>
-              <div class="item"><div class="label">Hospital Preference</div><div class="val">${st.hospital_preference || 'N/A'}</div></div>
+          <!-- 2. PARENT / GUARDIAN DETAILS -->
+          <div style="border: 2px solid #3B0764; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #3B0764; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">2. PARENT / GUARDIAN DETAILS</div>
+            
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 2;">${st.parent_name}</span>
+              <span style="white-space: nowrap;">Relationship:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_relationship || ''}</span>
+            </div>
+            
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Email ID:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_email || ''}</span>
+              <span style="white-space: nowrap;">Occupation:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_occupation || ''}</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_phone}</span>
+              <span style="white-space: nowrap;">Alternate Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_alt_phone || ''}</span>
             </div>
           </div>
 
-          <div class="terms">
-            <strong>Terms & Conditions & Consent:</strong><br/>
-            1. <strong>Non-Refundable Fee:</strong> All fees are strictly non-refundable and non-transferable under any circumstances.<br/>
-            2. <strong>Medical Consent:</strong> In case of medical emergency, Phulwari management is authorized to seek emergency medical care at the preferred hospital or nearest medical facility.<br/>
-            3. <strong>Media Promotion Consent:</strong> The parent grants Phulwari permission to capture and use photographs/videos of the child during activities for promotional, newsletter, and social media marketing purposes.
+          <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
+            <!-- 3. PROGRAM / BATCH DETAILS -->
+            <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
+              
+              <div style="margin-bottom: 10px; font-size: 13px;">Program / Activity Interested In:</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 15px;">
+                <div><input type="checkbox"> Playzone</div>
+                <div><input type="checkbox"> Weekend Prog.</div>
+                <div><input type="checkbox"> 3 Days Prog.</div>
+                <div><input type="checkbox"> 5 Days Prog.</div>
+                <div><input type="checkbox"> 6 Days Prog.</div>
+                <div><input type="checkbox"> 7 Days Prog.</div>
+                <div><input type="checkbox"> Mother Zumba</div>
+                <div><input type="checkbox"> Other: <span style="border-bottom: 1px solid #000; display:inline-block; width:40px;"></span></div>
+              </div>
+
+              <div style="margin-bottom: 10px; font-size: 13px;">Preferred Time Slot:</div>
+              <div style="display: flex; gap: 20px; font-size: 13px; margin-bottom: 15px;">
+                <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Morning' ? 'checked' : ''}> Morning <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
+                <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Evening' ? 'checked' : ''}> Evening <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">No. of Classes Assigned:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center;">${st.classes_total || ''}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                <span style="white-space: nowrap;">📅 Plan Validity Ending Date:</span>
+                <div style="flex: 1; display: flex; justify-content: space-between; text-align: center; margin-left: 10px;">
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. PAYMENT DETAILS -->
+            <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
+              
+              <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
+                <div><input type="checkbox"> Cash</div>
+                <div><input type="checkbox"> UPI</div>
+                <div><input type="checkbox"> Bank Transfer</div>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Amount Paid (₹):</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Plan / Program:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.batch_name || ''}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Payment For:</span>
+                <span><input type="checkbox"> Monthly Fee</span>
+                <span><input type="checkbox"> Registration Fee</span>
+                <span><input type="checkbox"> Other</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                <span style="white-space: nowrap;">Remarks (if any):</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+              </div>
+            </div>
           </div>
 
-          <div class="signature-section">
-            <div>
-              <div class="sig-line" style="margin-top: 40px;">Parent / Guardian Signature</div>
+          <!-- 5. TERMS & CONDITIONS -->
+          <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
+            
+            <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
+              <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>
+              <li>I agree to pay the fees as per the program selected.</li>
+              <li>Registration fee is non-refundable.</li>
+              <li>Fees once paid are non-refundable and non-transferable.</li>
+              <li>I understand that physical activities, play and learning sessions may involve movement and participation.</li>
+              <li>I authorize Phulwari - Mother & Child Activity Centre to seek necessary medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.</li>
+              <li>I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).</li>
+              <li>I understand that the management reserves the right to make changes in schedules, timings, or activities when required.</li>
+              <li>I agree to abide by all the rules, policies and guidelines of Phulwari - Mother & Child Activity Centre.</li>
+              <li>I understand that in case of any damage caused by my child to centre property, I will be responsible for the same.</li>
+            </ul>
+
+            <!-- Signatures -->
+            <div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px 10px; align-items: flex-end;">
+              <div style="display: flex; gap: 10px; align-items: flex-end; flex: 1;">
+                <strong style="font-size: 14px;">Parent / Guardian Signature:</strong>
+                <div style="border-bottom: 1px solid #000; flex: 1; margin-right: 40px;"></div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <strong style="font-size: 14px;">Date:</strong>
+                <div style="display: flex; justify-content: space-between; text-align: center; width: 120px;">
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 40px;"></div>
+                </div>
+              </div>
             </div>
-            <div>
-              <div class="sig-line" style="margin-top: 40px;">Center Coordinator Signature</div>
+            
+            <!-- Bottom Tagline -->
+            <div style="text-align: center; color: #16A34A; font-weight: bold; font-size: 12px; margin-top: 10px;">
+              🌸 Nurturing Bonds. Building Confidence. Creating Happy Childhoods. 🌸
             </div>
           </div>
+
         </div>
       `
     })
@@ -1118,35 +1278,16 @@ export default function AdminDashboardPage() {
       <head>
         <title>Bulk Student Registration Forms</title>
         <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #334155; line-height: 1.5; background: #fff; }
-          .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-          .logo { height: 75px; margin-bottom: 10px; }
-          .title { font-size: 20px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; }
-          .subtitle { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; }
-          .section { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
-          .section-title { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 8px 16px; font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; }
-          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
-          .full-width { grid-column: span 2; }
-          .item { font-size: 12px; }
-          .label { font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 9px; margin-bottom: 2px; }
-          .val { font-size: 13px; font-weight: 700; color: #0f172a; }
-          .terms { font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; margin-top: 30px; }
-          .signature-section { display: flex; justify-content: space-between; margin-top: 50px; font-size: 12px; font-weight: 700; }
-          .sig-line { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 6px; }
           @media print {
-            body { padding: 0; }
-            button { display: none !important; }
-            @page { size: A4; margin: 15mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
+            @page { size: A4; margin: 10mm; }
           }
         </style>
       </head>
       <body>
         ${allFormsHtml}
         <script>
-          window.onload = function() {
-            window.print();
-          };
+          setTimeout(() => { window.print(); }, 1000);
         </script>
       </body>
       </html>
@@ -1154,7 +1295,6 @@ export default function AdminDashboardPage() {
     printWin.document.write(printHtml)
     printWin.document.close()
   }
-
   // Print Registration PDF Form
   const handlePrintRegistrationForm = (st: any) => {
     const printWin = window.open('', '_blank')
@@ -1163,112 +1303,241 @@ export default function AdminDashboardPage() {
     const printHtml = `
       <!DOCTYPE html>
       <html>
-      <head>
-        <title>Student Registration & Consent Form - ${st.full_name}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #334155; line-height: 1.5; background: #fff; }
-          .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-          .logo { height: 75px; margin-bottom: 10px; }
-          .title { font-size: 20px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; }
-          .subtitle { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; }
-          .section { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
-          .section-title { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 8px 16px; font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; }
-          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
-          .full-width { grid-column: span 2; }
-          .item { font-size: 12px; }
-          .label { font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 9px; margin-bottom: 2px; }
-          .val { font-size: 13px; font-weight: 700; color: #0f172a; }
-          .terms { font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; margin-top: 30px; }
-          .signature-section { display: flex; justify-content: space-between; margin-top: 50px; font-size: 12px; font-weight: 700; }
-          .sig-line { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 6px; }
-          @media print {
-            body { padding: 0; }
-            button { display: none !important; }
-            @page { size: A4; margin: 15mm; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <img src="/Logo-png.png" class="logo" alt="Phulwari Logo" />
-          <div class="title">Parent Registration & Consent Form</div>
-          <div class="subtitle">M/32, Road No. 25, Sri Krishna Nagar, Patna — 800001 | Phone: +91 91552 25888</div>
-        </div>
+        <head>
+          <title>Student Registration & Consent Form - ${st.full_name}</title>
+          <style>
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
+              @page { size: A4; margin: 10mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0;">
+            
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <div style="flex: 1;">
+                <img src="https://phulwari.co.in/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
+                <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
+              </div>
+              
+              <div style="flex: 2; text-align: center;">
+                <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
+                <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
+              </div>
+              
+              <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                  <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
+                </div>
+                <div style="margin-top: 4px;">📞 +91 6207368839</div>
+                <div>✉️ phulwari02@gmail.com</div>
+                <div>🌐 www.phulwari.co.in</div>
+                <div>📸 @phulwari.activitycentre</div>
+              </div>
+            </div>
 
-        <div class="section">
-          <div class="section-title">1. Child's Information</div>
-          <div class="grid">
-            <div class="item"><div class="label">Full Name</div><div class="val">${st.full_name}</div></div>
-            <div class="item"><div class="label">Admission ID</div><div class="val">${st.admission_id}</div></div>
-            <div class="item"><div class="label">Date of Birth</div><div class="val">${st.dob || 'N/A'}</div></div>
-            <div class="item"><div class="label">Gender</div><div class="val">${st.gender || 'N/A'}</div></div>
-            <div class="item"><div class="label">Blood Group</div><div class="val">${st.blood_group || 'N/A'}</div></div>
-            <div class="item"><div class="label">Category</div><div class="val">${st.category || 'Child Activity'}</div></div>
-            <div class="item full-width"><div class="label">Address</div><div class="val">${st.address || 'N/A'}, ${st.city || 'Patna'}, ${st.state || 'Bihar'} - ${st.pin_code || '800001'}</div></div>
+            <!-- Top Boxes -->
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+              <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+                <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Admission No.:</strong>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.admission_id}</span>
+              </div>
+              <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+                <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Date:</strong>
+                <div style="flex: 1; display: flex; justify-content: space-between; text-align: center;">
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 1. CHILD'S DETAILS -->
+            <div style="border: 2px solid #E11D48; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">1. CHILD'S DETAILS</div>
+              
+              <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+                <span style="white-space: nowrap;">Child's Full Name:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.full_name}</span>
+                <span style="white-space: nowrap;">Date of Birth:</span>
+                <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${st.dob || ''}</span>
+              </div>
+              
+              <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
+                <span style="white-space: nowrap;">Gender:</span>
+                <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
+                <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
+                <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
+                <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <span style="white-space: nowrap;">City:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.city || 'Patna'}</span>
+                <span style="white-space: nowrap;">State:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.state || 'Bihar'}</span>
+                <span style="white-space: nowrap;">PIN Code:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.pin_code || '800001'}</span>
+              </div>
+            </div>
+
+            <!-- 2. PARENT / GUARDIAN DETAILS -->
+            <div style="border: 2px solid #3B0764; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #3B0764; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">2. PARENT / GUARDIAN DETAILS</div>
+              
+              <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+                <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
+                <span style="border-bottom: 1px solid #000; flex: 2;">${st.parent_name}</span>
+                <span style="white-space: nowrap;">Relationship:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_relationship || ''}</span>
+              </div>
+              
+              <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+                <span style="white-space: nowrap;">Email ID:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_email || ''}</span>
+                <span style="white-space: nowrap;">Occupation:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_occupation || ''}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <span style="white-space: nowrap;">Phone No.:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_phone}</span>
+                <span style="white-space: nowrap;">Alternate Phone No.:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_alt_phone || ''}</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
+              <!-- 3. PROGRAM / BATCH DETAILS -->
+              <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+                <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
+                
+                <div style="margin-bottom: 10px; font-size: 13px;">Program / Activity Interested In:</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 15px;">
+                  <div><input type="checkbox"> Playzone</div>
+                  <div><input type="checkbox"> Weekend Prog.</div>
+                  <div><input type="checkbox"> 3 Days Prog.</div>
+                  <div><input type="checkbox"> 5 Days Prog.</div>
+                  <div><input type="checkbox"> 6 Days Prog.</div>
+                  <div><input type="checkbox"> 7 Days Prog.</div>
+                  <div><input type="checkbox"> Mother Zumba</div>
+                  <div><input type="checkbox"> Other: <span style="border-bottom: 1px solid #000; display:inline-block; width:40px;"></span></div>
+                </div>
+
+                <div style="margin-bottom: 10px; font-size: 13px;">Preferred Time Slot:</div>
+                <div style="display: flex; gap: 20px; font-size: 13px; margin-bottom: 15px;">
+                  <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Morning' ? 'checked' : ''}> Morning <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
+                  <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Evening' ? 'checked' : ''}> Evening <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                  <span style="white-space: nowrap;">No. of Classes Assigned:</span>
+                  <span style="border-bottom: 1px solid #000; flex: 1; text-align: center;">${st.classes_total || ''}</span>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                  <span style="white-space: nowrap;">📅 Plan Validity Ending Date:</span>
+                  <div style="flex: 1; display: flex; justify-content: space-between; text-align: center; margin-left: 10px;">
+                    <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
+                    <span>/</span>
+                    <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
+                    <span>/</span>
+                    <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. PAYMENT DETAILS -->
+              <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+                <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
+                
+                <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
+                  <div><input type="checkbox"> Cash</div>
+                  <div><input type="checkbox"> UPI</div>
+                  <div><input type="checkbox"> Bank Transfer</div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                  <span style="white-space: nowrap;">Amount Paid (₹):</span>
+                  <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                  <span style="white-space: nowrap;">Plan / Program:</span>
+                  <span style="border-bottom: 1px solid #000; flex: 1;">${st.batch_name || ''}</span>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                  <span style="white-space: nowrap;">Payment For:</span>
+                  <span><input type="checkbox"> Monthly Fee</span>
+                  <span><input type="checkbox"> Registration Fee</span>
+                  <span><input type="checkbox"> Other</span>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                  <span style="white-space: nowrap;">Remarks (if any):</span>
+                  <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. TERMS & CONDITIONS -->
+            <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
+              
+              <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
+                <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>
+                <li>I agree to pay the fees as per the program selected.</li>
+                <li>Registration fee is non-refundable.</li>
+                <li>Fees once paid are non-refundable and non-transferable.</li>
+                <li>I understand that physical activities, play and learning sessions may involve movement and participation.</li>
+                <li>I authorize Phulwari - Mother & Child Activity Centre to seek necessary medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.</li>
+                <li>I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).</li>
+                <li>I understand that the management reserves the right to make changes in schedules, timings, or activities when required.</li>
+                <li>I agree to abide by all the rules, policies and guidelines of Phulwari - Mother & Child Activity Centre.</li>
+                <li>I understand that in case of any damage caused by my child to centre property, I will be responsible for the same.</li>
+              </ul>
+
+              <!-- Signatures -->
+              <div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px 10px; align-items: flex-end;">
+                <div style="display: flex; gap: 10px; align-items: flex-end; flex: 1;">
+                  <strong style="font-size: 14px;">Parent / Guardian Signature:</strong>
+                  <div style="border-bottom: 1px solid #000; flex: 1; margin-right: 40px;"></div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                  <strong style="font-size: 14px;">Date:</strong>
+                  <div style="display: flex; justify-content: space-between; text-align: center; width: 120px;">
+                    <div style="border-bottom: 1px solid #000; width: 30px;"></div>
+                    <span>/</span>
+                    <div style="border-bottom: 1px solid #000; width: 30px;"></div>
+                    <span>/</span>
+                    <div style="border-bottom: 1px solid #000; width: 40px;"></div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Bottom Tagline -->
+              <div style="text-align: center; color: #16A34A; font-weight: bold; font-size: 12px; margin-top: 10px;">
+                🌸 Nurturing Bonds. Building Confidence. Creating Happy Childhoods. 🌸
+              </div>
+            </div>
+
           </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">2. Parent & Contact Information</div>
-          <div class="grid">
-            <div class="item"><div class="label">Parent / Guardian Name</div><div class="val">${st.parent_name} (${st.parent_relationship || 'Father'})</div></div>
-            <div class="item"><div class="label">Occupation</div><div class="val">${st.parent_occupation || 'N/A'}</div></div>
-            <div class="item"><div class="label">Primary Phone</div><div class="val">${st.parent_phone}</div></div>
-            <div class="item"><div class="label">Alternate Phone</div><div class="val">${st.parent_alt_phone || 'N/A'}</div></div>
-            <div class="item full-width"><div class="label">Email Address</div><div class="val">${st.parent_email || 'N/A'}</div></div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">3. Program & Schedule Details</div>
-          <div class="grid">
-            <div class="item"><div class="label">Enrolled Program Batch</div><div class="val">${st.batch_name || 'Mother & Toddler Program'}</div></div>
-            <div class="item"><div class="label">Preferred Time Slot</div><div class="val">${st.preferred_time_slot || 'Morning'}</div></div>
-            <div class="item"><div class="label">Weekly Schedule (Days)</div><div class="val">${st.custom_days || 'Standard Batch Days'}</div></div>
-            <div class="item"><div class="label">Total / Consumed Classes</div><div class="val">${st.classes_total || 12} Classes / ${st.classes_consumed || 0} Used</div></div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">4. Medical Emergency Profile</div>
-          <div class="grid">
-            <div class="item"><div class="label">Emergency Contact</div><div class="val">${st.emergency_contact_name || 'N/A'} (${st.emergency_relationship || 'N/A'})</div></div>
-            <div class="item"><div class="label">Emergency Phone</div><div class="val">${st.emergency_phone || 'N/A'}</div></div>
-            <div class="item"><div class="label">Medical Conditions</div><div class="val">${st.has_medical_condition ? (st.medical_condition_details || 'Yes') : 'None Declared'}</div></div>
-            <div class="item"><div class="label">Hospital Preference</div><div class="val">${st.hospital_preference || 'N/A'}</div></div>
-          </div>
-        </div>
-
-        <div class="terms">
-          <strong>Terms & Conditions & Consent:</strong><br/>
-          1. <strong>Non-Refundable Fee:</strong> All fees are strictly non-refundable and non-transferable under any circumstances.<br/>
-          2. <strong>Medical Consent:</strong> In case of medical emergency, Phulwari management is authorized to seek emergency medical care at the preferred hospital or nearest medical facility.<br/>
-          3. <strong>Media Promotion Consent:</strong> The parent grants Phulwari permission to capture and use photographs/videos of the child during activities for promotional, newsletter, and social media marketing purposes.
-        </div>
-
-        <div class="signature-section">
-          <div>
-            <div class="sig-line" style="margin-top: 40px;">Parent / Guardian Signature</div>
-          </div>
-          <div>
-            <div class="sig-line" style="margin-top: 40px;">Center Coordinator Signature</div>
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 2000);
-          };
-        </script>
-      </body>
+          <script>
+            setTimeout(() => { window.print(); }, 1000);
+          </script>
+        </body>
       </html>
     `
     printWin.document.write(printHtml)
     printWin.document.close()
   }
-
   // Send Prerequisite WhatsApp Fee Due Reminder Message
   const handleSendWhatsAppFeeReminder = (stName: string, admissionId: string, parentPhone: string, monthTitle: string, dueAmount: number, dueDate: string) => {
     const cleanPhone = (parentPhone || '').replace(/[^0-9]/g, '')
@@ -1304,7 +1573,7 @@ export default function AdminDashboardPage() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
       if (supabaseUrl && supabaseKey) {
-        const res = await fetch(`${supabaseUrl}/rest/v1/gallery?select=*`, {
+        const res = await fetch(`${supabaseUrl}/rest/v1/gallery?select=*&order=created_at.desc`, {
           headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
         })
         if (res.ok) {
@@ -1452,80 +1721,55 @@ export default function AdminDashboardPage() {
 
   // Save Party Packages
   const handleSavePartyPackages = async () => {
-    setPkgSaveStatus('Saving packages to persistent storage & database...')
-    try {
-      localStorage.setItem('phulwari_party_packages', JSON.stringify(partyPackages))
-    } catch (err) {}
+    setPkgSaveStatus('Saving packages to database...')
 
-    // Post to zero-token public API route on main frontend app if configured
+    // Always persist to localStorage first
+    try { localStorage.setItem('phulwari_party_packages', JSON.stringify(partyPackages)) } catch (e) {}
+
     try {
-      const clientBaseUrl = process.env.NEXT_PUBLIC_CLIENT_URL
-      if (clientBaseUrl) {
-        fetch(`${clientBaseUrl}/api/packages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(partyPackages)
-        }).catch(() => {})
+      const supabase = createClient()
+
+      // Delete all existing packages and re-insert fresh to avoid conflict issues
+      await supabase.from('party_packages').delete().neq('id', 0)
+
+      // Build clean rows — strip string IDs, let DB auto-assign integer ids
+      const rows = partyPackages.map((pkg, idx) => ({
+        name: pkg.name || `Package ${idx + 1}`,
+        price: pkg.price || '',
+        tagline: pkg.tagline || '',
+        includes: pkg.includes || '',
+        is_visible: pkg.is_visible !== false
+      }))
+
+      const { data, error } = await supabase.from('party_packages').insert(rows).select()
+
+      if (error) throw error
+
+      // Update the in-memory partyPackages with DB-assigned integer IDs
+      if (data) {
+        setPartyPackages(data.map((dbPkg: any, idx: number) => ({
+          ...partyPackages[idx],
+          ...dbPkg
+        })))
       }
-    } catch (e) {}
 
-    // Safe Supabase REST upsert attempt
-    try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      if (supabaseUrl && supabaseKey) {
-        // First try standard REST upsert for party_packages
-        for (const pkg of partyPackages) {
-          await fetch(`${supabaseUrl}/rest/v1/party_packages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': supabaseKey,
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Prefer': 'resolution=merge-duplicates'
-            },
-            body: JSON.stringify({ 
-              id: pkg.id, 
-              name: pkg.name, 
-              price: pkg.price, 
-              tagline: pkg.tagline, 
-              includes: pkg.includes,
-              is_visible: pkg.is_visible !== false
-            })
-          }).catch(() => {})
+      // Also embed into birthday_landing_config as a backup for the frontend
+      try {
+        const { data: cfgData } = await supabase.from('birthday_landing_config').select('*').eq('id', 1).single()
+        if (cfgData) {
+          await supabase.from('birthday_landing_config').update({
+            hero_section: { ...cfgData.hero_section, packages: rows }
+          }).eq('id', 1)
         }
+      } catch (_) {}
 
-        // Also sync packages directly into birthday_landing_config hero_section.packages to guarantee dynamic frontend loads
-        const resConfig = await fetch(`${supabaseUrl}/rest/v1/birthday_landing_config?id=eq.1`, {
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`
-          }
-        });
-        if (resConfig.ok) {
-          const configData = await resConfig.json();
-          if (configData && configData.length > 0) {
-            const row = configData[0];
-            const updatedHero = {
-              ...row.hero_section,
-              packages: partyPackages
-            };
-            await fetch(`${supabaseUrl}/rest/v1/birthday_landing_config?id=eq.1`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': supabaseKey,
-                'Authorization': `Bearer ${supabaseKey}`
-              },
-              body: JSON.stringify({ hero_section: updatedHero })
-            });
-          }
-        }
-      }
-    } catch (err) {}
+      setPkgSaveStatus('✅ Party packages saved & published live!')
+    } catch (err: any) {
+      console.error('Failed to save party packages to DB:', err)
+      setPkgSaveStatus(`✅ Saved locally (DB: ${err?.message || 'check table exists'})`)
+    }
 
-    setPkgSaveStatus('✅ Party packages updated & published live!')
-    setTimeout(() => setPkgSaveStatus(''), 3500)
+    setTimeout(() => setPkgSaveStatus(''), 4000)
   }
 
   const handleAddNewPackage = () => {
@@ -1894,22 +2138,30 @@ export default function AdminDashboardPage() {
   const totalEnrolled = filteredStudents.length
   const totalStudentsCount = activeStudents.length
   const totalBatchesCount = allAvailableBatches.length
-  const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
+  
+  // Fees KPI: all-time totals so they always show real data
   let totalPaidFees = 0
   let totalPendingFees = 0
   
-  activeStudents.forEach(st => {
-    const stFee = currentMonthFees.find(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
-    if (stFee && stFee.status === 'paid') {
-      totalPaidFees += Number(stFee.net_amount || stFee.amount || 0)
-    } else if (stFee && stFee.status === 'pending') {
-      totalPendingFees += Number(stFee.net_amount || stFee.amount || 0)
-    } else {
+  fees.forEach(f => {
+    if (f.status === 'paid') {
+      totalPaidFees += Number(f.net_amount || f.amount || 0)
+    } else if (f.status === 'pending' || f.status === 'due') {
+      totalPendingFees += Number(f.net_amount || f.amount || 0)
+    }
+  })
+
+  // If no fee records exist yet, estimate pending from active students
+  if (fees.length === 0 && activeStudents.length > 0) {
+    activeStudents.forEach(st => {
       const batch = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.trim().toLowerCase() === st.batch_name.trim().toLowerCase()))
       const feeAmount = classFees[batch?.batch_name || 'Mother & Toddler Program'] || 3500
       totalPendingFees += Number(feeAmount)
-    }
-  })
+    })
+  }
+  
+  // For month-specific fee tab display
+  const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
   
   const totalRevenueCombined = totalPaidFees + totalPendingFees
   const paidRatioPercentage = totalRevenueCombined > 0 ? ((totalPaidFees / totalRevenueCombined) * 100).toFixed(1) : '0.0'
@@ -2436,8 +2688,8 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* HIDE STUDENT KPI CARDS AND FILTER BAR WHEN IN PARTY PACKAGES, BLOGS, REVIEWS AND BIRTHDAYS TABS AS REQUESTED */}
-        {activeTab !== 'packages' && activeTab !== 'birthday_page' && activeTab !== 'blogs' && activeTab !== 'reviews' && activeTab !== 'birthdays' && activeTab !== 'dashboard' && activeTab !== 'gallery' && activeTab !== 'announcements' && activeTab !== 'teachers' && (
+        {/* SHOW STUDENT KPI CARDS AND FILTER BAR ONLY ON STUDENT/FEE RELEVANT TABS */}
+        {(activeTab === 'students' || activeTab === 'student_list' || activeTab === 'deactivated' || activeTab === 'fees') && (
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -2474,7 +2726,7 @@ export default function AdminDashboardPage() {
                   <CheckCircle2 className="w-4 h-4 text-blue-600" />
                 </div>
                 <p className="text-2xl font-bold text-blue-500">
-                  {attendance.filter(a => a.status === 'present').length} Present
+                  {attendance.filter(a => a.status === 'present' && a.date === new Date().toISOString().split('T')[0]).length} Present
                 </p>
                 <p className={`text-[11px] ${textSecondary}`}>Daily active tracker</p>
               </div>
@@ -2597,6 +2849,7 @@ export default function AdminDashboardPage() {
             isLight={isLight}
             deactivatedStudents={deactivatedStudents}
             onReactivate={handleReactivateStudent}
+            onPermanentDelete={handlePermanentDeleteDeactivated}
           />
         )}
 
@@ -3962,114 +4215,124 @@ export default function AdminDashboardPage() {
 
               </div>
 
-              {/* 5. MEDICAL INFORMATION */}
-              <div className="border border-blue-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-[#0288d1] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
-                  5. Medical Information
+              {/* 5. PAYMENT DETAILS */}
+              <div className="border border-emerald-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-[#1b5e20] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                  5. Payment Details
                 </div>
-                <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-2 flex items-center gap-4 py-2">
-                    <span className="font-bold text-slate-700">Does your child have any medical condition?</span>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-1.5 font-bold cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={newStudentForm.has_medical_condition} 
-                          onChange={(e) => setNewStudentForm({ ...newStudentForm, has_medical_condition: e.target.checked })} 
-                          className="w-4 h-4 accent-blue-600 rounded" 
-                        />
-                        <span>Yes</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 font-bold cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={!newStudentForm.has_medical_condition} 
-                          onChange={(e) => setNewStudentForm({ ...newStudentForm, has_medical_condition: !e.target.checked })} 
-                          className="w-4 h-4 accent-blue-600 rounded" 
-                        />
-                        <span>No</span>
-                      </label>
+                <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Mode of Payment</label>
+                    <div className="flex gap-4 mt-2 flex-wrap">
+                      {['Cash', 'UPI', 'Bank Transfer'].map(mode => (
+                        <label key={mode} className="flex items-center gap-1.5 font-bold cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment_mode" 
+                            value={mode} 
+                            checked={(newStudentForm as any).payment_mode === mode} 
+                            onChange={(e) => setNewStudentForm({ ...newStudentForm, payment_mode: e.target.value } as any)} 
+                            className="w-4 h-4 accent-emerald-600" 
+                          />
+                          <span>{mode}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Amount Paid (₹)</label>
+                    <input 
+                      type="number" 
+                      placeholder="e.g. 3500"
+                      value={(newStudentForm as any).amount_paid || ''} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, amount_paid: e.target.value } as any)} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Plan Validity Ending Date</label>
+                    <input 
+                      type="date" 
+                      value={(newStudentForm as any).plan_validity_date || ''} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, plan_validity_date: e.target.value } as any)} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Payment For</label>
+                    <div className="flex gap-4 mt-2 flex-wrap">
+                      {['Monthly Fee', 'Registration Fee', 'Other'].map(payFor => (
+                        <label key={payFor} className="flex items-center gap-1.5 font-bold cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment_for" 
+                            value={payFor} 
+                            checked={(newStudentForm as any).payment_for === payFor} 
+                            onChange={(e) => setNewStudentForm({ ...newStudentForm, payment_for: e.target.value } as any)} 
+                            className="w-4 h-4 accent-emerald-600" 
+                          />
+                          <span>{payFor}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">If Yes, please specify:</label>
+                    <label className="block font-bold text-slate-700 mb-1">Remarks (if any)</label>
                     <input 
                       type="text" 
-                      disabled={!newStudentForm.has_medical_condition}
-                      placeholder="Specify child's medical condition"
-                      value={newStudentForm.medical_condition_details} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, medical_condition_details: e.target.value })} 
-                      className="w-full bg-white disabled:bg-slate-100 disabled:text-slate-400 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">Regular Medication (if any):</label>
-                    <input 
-                      type="text" 
-                      placeholder="Medications"
-                      value={newStudentForm.regular_medication} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, regular_medication: e.target.value })} 
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Doctor's Name:</label>
-                    <input 
-                      type="text" 
-                      placeholder="Doctor's full name"
-                      value={newStudentForm.doctor_name} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, doctor_name: e.target.value })} 
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Doctor's Contact No.:</label>
-                    <input 
-                      type="tel" 
-                      placeholder="Doctor's phone number"
-                      value={newStudentForm.doctor_phone} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, doctor_phone: e.target.value })} 
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-mono font-semibold" 
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">Hospital Preference:</label>
-                    <input 
-                      type="text" 
-                      placeholder="Hospital name"
-                      value={newStudentForm.hospital_preference} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, hospital_preference: e.target.value })} 
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
+                      placeholder="Any additional notes or remarks"
+                      value={(newStudentForm as any).remarks || ''} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, remarks: e.target.value } as any)} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold" 
                     />
                   </div>
                 </div>
               </div>
 
-              {/* 6. CONSENT & AUTHORIZATION */}
-              <div className="border border-pink-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-pink-600 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider flex items-center justify-between">
-                  <span>6. Consent & Authorization</span>
-                  <span className="text-[10px] italic">(Please read and tick all that apply)</span>
+              {/* 6. TERMS & CONDITIONS */}
+              <div className="border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-[#b45309] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider flex items-center justify-between">
+                  <span>6. Terms & Conditions</span>
+                  <span className="text-[10px] italic">(Please read and agree to all terms)</span>
                 </div>
-                <div className="p-4 bg-pink-50/20 space-y-3">
+                <div className="p-4 bg-amber-50/20 space-y-3">
                   {[
                     "I confirm that all the information provided above is true and accurate to the best of my knowledge.",
                     "I authorize Phulwari - Mother & Child Activity Centre to seek emergency medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.",
                     "I understand that physical activities, play, and learning sessions may involve movement and participation. I consent to my child's participation in all activities conducted at Phulwari.",
-                    "I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.)."
+                    "I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).",
+                    "I understand that fees once paid are non-refundable. Missed sessions will not be compensated unless prior notice is given."
                   ].map((consentText, idx) => (
-                    <label key={idx} className="flex items-start gap-3 cursor-pointer group p-1 hover:bg-pink-50 rounded-lg transition-colors">
+                    <label key={idx} className="flex items-start gap-3 cursor-pointer group p-1 hover:bg-amber-50 rounded-lg transition-colors">
                       <input 
                         type="checkbox" 
-                        required={idx < 3} /* Mandate first three consents */
+                        required={idx < 4}
                         defaultChecked={true}
-                        className="mt-0.5 w-4 h-4 accent-pink-600 rounded text-white" 
+                        className="mt-0.5 w-4 h-4 accent-amber-600 rounded text-white" 
                       />
                       <span className="text-[11px] font-medium text-slate-700 leading-normal group-hover:text-slate-900">{consentText}</span>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* 7. PARENT / GUARDIAN AGREEMENT */}
+              <div className="border border-indigo-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-indigo-700 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                  7. Parent / Guardian Agreement
+                </div>
+                <div className="p-4 bg-indigo-50/20">
+                  <label className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-indigo-50 rounded-lg transition-colors">
+                    <input 
+                      type="checkbox" 
+                      required
+                      defaultChecked={true}
+                      className="mt-0.5 w-5 h-5 accent-indigo-700 rounded text-white shrink-0" 
+                    />
+                    <span className="text-xs font-semibold text-slate-700 leading-relaxed">
+                      I, <strong className="text-indigo-700">{newStudentForm.parent_name || '____________________'}</strong>, parent/guardian of <strong className="text-pink-600">{newStudentForm.full_name || '____________________'}</strong>, hereby agree to all the Terms and Conditions of Phulwari Mother &amp; Child Activity Centre. I confirm that I have read, understood, and willingly consent to all the above declarations.
+                    </span>
+                  </label>
                 </div>
               </div>
 
