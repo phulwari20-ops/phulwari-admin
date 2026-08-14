@@ -674,7 +674,7 @@ export default function AdminDashboardPage() {
     const { error } = await supabase.from('students').update({ status: 'deactivated' }).eq('id', id)
     if (!error) {
       setStudents(students.map(s => s.id === id ? { ...s, status: 'deactivated' } : s))
-      setIsERPModalOpen(false)
+      setSelectedERPStudent(null)
       alert('⚠️ Student deactivated successfully!')
     }
   }
@@ -1031,6 +1031,128 @@ export default function AdminDashboardPage() {
       printWin.document.write(htmlContent)
       printWin.document.close()
     }
+  }
+
+  // Export Bulk Registration Forms
+  const handleExportBulkRegistrationForms = () => {
+    setIsExportModalOpen(false)
+    const printWin = window.open('', '_blank')
+    if (!printWin) return
+
+    let allFormsHtml = ''
+    filteredStudents.forEach((st, index) => {
+      allFormsHtml += `
+        <div style="page-break-after: ${index === filteredStudents.length - 1 ? 'auto' : 'always'};">
+          <div class="header">
+            <img src="/Logo-png.png" class="logo" alt="Phulwari Logo" />
+            <div class="title">Parent Registration & Consent Form</div>
+            <div class="subtitle">M/32, Road No. 25, Sri Krishna Nagar, Patna — 800001 | Phone: +91 91552 25888</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">1. Child's Information</div>
+            <div class="grid">
+              <div class="item"><div class="label">Full Name</div><div class="val">${st.full_name}</div></div>
+              <div class="item"><div class="label">Admission ID</div><div class="val">${st.admission_id}</div></div>
+              <div class="item"><div class="label">Date of Birth</div><div class="val">${st.dob || 'N/A'}</div></div>
+              <div class="item"><div class="label">Gender</div><div class="val">${st.gender || 'N/A'}</div></div>
+              <div class="item"><div class="label">Blood Group</div><div class="val">${st.blood_group || 'N/A'}</div></div>
+              <div class="item"><div class="label">Category</div><div class="val">${st.category || 'Child Activity'}</div></div>
+              <div class="item full-width"><div class="label">Address</div><div class="val">${st.address || 'N/A'}, ${st.city || 'Patna'}, ${st.state || 'Bihar'} - ${st.pin_code || '800001'}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">2. Parent & Contact Information</div>
+            <div class="grid">
+              <div class="item"><div class="label">Parent / Guardian Name</div><div class="val">${st.parent_name} (${st.parent_relationship || 'Father'})</div></div>
+              <div class="item"><div class="label">Occupation</div><div class="val">${st.parent_occupation || 'N/A'}</div></div>
+              <div class="item"><div class="label">Primary Phone</div><div class="val">${st.parent_phone}</div></div>
+              <div class="item"><div class="label">Alternate Phone</div><div class="val">${st.parent_alt_phone || 'N/A'}</div></div>
+              <div class="item full-width"><div class="label">Email Address</div><div class="val">${st.parent_email || 'N/A'}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">3. Program & Schedule Details</div>
+            <div class="grid">
+              <div class="item"><div class="label">Enrolled Program Batch</div><div class="val">${st.batch_name || 'Mother & Toddler Program'}</div></div>
+              <div class="item"><div class="label">Preferred Time Slot</div><div class="val">${st.preferred_time_slot || 'Morning'}</div></div>
+              <div class="item"><div class="label">Weekly Schedule (Days)</div><div class="val">${st.custom_days || 'Standard Batch Days'}</div></div>
+              <div class="item"><div class="label">Total / Consumed Classes</div><div class="val">${st.classes_total || 12} Classes / ${st.classes_consumed || 0} Used</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">4. Medical Emergency Profile</div>
+            <div class="grid">
+              <div class="item"><div class="label">Emergency Contact</div><div class="val">${st.emergency_contact_name || 'N/A'} (${st.emergency_relationship || 'N/A'})</div></div>
+              <div class="item"><div class="label">Emergency Phone</div><div class="val">${st.emergency_phone || 'N/A'}</div></div>
+              <div class="item"><div class="label">Medical Conditions</div><div class="val">${st.has_medical_condition ? (st.medical_condition_details || 'Yes') : 'None Declared'}</div></div>
+              <div class="item"><div class="label">Hospital Preference</div><div class="val">${st.hospital_preference || 'N/A'}</div></div>
+            </div>
+          </div>
+
+          <div class="terms">
+            <strong>Terms & Conditions & Consent:</strong><br/>
+            1. <strong>Non-Refundable Fee:</strong> All fees are strictly non-refundable and non-transferable under any circumstances.<br/>
+            2. <strong>Medical Consent:</strong> In case of medical emergency, Phulwari management is authorized to seek emergency medical care at the preferred hospital or nearest medical facility.<br/>
+            3. <strong>Media Promotion Consent:</strong> The parent grants Phulwari permission to capture and use photographs/videos of the child during activities for promotional, newsletter, and social media marketing purposes.
+          </div>
+
+          <div class="signature-section">
+            <div>
+              <div class="sig-line" style="margin-top: 40px;">Parent / Guardian Signature</div>
+            </div>
+            <div>
+              <div class="sig-line" style="margin-top: 40px;">Center Coordinator Signature</div>
+            </div>
+          </div>
+        </div>
+      `
+    })
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Bulk Student Registration Forms</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #334155; line-height: 1.5; background: #fff; }
+          .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+          .logo { height: 75px; margin-bottom: 10px; }
+          .title { font-size: 20px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; }
+          .section { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+          .section-title { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 8px 16px; font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; }
+          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
+          .full-width { grid-column: span 2; }
+          .item { font-size: 12px; }
+          .label { font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 9px; margin-bottom: 2px; }
+          .val { font-size: 13px; font-weight: 700; color: #0f172a; }
+          .terms { font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; margin-top: 30px; }
+          .signature-section { display: flex; justify-content: space-between; margin-top: 50px; font-size: 12px; font-weight: 700; }
+          .sig-line { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 6px; }
+          @media print {
+            body { padding: 0; }
+            button { display: none !important; }
+            @page { size: A4; margin: 15mm; }
+          }
+        </style>
+      </head>
+      <body>
+        ${allFormsHtml}
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `
+    printWin.document.write(printHtml)
+    printWin.document.close()
   }
 
   // Print Registration PDF Form
@@ -3001,7 +3123,7 @@ export default function AdminDashboardPage() {
                     key={tab.id}
                     onClick={() => setErpModalTab(tab.id as any)}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                      active ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      active ? 'bg-blue-600 text-white shadow-md' : isLight ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -4722,7 +4844,7 @@ export default function AdminDashboardPage() {
 
             <p className={`text-xs ${textSecondary}`}>Choose your preferred export format to download the complete directory of enrolled students.</p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <button
                 onClick={handleExportStudentsPDF}
                 className="p-5 rounded-2xl border flex flex-col items-center justify-center space-y-2 hover:border-blue-500 hover:bg-blue-50/50 transition cursor-pointer text-center group"
@@ -4739,10 +4861,21 @@ export default function AdminDashboardPage() {
                 className="p-5 rounded-2xl border flex flex-col items-center justify-center space-y-2 hover:border-emerald-500 hover:bg-emerald-50/50 transition cursor-pointer text-center group"
               >
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <span className={`text-xs font-bold ${textPrimary}`}>Export to CSV</span>
+                <span className="text-[10px] text-slate-400">Excel / Spreadsheet</span>
+              </button>
+              
+              <button
+                onClick={handleExportBulkRegistrationForms}
+                className="p-5 rounded-2xl border flex flex-col items-center justify-center space-y-2 hover:border-amber-500 hover:bg-amber-50/50 transition cursor-pointer text-center group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition">
                   <Download className="w-6 h-6" />
                 </div>
-                <span className={`text-xs font-bold ${textPrimary}`}>Export to CSV / Excel</span>
-                <span className="text-[10px] text-slate-400">Spreadsheet File</span>
+                <span className={`text-xs font-bold ${textPrimary}`}>Print Reg Forms</span>
+                <span className="text-[10px] text-slate-400">Bulk Registration Forms</span>
               </button>
             </div>
           </div>
