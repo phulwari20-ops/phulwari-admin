@@ -196,25 +196,25 @@ export default function BlogsTab({
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setEditingBlog(null); setActiveSubTab('dashboard'); }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'dashboard' ? 'bg-blue-600 text-white' : (isLight ? 'bg-slate-100 text-slate-700' : 'bg-slate-800 text-slate-200')}`}
           >
             Dashboard
           </button>
           <button
             onClick={() => { setEditingBlog(null); setActiveSubTab('list'); }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'list' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'list' ? 'bg-blue-600 text-white' : (isLight ? 'bg-slate-100 text-slate-700' : 'bg-slate-800 text-slate-200')}`}
           >
             Blog List
           </button>
           <button
             onClick={() => { setEditingBlog(null); setActiveSubTab('add'); }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'add' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${activeSubTab === 'add' ? 'bg-blue-600 text-white' : (isLight ? 'bg-slate-100 text-slate-700' : 'bg-slate-800 text-slate-200')}`}
           >
             Add New Blog
           </button>
           <button
             onClick={fetchBlogs}
-            className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700"
+            className={`p-2 rounded-xl border ${isLight ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-slate-800 text-slate-200 border-slate-700'}`}
             title="Reload blogs from DB"
           >
             <RefreshCw className="w-4 h-4" />
@@ -263,7 +263,7 @@ export default function BlogsTab({
                     <p className={`font-bold ${textPrimary} truncate`}>{b.title}</p>
                     <p className={`text-[10px] ${textSecondary}`}>{b.category} • {b.status}</p>
                   </div>
-                  <span className={`px-2 py-1 bg-blue-50 dark:bg-slate-800 text-blue-600 rounded-lg font-mono flex items-center gap-1 shrink-0`}>
+                  <span className={`px-2 py-1 rounded-lg font-mono flex items-center gap-1 shrink-0 ${isLight ? 'bg-blue-50 text-blue-600' : 'bg-slate-800 text-blue-400'}`}>
                     <Eye className="w-3.5 h-3.5" /> {b.views || 0}
                   </span>
                 </div>
@@ -289,9 +289,9 @@ export default function BlogsTab({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {blogs.map(b => (
-                <tr key={b.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 ${textPrimary}`}>
+                <tr key={b.id} className={`${isLight ? 'hover:bg-slate-50/50' : 'hover:bg-slate-800/30'} ${textPrimary}`}>
                   <td className="py-3 px-2">
-                    <div className="w-12 h-10 rounded overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <div className={`w-12 h-10 rounded overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-800'}`}>
                       <img src={b.featured_image || '/phulwari_logo.webp'} className="w-full h-full object-cover" onError={(e:any) => e.target.src='/phulwari_logo.webp'} />
                     </div>
                   </td>
@@ -314,7 +314,7 @@ export default function BlogsTab({
                       <Edit className="w-3.5 h-3.5" />
                     </button>
                     <a
-                      href={`http://localhost:3001/blogs/${b.slug}`}
+                      href={`http://localhost:3000/blogs/${b.slug}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-500 rounded transition cursor-pointer flex items-center justify-center"
@@ -523,7 +523,7 @@ export default function BlogsTab({
             <button
               type="button"
               onClick={() => { setEditingBlog(null); setActiveSubTab('list'); }}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer"
+              className={`px-4 py-2 rounded-xl font-semibold cursor-pointer ${isLight ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-slate-300'}`}
             >
               Cancel
             </button>

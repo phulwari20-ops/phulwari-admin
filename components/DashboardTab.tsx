@@ -36,6 +36,22 @@ export default function DashboardTab({
   ];
   const batchColors = ['bg-pink-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500', 'bg-teal-500'];
 
+  // Low Classes alerts (<= 3 classes left)
+  const lowClassStudents = students.filter(st => {
+    const remaining = (st.classes_total || 12) - (st.classes_consumed || 0);
+    return st.status === 'active' && remaining <= 3;
+  });
+
+  // Validity Expiry alerts (within next 5 days)
+  const expiryStudents = students.filter(st => {
+    if (!st.validity_end_date || st.status !== 'active') return false;
+    const expiryDate = new Date(st.validity_end_date);
+    const today = new Date();
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 5;
+  });
+
   return (
     <div className="space-y-6">
       {/* 6 Stat Cards */}
@@ -83,6 +99,44 @@ export default function DashboardTab({
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">92.4%</p></div>
         </div>
       </div>
+
+      {/* Expiry & Remaining Class Alerts */}
+      {(lowClassStudents.length > 0 || expiryStudents.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+          {lowClassStudents.length > 0 && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
+              <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                ⚠️ Low Classes Remaining Alert ({lowClassStudents.length} Students)
+              </h4>
+              <ul className="text-[11px] font-semibold text-amber-900 dark:text-amber-300 list-disc pl-4 space-y-1">
+                {lowClassStudents.slice(0, 4).map(st => {
+                  const left = (st.classes_total || 12) - (st.classes_consumed || 0);
+                  return (
+                    <li key={st.id}>
+                      {st.full_name} ({st.admission_id}) — Only <strong>{left}</strong> classes left!
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {expiryStudents.length > 0 && (
+            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
+              <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                ⏳ Validity Expiry Alert ({expiryStudents.length} Students)
+              </h4>
+              <ul className="text-[11px] font-semibold text-rose-900 dark:text-rose-300 list-disc pl-4 space-y-1">
+                {expiryStudents.slice(0, 4).map(st => (
+                  <li key={st.id}>
+                    {st.full_name} ({st.admission_id}) — Plan expires on <strong>{st.validity_end_date}</strong>!
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Row 2: Fee Chart + Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

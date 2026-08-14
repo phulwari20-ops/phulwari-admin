@@ -11,6 +11,7 @@ interface TeachersTabProps {
   setTeacherForm: (form: any) => void;
   setIsAddTeacherOpen: (isOpen: boolean) => void;
   handleDeleteTeacher: (id: string) => void;
+  adminRole?: string;
 }
 
 export default function TeachersTab({
@@ -22,29 +23,32 @@ export default function TeachersTab({
   setEditingTeacher,
   setTeacherForm,
   setIsAddTeacherOpen,
-  handleDeleteTeacher
+  handleDeleteTeacher,
+  adminRole
 }: TeachersTabProps) {
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-            <UserPlus className="w-5 h-5 text-indigo-500" /> Teacher & Faculty Staff Management
+            <UserPlus className="w-5 h-5 text-indigo-500" /> Teacher &amp; Faculty Staff Management
           </h3>
-          <p className={`text-xs ${textSecondary}`}>Manage educators, assign active batches, track phone & email contacts, and update status live.</p>
+          <p className={`text-xs ${textSecondary}`}>Manage educators, assign active batches, track phone &amp; email contacts, and update status live.</p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingTeacher(null);
-            setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' });
-            setIsAddTeacherOpen(true);
-          }}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Teacher</span>
-        </button>
+        {adminRole !== 'Staff' && (
+          <button
+            onClick={() => {
+              setEditingTeacher(null);
+              setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' });
+              setIsAddTeacherOpen(true);
+            }}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Teacher</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -93,24 +97,26 @@ export default function TeachersTab({
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setEditingTeacher(tch);
-                  setTeacherForm({ name: tch.name, email: tch.email, phone: tch.phone, specialization: tch.specialization, assigned_batch: tch.assigned_batch, status: tch.status });
-                  setIsAddTeacherOpen(true);
-                }}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-indigo-600 hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Edit3 className="w-4 h-4" /> Edit
-              </button>
-              <button
-                onClick={() => handleDeleteTeacher(tch.id)}
-                className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-600 hover:text-white dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Trash2 className="w-4 h-4" /> Delete
-              </button>
-            </div>
+            {adminRole !== 'Staff' && (
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setEditingTeacher(tch);
+                    setTeacherForm({ name: tch.name, email: tch.email, phone: tch.phone, specialization: tch.specialization, assigned_batch: tch.assigned_batch, status: tch.status });
+                    setIsAddTeacherOpen(true);
+                  }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-indigo-600 hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Edit3 className="w-4 h-4" /> Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteTeacher(tch.id)}
+                  className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-600 hover:text-white dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

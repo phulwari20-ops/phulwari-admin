@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { createClient } from '../lib/supabase/client'
 import {
   LayoutDashboard,
@@ -65,11 +66,18 @@ import {
   Smartphone,
   AlertCircle,
   Cake,
-  ExternalLink
+  ExternalLink,
+  PhoneCall,
+  UserX,
+  HelpCircle,
+  ShieldAlert
 } from 'lucide-react'
 import TeachersTab from '../components/TeachersTab'
+import EnquiriesTab from '../components/EnquiriesTab'
+import DeactivatedTab from '../components/DeactivatedTab'
 import GalleryTab from '../components/GalleryTab'
 import PackagesTab from '../components/PackagesTab'
+import BirthdayLandingTab from '../components/BirthdayLandingTab'
 import NoticesTab from '../components/NoticesTab'
 import DashboardTab from '../components/DashboardTab'
 import StudentsTab from '../components/StudentsTab'
@@ -96,7 +104,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'blogs' | 'reviews' | 'birthdays'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated'>('dashboard')
   const [loading, setLoading] = useState(true)
 
   // PWA Support
@@ -232,6 +240,12 @@ export default function AdminDashboardPage() {
 
   // Data states
   const [students, setStudents] = useState<any[]>([])
+  // ERP upgrades & enhancements state
+  const [enquiries, setEnquiries] = useState<any[]>([])
+  const [adminRole, setAdminRole] = useState<'Admin' | 'Staff'>('Admin')
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<'Child Activity' | 'Zumba & Yoga'>('Child Activity')
+  const [waReminderModal, setWaReminderModal] = useState({ isOpen: false, phone: '', message: '' })
+
   const [batches, setBatches] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])
   const [attendance, setAttendance] = useState<any[]>([])
@@ -334,15 +348,41 @@ export default function AdminDashboardPage() {
     admission_id: '',
     password: 'parent123',
     full_name: '',
-    dob: '2021-08-12',
+    dob: '',
     gender: 'Boy',
     blood_group: 'B+',
     batch_id: '11111111-1111-1111-1111-111111111111',
     parent_name: '',
     parent_phone: '',
     parent_email: '',
-    address: 'Kidwaipuri, Patna'
+    address: '',
+    city: 'Patna',
+    state: 'Bihar',
+    pin_code: '800001',
+    parent_relationship: 'Father',
+    parent_occupation: '',
+    parent_address_same: true,
+    parent_alt_phone: '',
+    emergency_contact_name: '',
+    emergency_relationship: '',
+    emergency_phone: '',
+    emergency_alt_phone: '',
+    program_interested: '',
+    preferred_time_slot: 'Morning',
+    has_medical_condition: false,
+    medical_condition_details: '',
+    regular_medication: '',
+    doctor_name: '',
+    doctor_phone: '',
+    hospital_preference: '',
+    consent_accepted: true,
+    custom_days: '',
+    classes_total: 12,
+    classes_consumed: 0,
+    category: 'Child Activity',
+    status: 'active'
   })
+
 
   // Export Choice Modal State (PDF vs CSV)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
@@ -367,7 +407,7 @@ export default function AdminDashboardPage() {
     { id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator' }
   ])
 
-  const [isAddAdminOpen, setIsAddAdminOpen] = useState<boolean>(false)
+  const [isAddAdminOpen, setIsAddAdminOpen] = useState(false)
   const [newAdminForm, setNewAdminForm] = useState({ name: '', email: '', password: '' })
   const [addAdminMsg, setAddAdminMsg] = useState<string>('')
 
@@ -545,10 +585,97 @@ export default function AdminDashboardPage() {
       // 7. Load Gallery Images from DB
       await fetchAdminGallery()
 
+      // 8. Fetch Enquiries
+      try {
+        const { data: dbEnquiries } = await supabase.from('enquiries').select('*').order('created_at', { ascending: false })
+        if (dbEnquiries && dbEnquiries.length > 0) {
+          setEnquiries(dbEnquiries)
+        } else {
+          setEnquiries([])
+        }
+      } catch (e) {
+        console.error('❌ [ENQUIRIES FETCH ERROR]:', e)
+      }
+
     } catch (err) {
       console.error('❌ [LOAD ERROR]:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // lead & enquiries handlers
+  const handleAddEnquiry = async (form: any) => {
+    const supabase = createClient()
+    const newEnq = {
+      child_name: form.child_name,
+      age: form.age,
+      parent_name: form.parent_name,
+      phone: form.phone,
+      email: form.email,
+      program_interested: form.program_interested,
+      notes: form.notes,
+      status: 'New'
+    }
+    const { data, error } = await supabase.from('enquiries').insert([newEnq]).select()
+    if (!error && data) {
+      setEnquiries([data[0], ...enquiries])
+      alert('🎉 Enquiry logged successfully!')
+    }
+  }
+
+  const handleUpdateEnquiryStatus = async (id: string, status: string) => {
+    const supabase = createClient()
+    const { error } = await supabase.from('enquiries').update({ status }).eq('id', id)
+    if (!error) {
+      setEnquiries(enquiries.map(e => e.id === id ? { ...e, status } : e))
+    }
+  }
+
+  const handleConvertToAdmission = (enquiry: any) => {
+    setNewStudentForm({
+      ...newStudentForm,
+      full_name: enquiry.child_name,
+      parent_name: enquiry.parent_name,
+      parent_phone: enquiry.phone,
+      parent_email: enquiry.email || '',
+      program_interested: enquiry.program_interested || 'Gymnastics & MMA',
+      custom_days: '',
+      classes_total: 12,
+      classes_consumed: 0,
+      category: 'Child Activity',
+      status: 'active'
+    })
+    setActiveTab('students')
+    setIsAddStudentOpen(true)
+  }
+
+  const handleDeleteEnquiry = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this enquiry?')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('enquiries').delete().eq('id', id)
+    if (!error) {
+      setEnquiries(enquiries.filter(e => e.id !== id))
+    }
+  }
+
+  const handleReactivateStudent = async (id: string) => {
+    const supabase = createClient()
+    const { error } = await supabase.from('students').update({ status: 'active' }).eq('id', id)
+    if (!error) {
+      setStudents(students.map(s => s.id === id ? { ...s, status: 'active' } : s))
+      alert('🎉 Student reactivated successfully!')
+    }
+  }
+
+  const handleDeactivateStudent = async (id: string) => {
+    if (!confirm('⚠️ Are you sure you want to deactivate this student? They will be hidden from attendance & dues lists.')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('students').update({ status: 'deactivated' }).eq('id', id)
+    if (!error) {
+      setStudents(students.map(s => s.id === id ? { ...s, status: 'deactivated' } : s))
+      setIsERPModalOpen(false)
+      alert('⚠️ Student deactivated successfully!')
     }
   }
 
@@ -638,6 +765,13 @@ export default function AdminDashboardPage() {
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // 1. Prevent duplicate active students
+    const isDuplicate = students.some(s => s.admission_id === newStudentForm.admission_id.trim() && s.status === 'active')
+    if (isDuplicate) {
+      alert('❌ Error: A student with this Admission ID is already active!')
+      return
+    }
+
     const generateUuid = () => {
       if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
       return 'f' + Date.now().toString(16).padStart(12, '0') + '-4000-8000-000000000000'
@@ -660,8 +794,32 @@ export default function AdminDashboardPage() {
       parent_phone: newStudentForm.parent_phone.trim(),
       parent_email: newStudentForm.parent_email.trim(),
       address: newStudentForm.address.trim(),
+      city: newStudentForm.city.trim(),
+      state: newStudentForm.state.trim(),
+      pin_code: newStudentForm.pin_code.trim(),
+      parent_relationship: newStudentForm.parent_relationship.trim(),
+      parent_occupation: newStudentForm.parent_occupation.trim(),
+      parent_address_same: newStudentForm.parent_address_same,
+      parent_alt_phone: newStudentForm.parent_alt_phone.trim(),
+      emergency_contact_name: newStudentForm.emergency_contact_name.trim(),
+      emergency_relationship: newStudentForm.emergency_relationship.trim(),
+      emergency_phone: newStudentForm.emergency_phone.trim(),
+      emergency_alt_phone: newStudentForm.emergency_alt_phone.trim(),
+      program_interested: newStudentForm.program_interested.trim(),
+      preferred_time_slot: newStudentForm.preferred_time_slot,
+      has_medical_condition: newStudentForm.has_medical_condition,
+      medical_condition_details: newStudentForm.medical_condition_details.trim(),
+      regular_medication: newStudentForm.regular_medication.trim(),
+      doctor_name: newStudentForm.doctor_name.trim(),
+      doctor_phone: newStudentForm.doctor_phone.trim(),
+      hospital_preference: newStudentForm.hospital_preference.trim(),
+      consent_accepted: newStudentForm.consent_accepted,
       validity_end_date: new Date(Date.now() + (selectedBatchObj?.validity_days || 30) * 86400000).toISOString().split('T')[0],
-      status: 'active'
+      status: 'active',
+      custom_days: newStudentForm.custom_days,
+      classes_total: newStudentForm.classes_total,
+      classes_consumed: newStudentForm.classes_consumed || 0,
+      category: newStudentForm.category || 'Child Activity'
     }
 
     const dbPayload = {
@@ -677,7 +835,31 @@ export default function AdminDashboardPage() {
       parent_phone: newStudentObj.parent_phone,
       parent_email: newStudentObj.parent_email,
       address: newStudentObj.address,
-      status: 'active'
+      city: newStudentObj.city,
+      state: newStudentObj.state,
+      pin_code: newStudentObj.pin_code,
+      parent_relationship: newStudentObj.parent_relationship,
+      parent_occupation: newStudentObj.parent_occupation,
+      parent_address_same: newStudentObj.parent_address_same,
+      parent_alt_phone: newStudentObj.parent_alt_phone,
+      emergency_contact_name: newStudentObj.emergency_contact_name,
+      emergency_relationship: newStudentObj.emergency_relationship,
+      emergency_phone: newStudentObj.emergency_phone,
+      emergency_alt_phone: newStudentObj.emergency_alt_phone,
+      program_interested: newStudentObj.program_interested,
+      preferred_time_slot: newStudentObj.preferred_time_slot,
+      has_medical_condition: newStudentObj.has_medical_condition,
+      medical_condition_details: newStudentObj.medical_condition_details,
+      regular_medication: newStudentObj.regular_medication,
+      doctor_name: newStudentObj.doctor_name,
+      doctor_phone: newStudentObj.doctor_phone,
+      hospital_preference: newStudentObj.hospital_preference,
+      consent_accepted: newStudentObj.consent_accepted,
+      status: 'active',
+      custom_days: newStudentObj.custom_days,
+      classes_total: newStudentObj.classes_total,
+      classes_consumed: newStudentObj.classes_consumed,
+      category: newStudentObj.category
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -708,6 +890,14 @@ export default function AdminDashboardPage() {
         try {
           localStorage.setItem('phulwari_admin_students', JSON.stringify(updatedList))
         } catch (err) {}
+
+        // Find matching enquiry and mark as Admission Done
+        const supabase = createClient()
+        const matchingEnq = enquiries.find(e => e.child_name.toLowerCase() === newStudentObj.full_name.toLowerCase() || e.phone === newStudentObj.parent_phone)
+        if (matchingEnq) {
+          await supabase.from('enquiries').update({ status: 'Admission Done' }).eq('id', matchingEnq.id)
+          setEnquiries(enquiries.map(e => e.id === matchingEnq.id ? { ...e, status: 'Admission Done' } : e))
+        }
 
         setIsAddStudentOpen(false)
         alert('Student created successfully!')
@@ -843,15 +1033,127 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // Print Registration PDF Form
+  const handlePrintRegistrationForm = (st: any) => {
+    const printWin = window.open('', '_blank')
+    if (!printWin) return
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Student Registration & Consent Form - ${st.full_name}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #334155; line-height: 1.5; background: #fff; }
+          .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+          .logo { height: 75px; margin-bottom: 10px; }
+          .title { font-size: 20px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; }
+          .section { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+          .section-title { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 8px 16px; font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; }
+          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
+          .full-width { grid-column: span 2; }
+          .item { font-size: 12px; }
+          .label { font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 9px; margin-bottom: 2px; }
+          .val { font-size: 13px; font-weight: 700; color: #0f172a; }
+          .terms { font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; margin-top: 30px; }
+          .signature-section { display: flex; justify-content: space-between; margin-top: 50px; font-size: 12px; font-weight: 700; }
+          .sig-line { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 6px; }
+          @media print {
+            body { padding: 0; }
+            button { display: none !important; }
+            @page { size: A4; margin: 15mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <img src="/Logo-png.png" class="logo" alt="Phulwari Logo" />
+          <div class="title">Parent Registration & Consent Form</div>
+          <div class="subtitle">M/32, Road No. 25, Sri Krishna Nagar, Patna — 800001 | Phone: +91 91552 25888</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">1. Child's Information</div>
+          <div class="grid">
+            <div class="item"><div class="label">Full Name</div><div class="val">${st.full_name}</div></div>
+            <div class="item"><div class="label">Admission ID</div><div class="val">${st.admission_id}</div></div>
+            <div class="item"><div class="label">Date of Birth</div><div class="val">${st.dob || 'N/A'}</div></div>
+            <div class="item"><div class="label">Gender</div><div class="val">${st.gender || 'N/A'}</div></div>
+            <div class="item"><div class="label">Blood Group</div><div class="val">${st.blood_group || 'N/A'}</div></div>
+            <div class="item"><div class="label">Category</div><div class="val">${st.category || 'Child Activity'}</div></div>
+            <div class="item full-width"><div class="label">Address</div><div class="val">${st.address || 'N/A'}, ${st.city || 'Patna'}, ${st.state || 'Bihar'} - ${st.pin_code || '800001'}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">2. Parent & Contact Information</div>
+          <div class="grid">
+            <div class="item"><div class="label">Parent / Guardian Name</div><div class="val">${st.parent_name} (${st.parent_relationship || 'Father'})</div></div>
+            <div class="item"><div class="label">Occupation</div><div class="val">${st.parent_occupation || 'N/A'}</div></div>
+            <div class="item"><div class="label">Primary Phone</div><div class="val">${st.parent_phone}</div></div>
+            <div class="item"><div class="label">Alternate Phone</div><div class="val">${st.parent_alt_phone || 'N/A'}</div></div>
+            <div class="item full-width"><div class="label">Email Address</div><div class="val">${st.parent_email || 'N/A'}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">3. Program & Schedule Details</div>
+          <div class="grid">
+            <div class="item"><div class="label">Enrolled Program Batch</div><div class="val">${st.batch_name || 'Mother & Toddler Program'}</div></div>
+            <div class="item"><div class="label">Preferred Time Slot</div><div class="val">${st.preferred_time_slot || 'Morning'}</div></div>
+            <div class="item"><div class="label">Weekly Schedule (Days)</div><div class="val">${st.custom_days || 'Standard Batch Days'}</div></div>
+            <div class="item"><div class="label">Total / Consumed Classes</div><div class="val">${st.classes_total || 12} Classes / ${st.classes_consumed || 0} Used</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">4. Medical Emergency Profile</div>
+          <div class="grid">
+            <div class="item"><div class="label">Emergency Contact</div><div class="val">${st.emergency_contact_name || 'N/A'} (${st.emergency_relationship || 'N/A'})</div></div>
+            <div class="item"><div class="label">Emergency Phone</div><div class="val">${st.emergency_phone || 'N/A'}</div></div>
+            <div class="item"><div class="label">Medical Conditions</div><div class="val">${st.has_medical_condition ? (st.medical_condition_details || 'Yes') : 'None Declared'}</div></div>
+            <div class="item"><div class="label">Hospital Preference</div><div class="val">${st.hospital_preference || 'N/A'}</div></div>
+          </div>
+        </div>
+
+        <div class="terms">
+          <strong>Terms & Conditions & Consent:</strong><br/>
+          1. <strong>Non-Refundable Fee:</strong> All fees are strictly non-refundable and non-transferable under any circumstances.<br/>
+          2. <strong>Medical Consent:</strong> In case of medical emergency, Phulwari management is authorized to seek emergency medical care at the preferred hospital or nearest medical facility.<br/>
+          3. <strong>Media Promotion Consent:</strong> The parent grants Phulwari permission to capture and use photographs/videos of the child during activities for promotional, newsletter, and social media marketing purposes.
+        </div>
+
+        <div class="signature-section">
+          <div>
+            <div class="sig-line" style="margin-top: 40px;">Parent / Guardian Signature</div>
+          </div>
+          <div>
+            <div class="sig-line" style="margin-top: 40px;">Center Coordinator Signature</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+            setTimeout(function() { window.close(); }, 2000);
+          };
+        </script>
+      </body>
+      </html>
+    `
+    printWin.document.write(printHtml)
+    printWin.document.close()
+  }
+
   // Send Prerequisite WhatsApp Fee Due Reminder Message
   const handleSendWhatsAppFeeReminder = (stName: string, admissionId: string, parentPhone: string, monthTitle: string, dueAmount: number, dueDate: string) => {
     const cleanPhone = (parentPhone || '').replace(/[^0-9]/g, '')
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone || '919876543210'
 
-    const message = `Dear Parents,\nThis is a gentle reminder that a fee of Rs. ${dueAmount} is pending for ${stName}. Please clear the dues as soon as possible.\n\nRegards,\nPhulwari Mother & Child Activity Centre`
-
-    const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`
-    window.open(waUrl, '_blank')
+    const message = `Dear Parent, ${stName} ki ₹${dueAmount} fee ${dueDate || '15th'} ko due hai. Kindly payment complete karein.\n\nRegards,\nPhulwari Mother & Child Activity Centre`
+    setWaReminderModal({ isOpen: true, phone: targetPhone, message })
 
     // Also push a live notification notice into announcements for student portal login
     const feeNotice = {
@@ -1050,6 +1352,7 @@ export default function AdminDashboardPage() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
       if (supabaseUrl && supabaseKey) {
+        // First try standard REST upsert for party_packages
         for (const pkg of partyPackages) {
           await fetch(`${supabaseUrl}/rest/v1/party_packages`, {
             method: 'POST',
@@ -1068,6 +1371,33 @@ export default function AdminDashboardPage() {
               is_visible: pkg.is_visible !== false
             })
           }).catch(() => {})
+        }
+
+        // Also sync packages directly into birthday_landing_config hero_section.packages to guarantee dynamic frontend loads
+        const resConfig = await fetch(`${supabaseUrl}/rest/v1/birthday_landing_config?id=eq.1`, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+        if (resConfig.ok) {
+          const configData = await resConfig.json();
+          if (configData && configData.length > 0) {
+            const row = configData[0];
+            const updatedHero = {
+              ...row.hero_section,
+              packages: partyPackages
+            };
+            await fetch(`${supabaseUrl}/rest/v1/birthday_landing_config?id=eq.1`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`
+              },
+              body: JSON.stringify({ hero_section: updatedHero })
+            });
+          }
         }
       }
     } catch (err) {}
@@ -1366,13 +1696,16 @@ export default function AdminDashboardPage() {
     }
   }
 
+  const activeStudents = students.filter(s => s.status !== 'deactivated')
+  const deactivatedStudents = students.filter(s => s.status === 'deactivated')
+
   const birthdayAlertsCount = useMemo(() => {
     const today = new Date();
     const currentYear = today.getFullYear();
     const tDate = new Date(currentYear, today.getMonth(), today.getDate());
     
     let count = 0;
-    students.forEach(st => {
+    activeStudents.forEach(st => {
       if (!st.dob) return;
       const dob = new Date(st.dob);
       if (isNaN(dob.getTime())) return;
@@ -1398,7 +1731,7 @@ export default function AdminDashboardPage() {
   // DYNAMIC BATCHES LIST FOR FILTER DROPDOWN (COMBINES CONFIGURED BATCHES + ENROLLED STUDENT BATCHES)
   const allAvailableBatches = useMemo(() => {
     const list: any[] = [...batches]
-    students.forEach(st => {
+    activeStudents.forEach(st => {
       if (st.batch_name && !list.some(b => b.id === st.batch_id || b.batch_name?.toLowerCase().trim() === st.batch_name?.toLowerCase().trim())) {
         list.push({
           id: st.batch_id || `bt-${Date.now()}`,
@@ -1411,7 +1744,8 @@ export default function AdminDashboardPage() {
   }, [batches, students])
 
   // ACCURATE CASE-INSENSITIVE Filtered Students List
-  const filteredStudents = students.filter(s => {
+
+  const filteredStudents = activeStudents.filter(s => {
     const sName = (s.full_name || '').toLowerCase()
     const sId = (s.admission_id || '').toLowerCase()
     const pName = (s.parent_name || '').toLowerCase()
@@ -1436,13 +1770,13 @@ export default function AdminDashboardPage() {
 
   // 100% DYNAMIC KPI CALCULATIONS FOR IMAGE 4 DASHBOARD
   const totalEnrolled = filteredStudents.length
-  const totalStudentsCount = students.length
+  const totalStudentsCount = activeStudents.length
   const totalBatchesCount = allAvailableBatches.length
   const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
   let totalPaidFees = 0
   let totalPendingFees = 0
   
-  students.forEach(st => {
+  activeStudents.forEach(st => {
     const stFee = currentMonthFees.find(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
     if (stFee && stFee.status === 'paid') {
       totalPaidFees += Number(stFee.net_amount || stFee.amount || 0)
@@ -1462,7 +1796,7 @@ export default function AdminDashboardPage() {
   // Dynamic Students by Batch Distribution
   const studentsByBatchDistribution = useMemo(() => {
     return allAvailableBatches.map(b => {
-      const bStudents = students.filter(st => st.batch_id === b.id || (st.batch_name && b.batch_name && st.batch_name.toLowerCase().trim() === b.batch_name.toLowerCase().trim()))
+      const bStudents = activeStudents.filter(st => st.batch_id === b.id || (st.batch_name && b.batch_name && st.batch_name.toLowerCase().trim() === b.batch_name.toLowerCase().trim()))
       return {
         batch_name: b.batch_name,
         count: bStudents.length,
@@ -1698,20 +2032,23 @@ export default function AdminDashboardPage() {
           <nav className="space-y-1 min-w-0">
             {[
               { id: 'dashboard', label: 'Dashboard & Home Analytics', icon: LayoutDashboard },
-              { id: 'students', label: 'Student Admissions & ERP', icon: Users, count: students.length },
-              { id: 'student_list', label: 'Student Master Directory', icon: UserCheck, count: students.length },
+              { id: 'students', label: 'Student Admissions & ERP', icon: Users, count: activeStudents.length },
+              { id: 'student_list', label: 'Student Master Directory', icon: UserCheck, count: activeStudents.length },
+              { id: 'deactivated', label: 'Deactivated Students', icon: UserX, count: deactivatedStudents.length },
               { id: 'teachers', label: 'Teacher Management', icon: UserPlus, count: teachers.length },
               { id: 'batches', label: 'Batches & Class Timings', icon: Clock, count: batches.length },
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
               { id: 'calendar', label: 'Attendance Calendar', icon: CalendarDays },
-              { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter(f => f.status === 'pending').length },
+              { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
+              { id: 'birthday_page', label: 'Birthday Landing Page', icon: Sparkles },
               { id: 'announcements', label: 'Notices Broadcaster', icon: Bell, count: announcements.length },
               { id: 'bookings', label: 'Registrations & Bookings', icon: Award, count: bookings.length },
               { id: 'blogs', label: 'Blogs CMS Editor', icon: FileText },
               { id: 'reviews', label: 'Parent Reviews & Ratings', icon: Star },
               { id: 'birthdays', label: 'Birthday Alerts', icon: Cake, count: birthdayAlertsCount },
+              { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
             ].map(item => {
               const Icon = item.icon
               const active = activeTab === item.id
@@ -1805,6 +2142,8 @@ export default function AdminDashboardPage() {
         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
           <div>
             <h2 className={`text-xl font-bold ${textPrimary} flex items-center gap-2`}>
+              {activeTab === 'enquiries' && 'Lead & Enquiry Follow-up Manager'}
+              {activeTab === 'deactivated' && 'Deactivated Students & Discontinued Logs'}
               {activeTab === 'students' && 'Student Management & Admissions'}
               {activeTab === 'teachers' && 'Teacher & Faculty Staff Management'}
               {activeTab === 'attendance' && 'Daily Class Attendance Marker'}
@@ -1812,6 +2151,7 @@ export default function AdminDashboardPage() {
               {activeTab === 'fees' && 'Class & Monthly Fee Management Dashboard'}
               {activeTab === 'gallery' && 'Dynamic Gallery Photo Manager'}
               {activeTab === 'packages' && 'Birthday & Party Packages Configuration'}
+              {activeTab === 'birthday_page' && 'Birthday Landing Page Editor'}
               {activeTab === 'batches' && 'Batches & Class Timings'}
               {activeTab === 'bookings' && 'Party & Camp Registrations'}
               {activeTab === 'announcements' && 'Notices & Circular Broadcaster'}
@@ -1845,6 +2185,20 @@ export default function AdminDashboardPage() {
         )}
 
           <div className="flex items-center space-x-3">
+            {/* ROLE TOGGLE SELECTOR */}
+            <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+              <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
+              {(['Admin', 'Staff'] as const).map(role => (
+                <button
+                  key={role}
+                  onClick={() => setAdminRole(role)}
+                  className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                    adminRole === role ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
+                  }`}
+                >{role}</button>
+              ))}
+            </div>
+
             {/* Active Logged-in Admin Identity Profile Card */}
             {adminUser && (
               <div className={`px-3 py-1.5 rounded-2xl border flex items-center gap-2 text-xs font-semibold shadow-sm shrink-0 ${
@@ -1860,7 +2214,22 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {activeTab === 'students' && (
+            {(activeTab === 'students' || activeTab === 'student_list') && (
+          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+            <span className={`font-semibold px-2 ${textSecondary}`}>Category Filter:</span>
+            {(['Child Activity', 'Zumba & Yoga'] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategoryFilter(cat)}
+                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  selectedCategoryFilter === cat ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
+                }`}
+              >{cat}</button>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'students' && (
               <button
                 onClick={() => {
                   setNewStudentForm({
@@ -1874,7 +2243,32 @@ export default function AdminDashboardPage() {
                     parent_name: '',
                     parent_phone: '',
                     parent_email: '',
-                    address: 'Kidwaipuri, Patna'
+                    address: '',
+                    city: 'Patna',
+                    state: 'Bihar',
+                    pin_code: '800001',
+                    parent_relationship: 'Father',
+                    parent_occupation: '',
+                    parent_address_same: true,
+                    parent_alt_phone: '',
+                    emergency_contact_name: '',
+                    emergency_relationship: '',
+                    emergency_phone: '',
+                    emergency_alt_phone: '',
+                    program_interested: '',
+                    preferred_time_slot: 'Morning',
+                    has_medical_condition: false,
+                    medical_condition_details: '',
+                    regular_medication: '',
+                    doctor_name: '',
+                    doctor_phone: '',
+                    hospital_preference: '',
+                    consent_accepted: true,
+                    custom_days: '',
+                    classes_total: 12,
+                    classes_consumed: 0,
+                    category: 'Child Activity',
+                    status: 'active'
                   })
                   setIsAddStudentOpen(true)
                 }}
@@ -1905,7 +2299,7 @@ export default function AdminDashboardPage() {
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            students={students}
+            students={activeStudents}
             batches={batches}
             totalPaidFees={totalPaidFees}
             totalPendingFees={totalPendingFees}
@@ -1921,7 +2315,7 @@ export default function AdminDashboardPage() {
         )}
 
         {/* HIDE STUDENT KPI CARDS AND FILTER BAR WHEN IN PARTY PACKAGES, BLOGS, REVIEWS AND BIRTHDAYS TABS AS REQUESTED */}
-        {activeTab !== 'packages' && activeTab !== 'blogs' && activeTab !== 'reviews' && activeTab !== 'birthdays' && activeTab !== 'dashboard' && (
+        {activeTab !== 'packages' && activeTab !== 'birthday_page' && activeTab !== 'blogs' && activeTab !== 'reviews' && activeTab !== 'birthdays' && activeTab !== 'dashboard' && activeTab !== 'gallery' && activeTab !== 'announcements' && activeTab !== 'teachers' && (
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -2014,7 +2408,27 @@ export default function AdminDashboardPage() {
           </>
         )}
 
+        {/* TAB: BIRTHDAY LANDING PAGE EDITOR */}
+        {activeTab === 'birthday_page' && (
+          <BirthdayLandingTab />
+        )}
+
         {/* TAB 1: STUDENT MANAGEMENT */}
+        {(activeTab === 'students' || activeTab === 'student_list') && (
+          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+            <span className={`font-semibold px-2 ${textSecondary}`}>Category Filter:</span>
+            {(['Child Activity', 'Zumba & Yoga'] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategoryFilter(cat)}
+                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  selectedCategoryFilter === cat ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
+                }`}
+              >{cat}</button>
+            ))}
+          </div>
+        )}
+
         {activeTab === 'students' && (
           <StudentsTab
             bgCard={bgCard}
@@ -2025,12 +2439,42 @@ export default function AdminDashboardPage() {
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
             badgePassword={badgePassword}
-            filteredStudents={filteredStudents}
+            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
             batches={batches}
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
             setFeeForm={setFeeForm}
             loadAllAdminData={loadAllAdminData}
+          />
+        )}
+
+        {/* TAB: LEAD & ENQUIRY MANAGER */}
+        {activeTab === 'enquiries' && (
+          <EnquiriesTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            badgePassword={badgePassword}
+            isLight={isLight}
+            enquiries={enquiries}
+            onUpdateStatus={handleUpdateEnquiryStatus}
+            onAddEnquiry={handleAddEnquiry}
+            onConvertToAdmission={handleConvertToAdmission}
+            onDeleteEnquiry={handleDeleteEnquiry}
+          />
+        )}
+
+        {/* TAB: DEACTIVATED STUDENTS */}
+        {activeTab === 'deactivated' && (
+          <DeactivatedTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            deactivatedStudents={deactivatedStudents}
+            onReactivate={handleReactivateStudent}
           />
         )}
 
@@ -2043,7 +2487,7 @@ export default function AdminDashboardPage() {
             isLight={isLight}
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
-            filteredStudents={filteredStudents}
+            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
             batches={batches}
             setIsExportModalOpen={setIsExportModalOpen}
           />
@@ -2057,12 +2501,13 @@ export default function AdminDashboardPage() {
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            filteredStudents={filteredStudents}
+            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
             attendance={attendance}
             attendanceDate={attendanceDate}
             setAttendanceDate={setAttendanceDate}
             setActiveTab={setActiveTab}
             handleMarkAttendance={handleMarkAttendance}
+            searchQuery={searchQuery}
           />
         )}
 
@@ -2094,7 +2539,7 @@ export default function AdminDashboardPage() {
             textSecondary={textSecondary}
             isLight={isLight}
             badgeStatus={badgeStatus}
-            filteredStudents={filteredStudents}
+            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
             fees={fees}
             feeSelectedMonth={feeSelectedMonth}
             setFeeSelectedMonth={setFeeSelectedMonth}
@@ -2141,6 +2586,7 @@ export default function AdminDashboardPage() {
             handleSavePartyPackages={handleSavePartyPackages}
             pkgSaveStatus={pkgSaveStatus}
             handleDeletePackage={handleDeletePackage}
+            adminRole={adminRole}
           />
         )}
 
@@ -2156,6 +2602,7 @@ export default function AdminDashboardPage() {
             setTeacherForm={setTeacherForm}
             setIsAddTeacherOpen={setIsAddTeacherOpen}
             handleDeleteTeacher={handleDeleteTeacher}
+            adminRole={adminRole}
           />
         )}
 
@@ -2182,7 +2629,7 @@ export default function AdminDashboardPage() {
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            students={students}
+            students={activeStudents}
           />
         )}
 
@@ -2501,14 +2948,38 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="flex items-center space-x-2">
+                {/* Print Reg PDF button */}
                 <button
-                  onClick={() => handleDeleteStudent(selectedERPStudent.id)}
-                  className="px-3 py-1.5 bg-rose-600/10 text-rose-500 border border-rose-500/20 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition"
-                  title="Delete Student Record"
+                  onClick={() => handlePrintRegistrationForm(selectedERPStudent)}
+                  className="px-3 py-1.5 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                  title="Print Registration Form"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete Student</span>
+                  <span>📥 Print Reg Form</span>
                 </button>
+
+                {/* Deactivate Student button */}
+                {selectedERPStudent.status !== 'deactivated' && (
+                  <button
+                    onClick={() => handleDeactivateStudent(selectedERPStudent.id)}
+                    className="px-3 py-1.5 bg-amber-600/10 text-amber-500 border border-amber-500/20 hover:bg-amber-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                    title="Deactivate Student"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Deactivate Student</span>
+                  </button>
+                )}
+
+                {/* Delete Student button */}
+                {adminRole === 'Admin' && (
+                  <button
+                    onClick={() => handleDeleteStudent(selectedERPStudent.id)}
+                    className="px-3 py-1.5 bg-rose-600/10 text-rose-500 border border-rose-500/20 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                    title="Delete Student Record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Student</span>
+                  </button>
+                )}
 
                 <button onClick={() => setSelectedERPStudent(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                   <X className="w-6 h-6" />
@@ -2772,13 +3243,60 @@ export default function AdminDashboardPage() {
             )}
 
             {erpModalTab === 'profile' && (
-              <div className="space-y-4 text-xs">
-                <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
-                  <p><strong className={textSecondary}>Parent Name:</strong> {selectedERPStudent.parent_name}</p>
-                  <p><strong className={textSecondary}>Parent Contact Phone:</strong> {selectedERPStudent.parent_phone}</p>
-                  <p><strong className={textSecondary}>Email:</strong> {selectedERPStudent.parent_email || 'parent@example.com'}</p>
-                  <p><strong className={textSecondary}>Address:</strong> {selectedERPStudent.address || 'Kidwaipuri, Patna'}</p>
-                  <p><strong className={textSecondary}>Assigned Password:</strong> <span className={`font-mono font-bold border px-2 py-0.5 rounded ${badgePassword}`}>{selectedERPStudent.password}</span></p>
+              <div className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Child Details */}
+                  <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                    <h4 className="font-bold text-pink-600 uppercase tracking-wider text-[10px] border-b pb-1">Child Details</h4>
+                    <p><strong className={textSecondary}>Full Name:</strong> {selectedERPStudent.full_name}</p>
+                    <p><strong className={textSecondary}>Admission ID:</strong> {selectedERPStudent.admission_id}</p>
+                    <p><strong className={textSecondary}>Date of Birth:</strong> {selectedERPStudent.dob || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Gender:</strong> {selectedERPStudent.gender || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Blood Group:</strong> {selectedERPStudent.blood_group || 'N/A'}</p>
+                    <p><strong className={textSecondary}>City/State/PIN:</strong> {selectedERPStudent.city || 'Patna'}, {selectedERPStudent.state || 'Bihar'} {selectedERPStudent.pin_code && `(${selectedERPStudent.pin_code})`}</p>
+                    <p><strong className={textSecondary}>Address:</strong> {selectedERPStudent.address || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Assigned Password:</strong> <span className={`font-mono font-bold border px-2 py-0.5 rounded ${badgePassword}`}>{selectedERPStudent.password}</span></p>
+                  </div>
+
+                  {/* Parent Details */}
+                  <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                    <h4 className="font-bold text-purple-600 uppercase tracking-wider text-[10px] border-b pb-1">Parent Details</h4>
+                    <p><strong className={textSecondary}>Parent Name:</strong> {selectedERPStudent.parent_name}</p>
+                    <p><strong className={textSecondary}>Relationship:</strong> {selectedERPStudent.parent_relationship || 'Father'}</p>
+                    <p><strong className={textSecondary}>Occupation:</strong> {selectedERPStudent.parent_occupation || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Contact Phone:</strong> {selectedERPStudent.parent_phone}</p>
+                    <p><strong className={textSecondary}>Alternate Phone:</strong> {selectedERPStudent.parent_alt_phone || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Email:</strong> {selectedERPStudent.parent_email || 'N/A'}</p>
+                  </div>
+
+                  {/* Emergency Details */}
+                  <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                    <h4 className="font-bold text-green-600 uppercase tracking-wider text-[10px] border-b pb-1">Emergency Details</h4>
+                    <p><strong className={textSecondary}>Contact Person:</strong> {selectedERPStudent.emergency_contact_name || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Relationship:</strong> {selectedERPStudent.emergency_relationship || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Primary Phone:</strong> {selectedERPStudent.emergency_phone || 'N/A'}</p>
+                    <p><strong className={textSecondary}>Alternate Phone:</strong> {selectedERPStudent.emergency_alt_phone || 'N/A'}</p>
+                  </div>
+
+                  {/* Program & Medical Details */}
+                  <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                    <h4 className="font-bold text-orange-600 uppercase tracking-wider text-[10px] border-b pb-1">Program & Batch</h4>
+                    <p><strong className={textSecondary}>Programs Active:</strong> {selectedERPStudent.program_interested || 'General Activity'}</p>
+                    <p><strong className={textSecondary}>Preferred Time Slot:</strong> {selectedERPStudent.preferred_time_slot || 'Morning'}</p>
+                    <p><strong className={textSecondary}>Joined On:</strong> {selectedERPStudent.created_at ? new Date(selectedERPStudent.created_at).toLocaleDateString('en-GB') : 'N/A'}</p>
+                    
+                    <h4 className="font-bold text-blue-600 uppercase tracking-wider text-[10px] border-b pb-1 pt-2">Medical Information</h4>
+                    <p><strong className={textSecondary}>Condition:</strong> {selectedERPStudent.has_medical_condition ? (selectedERPStudent.medical_condition_details || 'Yes') : 'None'}</p>
+                    <p><strong className={textSecondary}>Medication:</strong> {selectedERPStudent.regular_medication || 'None'}</p>
+                    <p><strong className={textSecondary}>Doctor:</strong> {selectedERPStudent.doctor_name || 'N/A'} {selectedERPStudent.doctor_phone && `(${selectedERPStudent.doctor_phone})`}</p>
+                    <p><strong className={textSecondary}>Hospital:</strong> {selectedERPStudent.hospital_preference || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Consent & Deletion */}
+                <div className={`p-4 rounded-2xl border ${bgSubCard} flex items-center justify-between`}>
+                  <p><strong className={textSecondary}>Consent Terms Status:</strong> {selectedERPStudent.consent_accepted ? '✓ YES, Agreed to legal terms' : 'Pending Verification'}</p>
+                  <p><strong className={textSecondary}>Status:</strong> <span className={`font-bold ${selectedERPStudent.status === 'active' ? 'text-green-600' : 'text-red-500'}`}>{selectedERPStudent.status?.toUpperCase() || 'ACTIVE'}</span></p>
                 </div>
 
                 <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
@@ -2907,150 +3425,587 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* MODAL: ADD NEW STUDENT */}
+            {/* MODAL: ADD NEW STUDENT */}
       {isAddStudentOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                <UserPlus className="w-5 h-5 text-blue-500" /> New Student Admission
-              </h3>
-              <button onClick={() => setIsAddStudentOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStudentSubmit} className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Admission ID</label>
-                  <input
-                    type="text"
-                    required
-                    value={newStudentForm.admission_id}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, admission_id: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white text-slate-800 rounded-3xl p-8 max-w-4xl w-full shadow-2xl relative max-h-[95vh] overflow-y-auto border-4 border-pink-100 custom-scrollbar">
+            
+            {/* Flower decoration top-left & top-right */}
+            <div className="absolute top-0 left-0 w-16 h-16 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-pink-500 via-red-500 to-transparent"></div>
+            <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-pink-500 via-red-500 to-transparent"></div>
+            
+            <button onClick={() => setIsAddStudentOpen(false)} className="absolute top-4 right-4 p-2 bg-rose-100 text-rose-600 rounded-full hover:bg-rose-200 transition cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+            
+            {/* HEADER BRANDING */}
+            <div className="flex flex-col md:flex-row items-center justify-between pb-1 border-b-2 border-pink-200 gap-4">
+              <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3">
+                <div className="flex items-center -my-4">
+                  <img src="/Logo-png.png" alt="Phulwari Logo" className="h-40 md:h-48 object-contain" />
                 </div>
-
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Assign Login Password</label>
-                  <input
-                    type="text"
-                    required
-                    value={newStudentForm.password}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-amber-700' : 'bg-slate-950 border-slate-800 text-amber-400'
-                    }`}
-                  />
+                
+                <div className="text-center md:text-left -my-2">
+                  <h1 className="text-xl md:text-2xl font-black text-purple-900 tracking-wide uppercase">PARENT REGISTRATION</h1>
+                  <h2 className="text-lg md:text-xl font-bold text-pink-600 tracking-wide uppercase -mt-1">& CONSENT FORM</h2>
+                  <div className="mt-0.5 bg-green-600 text-white text-[10px] font-bold px-3 py-1 rounded-full inline-block tracking-wider uppercase">
+                    Where Growth Meets Wellness
+                  </div>
                 </div>
               </div>
+              
+              <div className="text-[10px] text-slate-600 space-y-0.5 border-l-2 border-purple-200 pl-4 py-1">
+                <p className="flex items-center gap-1 font-semibold"><span className="text-purple-600">📍</span> M/32, Road No. 25, Sri Krishna Nagar, Kidwaipuri, Patna - 800001</p>
+                <p className="flex items-center gap-1 font-semibold"><span className="text-purple-600">📞</span> +91 6207368839</p>
+                <p className="flex items-center gap-1"><span className="text-purple-600">✉️</span> phulwari02@gmail.com</p>
+                <p className="flex items-center gap-1"><span className="text-purple-600">🌐</span> www.phulwari.co.in</p>
+                <p className="flex items-center gap-1"><span className="text-purple-600">📸</span> @phulwari.activitycentre</p>
+              </div>
+            </div>
 
-              <div>
-                <label className={`font-semibold ${textSecondary}`}>Child Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Aarav Sharma"
-                  value={newStudentForm.full_name}
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, full_name: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                  }`}
+            <form onSubmit={handleAddStudentSubmit} className="mt-6 space-y-6 text-xs">
+              
+              {/* ADMISSION NUMBER SECTION */}
+              <div className="flex items-center gap-3 bg-pink-50 p-3 rounded-2xl border border-pink-200 w-fit">
+                <span className="font-extrabold text-pink-700 text-sm">Admission No.:</span>
+                <input 
+                  type="text" 
+                  required 
+                  value={newStudentForm.admission_id} 
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, admission_id: e.target.value })} 
+                  className="bg-white border-2 border-pink-300 rounded-xl px-3 py-1.5 text-sm font-mono font-extrabold text-pink-700 focus:outline-none focus:border-pink-500 w-44" 
+                />
+                
+                <span className="font-bold text-slate-500 text-xs ml-4">Password:</span>
+                <input 
+                  type="text" 
+                  required 
+                  value={newStudentForm.password} 
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })} 
+                  className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32" 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Child Date of Birth (DOB) *</label>
-                  <input
-                    type="date"
-                    required
-                    value={newStudentForm.dob}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, dob: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono font-bold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
+              {/* 1. CHILD'S DETAILS */}
+              <div className="border border-pink-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-pink-600 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider flex items-center justify-between">
+                  <span>1. Child's Details</span>
                 </div>
-
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Gender</label>
-                  <select
-                    value={newStudentForm.gender}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, gender: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  >
-                    <option value="Boy">Boy 👦</option>
-                    <option value="Girl">Girl 👧</option>
-                  </select>
+                <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Child's Full Name</label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="Enter child's full name" 
+                      value={newStudentForm.full_name} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, full_name: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Date of Birth</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={newStudentForm.dob} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, dob: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-mono font-bold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Gender</label>
+                    <div className="flex gap-4 mt-2">
+                      {['Boy', 'Girl', 'Other'].map(g => (
+                        <label key={g} className="flex items-center gap-1.5 font-semibold cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="gender" 
+                            value={g === 'Other' ? 'Other' : g} 
+                            checked={newStudentForm.gender === g || (g === 'Other' && !['Boy', 'Girl'].includes(newStudentForm.gender))} 
+                            onChange={(e) => setNewStudentForm({ ...newStudentForm, gender: e.target.value })} 
+                            className="w-4 h-4 accent-pink-600" 
+                          />
+                          <span>{g}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="md:col-span-4">
+                    <label className="block font-bold text-slate-700 mb-1">Address</label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="Residential address" 
+                      value={newStudentForm.address} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, address: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">City</label>
+                    <input 
+                      type="text" 
+                      value={newStudentForm.city} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, city: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">State</label>
+                    <input 
+                      type="text" 
+                      value={newStudentForm.state} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, state: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">PIN Code</label>
+                    <input 
+                      type="text" 
+                      value={newStudentForm.pin_code} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, pin_code: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Blood Group</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. B+"
+                      value={newStudentForm.blood_group} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, blood_group: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className={`font-semibold ${textSecondary}`}>Select Student Batch</label>
-                <select
-                  value={newStudentForm.batch_id}
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, batch_id: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none cursor-pointer ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
-                  }`}
-                >
-                  {allAvailableBatches.map(b => (
-                    <option key={b.id} value={b.id} className={isLight ? 'bg-white text-slate-900 font-semibold' : 'bg-slate-900 text-slate-100 font-semibold'}>
-                      {b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / {b.validity_days || 30} Days
-                    </option>
+              {/* 2. PARENT / GUARDIAN DETAILS */}
+              <div className="border border-purple-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-[#4a148c] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                  2. Parent / Guardian Details
+                </div>
+                <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Parent / Guardian Full Name</label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="Full name" 
+                      value={newStudentForm.parent_name} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_name: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Relationship</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Father / Mother" 
+                      value={newStudentForm.parent_relationship} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_relationship: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Occupation</label>
+                    <input 
+                      type="text" 
+                      placeholder="Occupation" 
+                      value={newStudentForm.parent_occupation} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_occupation: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Email ID</label>
+                    <input 
+                      type="email" 
+                      placeholder="parent@example.com" 
+                      value={newStudentForm.parent_email} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_email: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Phone No.</label>
+                    <input 
+                      type="tel" 
+                      required 
+                      placeholder="Primary phone number" 
+                      value={newStudentForm.parent_phone} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_phone: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Alternate Phone No.</label>
+                    <input 
+                      type="tel" 
+                      placeholder="Alternate phone number" 
+                      value={newStudentForm.parent_alt_phone} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_alt_phone: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* EMERGENCY CONTACT & PROGRAM DETAILS (Side-by-side) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* 3. EMERGENCY CONTACT DETAILS */}
+                <div className="border border-green-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full">
+                  <div className="bg-[#43a047] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                    3. Emergency Contact Details
+                  </div>
+                  <div className="p-4 bg-slate-50/50 space-y-3 flex-1">
+                    <p className="text-[10px] text-green-700 font-semibold italic">(In case parent/guardian is not reachable)</p>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Emergency Contact Name</label>
+                      <input 
+                        type="text" 
+                        placeholder="Contact person name" 
+                        value={newStudentForm.emergency_contact_name} 
+                        onChange={(e) => setNewStudentForm({ ...newStudentForm, emergency_contact_name: e.target.value })} 
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-green-500 font-semibold" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Relationship</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Uncle / Aunt / Neighbor" 
+                        value={newStudentForm.emergency_relationship} 
+                        onChange={(e) => setNewStudentForm({ ...newStudentForm, emergency_relationship: e.target.value })} 
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-green-500 font-semibold" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Phone No.</label>
+                      <input 
+                        type="tel" 
+                        placeholder="Emergency contact phone" 
+                        value={newStudentForm.emergency_phone} 
+                        onChange={(e) => setNewStudentForm({ ...newStudentForm, emergency_phone: e.target.value })} 
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-green-500 font-mono font-semibold" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Alternate Phone No.</label>
+                      <input 
+                        type="tel" 
+                        placeholder="Alternate contact phone" 
+                        value={newStudentForm.emergency_alt_phone} 
+                        onChange={(e) => setNewStudentForm({ ...newStudentForm, emergency_alt_phone: e.target.value })} 
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-green-500 font-mono font-semibold" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. PROGRAM / BATCH DETAILS */}
+                <div className="border border-orange-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full">
+                  <div className="bg-[#f57c00] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                    4. Program / Batch Details
+                  </div>
+                  <div className="p-4 bg-slate-50/50 space-y-4 flex-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Registration Category</label>
+                        <select 
+                          value={newStudentForm.category} 
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, category: e.target.value })} 
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                        >
+                          <option value="Child Activity">Child Activity 🧸</option>
+                          <option value="Zumba & Yoga">Zumba & Yoga (Mother) 🧘</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Select Student Batch</label>
+                        <select 
+                          value={newStudentForm.batch_id} 
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, batch_id: e.target.value })} 
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                        >
+                          {allAvailableBatches.map(b => (
+                            <option key={b.id} value={b.id} className="bg-white text-slate-900">
+                              {b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / {b.validity_days || 30} Days
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1.5">Select Attendance Days (Custom Plan):</label>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                          const isChecked = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ').includes(day) : false;
+                          return (
+                            <label key={day} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white border border-slate-100 rounded-lg">
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 accent-orange-500 rounded" 
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  let days = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ') : [];
+                                  if (e.target.checked) days.push(day);
+                                  else days = days.filter(d => d !== day);
+                                  
+                                  const totalCls = days.length * 4;
+                                  setNewStudentForm({ 
+                                    ...newStudentForm, 
+                                    custom_days: days.join(', '),
+                                    classes_total: totalCls > 0 ? totalCls : 12
+                                  });
+                                }} 
+                              />
+                              <span>{day.slice(0,3)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Total Classes in Plan</label>
+                        <input 
+                          type="number"
+                          value={newStudentForm.classes_total}
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, classes_total: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Classes Consumed Already</label>
+                        <input 
+                          type="number"
+                          value={newStudentForm.classes_consumed}
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, classes_consumed: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1.5">Program / Activity Interested In:</label>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        {['Playzone', 'Weekend Program', '3 Days Program', '5 Days Program', '6 Days Program', '7 Days Program', 'Mother Zumba'].map(prog => (
+                          <label key={prog} className="flex items-center gap-2 font-semibold cursor-pointer p-1.5 bg-white border border-slate-100 hover:border-orange-200 rounded-lg">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 accent-orange-500 rounded" 
+                              checked={newStudentForm.program_interested.includes(prog)}
+                              onChange={(e) => {
+                                let progs = newStudentForm.program_interested ? newStudentForm.program_interested.split(', ') : [];
+                                if (e.target.checked) progs.push(prog);
+                                else progs = progs.filter(p => p !== prog);
+                                setNewStudentForm({ ...newStudentForm, program_interested: progs.join(', ') })
+                              }} 
+                            />
+                            <span>{prog}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Preferred Time Slot:</label>
+                      <div className="flex gap-6 mt-1">
+                        {['Morning', 'Evening'].map(slot => (
+                          <label key={slot} className="flex items-center gap-1.5 font-bold cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="slot" 
+                              value={slot} 
+                              checked={newStudentForm.preferred_time_slot === slot} 
+                              onChange={(e) => setNewStudentForm({ ...newStudentForm, preferred_time_slot: e.target.value })} 
+                              className="w-4 h-4 accent-orange-500" 
+                            />
+                            <span>{slot}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* 5. MEDICAL INFORMATION */}
+              <div className="border border-blue-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-[#0288d1] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+                  5. Medical Information
+                </div>
+                <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-2 flex items-center gap-4 py-2">
+                    <span className="font-bold text-slate-700">Does your child have any medical condition?</span>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-1.5 font-bold cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={newStudentForm.has_medical_condition} 
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, has_medical_condition: e.target.checked })} 
+                          className="w-4 h-4 accent-blue-600 rounded" 
+                        />
+                        <span>Yes</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 font-bold cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={!newStudentForm.has_medical_condition} 
+                          onChange={(e) => setNewStudentForm({ ...newStudentForm, has_medical_condition: !e.target.checked })} 
+                          className="w-4 h-4 accent-blue-600 rounded" 
+                        />
+                        <span>No</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">If Yes, please specify:</label>
+                    <input 
+                      type="text" 
+                      disabled={!newStudentForm.has_medical_condition}
+                      placeholder="Specify child's medical condition"
+                      value={newStudentForm.medical_condition_details} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, medical_condition_details: e.target.value })} 
+                      className="w-full bg-white disabled:bg-slate-100 disabled:text-slate-400 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Regular Medication (if any):</label>
+                    <input 
+                      type="text" 
+                      placeholder="Medications"
+                      value={newStudentForm.regular_medication} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, regular_medication: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Doctor's Name:</label>
+                    <input 
+                      type="text" 
+                      placeholder="Doctor's full name"
+                      value={newStudentForm.doctor_name} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, doctor_name: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Doctor's Contact No.:</label>
+                    <input 
+                      type="tel" 
+                      placeholder="Doctor's phone number"
+                      value={newStudentForm.doctor_phone} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, doctor_phone: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-mono font-semibold" 
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Hospital Preference:</label>
+                    <input 
+                      type="text" 
+                      placeholder="Hospital name"
+                      value={newStudentForm.hospital_preference} 
+                      onChange={(e) => setNewStudentForm({ ...newStudentForm, hospital_preference: e.target.value })} 
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 font-semibold" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. CONSENT & AUTHORIZATION */}
+              <div className="border border-pink-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-pink-600 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider flex items-center justify-between">
+                  <span>6. Consent & Authorization</span>
+                  <span className="text-[10px] italic">(Please read and tick all that apply)</span>
+                </div>
+                <div className="p-4 bg-pink-50/20 space-y-3">
+                  {[
+                    "I confirm that all the information provided above is true and accurate to the best of my knowledge.",
+                    "I authorize Phulwari - Mother & Child Activity Centre to seek emergency medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.",
+                    "I understand that physical activities, play, and learning sessions may involve movement and participation. I consent to my child's participation in all activities conducted at Phulwari.",
+                    "I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.)."
+                  ].map((consentText, idx) => (
+                    <label key={idx} className="flex items-start gap-3 cursor-pointer group p-1 hover:bg-pink-50 rounded-lg transition-colors">
+                      <input 
+                        type="checkbox" 
+                        required={idx < 3} /* Mandate first three consents */
+                        defaultChecked={true}
+                        className="mt-0.5 w-4 h-4 accent-pink-600 rounded text-white" 
+                      />
+                      <span className="text-[11px] font-medium text-slate-700 leading-normal group-hover:text-slate-900">{consentText}</span>
+                    </label>
                   ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Parent Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Rajesh Sharma"
-                    value={newStudentForm.parent_name}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_name: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`font-semibold ${textSecondary}`}>Parent Phone</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="+91 98765 43210"
-                    value={newStudentForm.parent_phone}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_phone: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
                 </div>
               </div>
 
-              <div className="pt-3 flex items-center justify-end space-x-3">
-                <button type="button" onClick={() => setIsAddStudentOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
+              {/* SIGNATURES SECTION */}
+              <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-6 py-6">
+                <div className="w-full md:w-1/3 flex flex-col items-center">
+                  <div className="w-full border-b border-slate-400 h-10 flex items-end justify-center font-bold text-slate-600 pb-1">
+                    {newStudentForm.parent_name || "____________________"}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Parent / Guardian Signature</span>
+                </div>
+                
+                <div className="w-full md:w-1/4 flex flex-col items-center">
+                  <div className="w-full border-b border-slate-400 h-10 flex items-end justify-center font-mono font-bold text-slate-600 pb-1">
+                    {new Date().toLocaleDateString('en-GB')}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Date</span>
+                </div>
+                
+                <div className="w-full md:w-1/3 flex flex-col items-center">
+                  <div className="w-full border-b border-slate-400 h-10 flex items-end justify-center text-pink-600 font-bold pb-1 text-center italic">
+                    Phulwari Signatory
+                  </div>
+                  <span className="text-[10px] text-pink-600 font-bold mt-1 uppercase">Authorised Signatory</span>
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <div className="text-center py-2 flex items-center justify-center gap-2">
+                <span className="text-pink-600">🌺</span>
+                <span className="font-extrabold text-[#43a047] tracking-wider italic text-xs">
+                  Nurturing Bonds. Building Confidence. Creating Happy Childhoods.
+                </span>
+                <span className="text-pink-600">🌺</span>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="pt-4 flex items-center justify-end space-x-3 border-t-2 border-pink-100">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddStudentOpen(false)} 
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all duration-200 cursor-pointer shadow-sm"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-md shadow-blue-600/20 cursor-pointer">
-                  Register Student
+                <button 
+                  type="submit" 
+                  className="px-8 py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-xl font-extrabold transition-all duration-200 shadow-md shadow-pink-600/20 cursor-pointer"
+                >
+                  Save Registration
                 </button>
               </div>
+
             </form>
           </div>
         </div>
       )}
+
 
       {/* MODAL: DAY ATTENDANCE BREAKDOWN CALENDAR POPUP */}
       {selectedCalendarDate && (

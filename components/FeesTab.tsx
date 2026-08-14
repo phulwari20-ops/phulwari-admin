@@ -56,7 +56,7 @@ export default function FeesTab({
               <option value="July 2026">July 2026</option>
               <option value="June 2026">June 2026</option>
             </select>
-            <div className="flex items-center space-x-1 border rounded-xl p-1 bg-slate-100 dark:bg-slate-950 shrink-0">
+            <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 ${isLight ? 'bg-slate-100' : 'bg-slate-950'}`}>
               {(['All', 'PAID', 'PENDING'] as const).map(st => (
                 <button
                   key={st}
@@ -86,7 +86,7 @@ export default function FeesTab({
               >
                 <div className="flex items-center gap-4">
                   <span className={`text-[10px] px-2.5 py-1 rounded-full font-mono font-extrabold uppercase border whitespace-nowrap w-24 text-center ${
-                    isPaid ? badgeStatus : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800'
+                    isPaid ? badgeStatus : (isLight ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-rose-950/80 text-rose-300 border-rose-800')
                   }`}>
                     {isPaid ? `PAID ₹${studentFee?.net_amount || 3000}` : 'PENDING'}
                   </span>
