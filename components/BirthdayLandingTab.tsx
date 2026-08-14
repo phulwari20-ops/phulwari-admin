@@ -51,9 +51,15 @@ export default function BirthdayLandingTab() {
     fetchConfig()
     // Determine frontend URL based on window location
     if (typeof window !== 'undefined') {
-      const port = window.location.port
-      const frontend = window.location.origin.replace(`:${port}`, ':3000') + '/birthdays'
-      setPreviewUrl(frontend)
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      if (isLocalhost) {
+        const port = window.location.port
+        const frontend = window.location.origin.replace(`:${port}`, ':3000') + '/birthdays'
+        setPreviewUrl(frontend)
+      } else {
+        // In production, always point to the live site
+        setPreviewUrl('https://phulwari.co.in/birthdays')
+      }
     }
   }, [])
 
