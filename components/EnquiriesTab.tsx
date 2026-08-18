@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays } from 'lucide-react';
+import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle } from 'lucide-react';
 
 interface EnquiriesTabProps {
   bgCard: string;
@@ -98,17 +98,40 @@ export default function EnquiriesTab({
                 enquiries.map((enq) => (
                   <tr key={enq.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-semibold text-slate-500">
-                      {enq.created_at ? new Date(enq.created_at).toLocaleDateString('en-GB') : 'N/A'}
+                      <div>{enq.created_at ? new Date(enq.created_at).toLocaleDateString('en-GB') : 'N/A'}</div>
+                      {enq.source && (
+                        <div className="mt-1 text-[10px] font-sans px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 inline-block text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          {enq.source}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-bold">{enq.child_name}</div>
+                      <div className="font-bold">{enq.child_name || 'N/A'}</div>
                       <div className="text-[10px] text-slate-400">Age: {enq.age || 'N/A'}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="font-semibold">{enq.parent_name}</div>
                       <div className="text-[10px] text-slate-500 font-mono">{enq.phone}</div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <a href={`tel:${enq.phone}`} title="Call" className="p-1 bg-blue-50 text-blue-500 hover:bg-blue-100 rounded transition cursor-pointer">
+                          <Phone className="w-3 h-3" />
+                        </a>
+                        <a href={`sms:${enq.phone}`} title="SMS" className="p-1 bg-purple-50 text-purple-500 hover:bg-purple-100 rounded transition cursor-pointer">
+                          <MessageSquare className="w-3 h-3" />
+                        </a>
+                        <a href={`https://wa.me/${enq.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1 bg-green-50 text-green-500 hover:bg-green-100 rounded transition cursor-pointer">
+                          <MessageCircle className="w-3 h-3" />
+                        </a>
+                      </div>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-pink-600">{enq.program_interested}</td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-pink-600">{enq.program_interested || 'General Inquiry'}</div>
+                      {enq.message && (
+                        <div className="mt-1 text-[10px] text-slate-500 line-clamp-2 max-w-[200px]" title={enq.message}>
+                          💬 {enq.message}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4">
                       <select
                         value={enq.status || 'New'}

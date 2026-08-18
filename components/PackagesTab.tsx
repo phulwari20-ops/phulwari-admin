@@ -161,7 +161,7 @@ export default function PackagesTab({
                 }}
                 className="w-4 h-4 cursor-pointer"
               />
-              <label htmlFor={`pkg-visible-${pkg.id}`} className={`text-xs font-bold ${textPrimary} cursor-pointer`}>Show on Website (Frontend)</label>
+              <label htmlFor={`pkg-visible-${pkg.id}`} className={`text-xs font-bold ${textPrimary} cursor-pointer`}>Show in User Panel / Don't show in user panel</label>
             </div>
           </div>
         ))}
