@@ -10,6 +10,7 @@ interface AddStudentModalProps {
   setNewStudentForm: (val: any) => void
   allAvailableBatches: any[]
   handleAddStudentSubmit: (e: React.FormEvent) => void
+  batchSchedules: any[]
 }
 
 const classFees: Record<string, number> = {
@@ -28,7 +29,8 @@ export default function AddStudentModal({
   newStudentForm,
   setNewStudentForm,
   allAvailableBatches,
-  handleAddStudentSubmit
+  handleAddStudentSubmit,
+  batchSchedules
 }: AddStudentModalProps) {
   if (!isOpen) return null
 
@@ -349,36 +351,102 @@ export default function AddStudentModal({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">Select Attendance Days (Custom Plan):</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
-                      const isChecked = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ').includes(day) : false;
-                      return (
-                        <label key={day} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white border border-slate-100 rounded-lg">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 accent-orange-500 rounded" 
-                            checked={isChecked}
-                            onChange={(e) => {
-                              let days = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ') : [];
-                              if (e.target.checked) days.push(day);
-                              else days = days.filter((d: string) => d !== day);
-                              
-                              const totalCls = days.length * 4;
-                              setNewStudentForm({ 
-                                ...newStudentForm, 
-                                custom_days: days.join(', '),
-                                classes_total: totalCls > 0 ? totalCls : 12
-                              });
-                            }} 
-                          />
-                          <span>{day.slice(0,3)}</span>
-                        </label>
-                      );
-                    })}
+                {newStudentForm.batch_id === '00000000-0000-0000-0000-000000000000' ? (
+                  <div className="space-y-3 pt-3 border-t border-dashed border-orange-200">
+                    <label className="block font-bold text-slate-700">Customized Batch Schedule Builder</label>
+                    <p className="text-[10px] text-slate-500 font-semibold italic -mt-2">Select classes/times available in Batch Master for each day:</p>
+                    
+                    <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar p-1">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                        const dayClasses = batchSchedules.filter(sch => sch.day_of_week === day);
+                        const currentCustomSch = newStudentForm.custom_schedules || [];
+                        
+                        return (
+                          <div key={day} className="p-3 bg-white border border-slate-200/80 rounded-xl space-y-2">
+                            <span className="font-bold text-slate-800 text-xs block">📅 {day}</span>
+                            {dayClasses.length === 0 ? (
+                              <p className="text-[10px] text-slate-400 italic">No classes scheduled on this day in Batch Master.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {dayClasses.map(cls => {
+                                  const isChecked = currentCustomSch.some(
+                                    (s: any) => s.day_of_week === day && s.class_name === cls.class_name && s.start_time === cls.start_time && s.end_time === cls.end_time
+                                  );
+                                  return (
+                                    <label key={cls.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:border-orange-300 transition cursor-pointer text-[11px] font-semibold text-slate-700 bg-slate-50/50">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          let updated = [...currentCustomSch];
+                                          if (e.target.checked) {
+                                            updated.push({
+                                              day_of_week: day,
+                                              class_name: cls.class_name,
+                                              start_time: cls.start_time,
+                                              end_time: cls.end_time
+                                            });
+                                          } else {
+                                            updated = updated.filter(
+                                              (s: any) => !(s.day_of_week === day && s.class_name === cls.class_name && s.start_time === cls.start_time && s.end_time === cls.end_time)
+                                            );
+                                          }
+                                          const uniqueDays = Array.from(new Set(updated.map(s => s.day_of_week))).join(', ');
+                                          setNewStudentForm({
+                                            ...newStudentForm,
+                                            custom_schedules: updated,
+                                            custom_days: uniqueDays,
+                                            classes_total: updated.length * 4
+                                          });
+                                        }}
+                                        className="w-4 h-4 accent-orange-600 rounded"
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-slate-800">{cls.class_name}</span>
+                                        <span className="text-[10px] font-mono text-slate-500">{cls.start_time} - {cls.end_time}</span>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Select Attendance Days (Custom Plan):</label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                        const isChecked = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ').includes(day) : false;
+                        return (
+                          <label key={day} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white border border-slate-100 rounded-lg">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 accent-orange-500 rounded" 
+                              checked={isChecked}
+                              onChange={(e) => {
+                                let days = newStudentForm.custom_days ? newStudentForm.custom_days.split(', ') : [];
+                                if (e.target.checked) days.push(day);
+                                else days = days.filter((d: string) => d !== day);
+                                
+                                const totalCls = days.length * 4;
+                                setNewStudentForm({ 
+                                  ...newStudentForm, 
+                                  custom_days: days.join(', '),
+                                  classes_total: totalCls > 0 ? totalCls : 12
+                                });
+                              }} 
+                            />
+                            <span>{day.slice(0,3)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

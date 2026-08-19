@@ -26,6 +26,11 @@ export default function TeachersTab({
   handleDeleteTeacher,
   adminRole
 }: TeachersTabProps) {
+  const [selectedBatchNameFilter, setSelectedBatchNameFilter] = React.useState<string>('All');
+
+  // Extract all unique assigned batch names from teachers list
+  const uniqueBatches = Array.from(new Set(teachers.map(t => t.assigned_batch).filter(Boolean)));
+
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -36,23 +41,37 @@ export default function TeachersTab({
           <p className={`text-xs ${textSecondary}`}>Manage educators, assign active batches, track phone &amp; email contacts, and update status live.</p>
         </div>
 
-        {adminRole !== 'Staff' && (
-          <button
-            onClick={() => {
-              setEditingTeacher(null);
-              setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' });
-              setIsAddTeacherOpen(true);
-            }}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedBatchNameFilter}
+            onChange={(e) => setSelectedBatchNameFilter(e.target.value)}
+            className={`text-xs px-3.5 py-2.5 rounded-xl border outline-none font-bold shrink-0 ${
+              textPrimary === 'text-white' ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-100 border-slate-300 text-slate-800'
+            }`}
           >
-            <Plus className="w-4 h-4" />
-            <span>Add New Teacher</span>
-          </button>
-        )}
+            <option value="All">All Assigned Batches</option>
+            {uniqueBatches.map(bName => (
+              <option key={bName} value={bName}>{bName}</option>
+            ))}
+          </select>
+          {adminRole !== 'Staff' && (
+            <button
+              onClick={() => {
+                setEditingTeacher(null);
+                setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' });
+                setIsAddTeacherOpen(true);
+              }}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Teacher</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teachers.map((tch) => (
+        {teachers.filter(t => selectedBatchNameFilter === 'All' || t.assigned_batch === selectedBatchNameFilter).map((tch) => (
           <div key={tch.id} className={`relative p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 space-y-5 ${bgSubCard} shadow-sm hover:shadow-xl hover:border-indigo-400/50 transition-all duration-300 group`}>
             
             {/* Status Badge - Absolute Top Right */}

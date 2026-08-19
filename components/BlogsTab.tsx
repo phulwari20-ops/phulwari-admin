@@ -280,7 +280,12 @@ export default function BlogsTab({
             <h4 className={`text-sm font-extrabold ${textPrimary} flex items-center gap-1.5`}><BarChart2 className="w-4 h-4 text-blue-500" /> Popular Blogs</h4>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {blogs.slice(0, 3).map(b => (
-                <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
+                <div 
+                  key={b.id} 
+                  onClick={() => handleViewBlog(b)}
+                  className="py-2.5 flex items-center justify-between text-xs cursor-pointer hover:bg-slate-500/10 dark:hover:bg-slate-800/40 px-2 rounded-xl transition"
+                  title="Click to view details & actions"
+                >
                   <div className="min-w-0 flex-1 pr-4">
                     <p className={`font-bold ${textPrimary} truncate`}>{b.title}</p>
                     <p className={`text-[10px] ${textSecondary}`}>{b.category} • {b.status}</p>

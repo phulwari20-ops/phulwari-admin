@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShieldCheck, UserPlus, Trash2, Key, CheckSquare, Square, Eye, EyeOff } from 'lucide-react'
+import { ShieldCheck, UserPlus, Trash2, Key, CheckSquare, Square, Eye, EyeOff, Edit } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface StaffMember {
@@ -11,6 +11,7 @@ interface StaffMember {
   phone: string
   roleName: string
   permissions: string[]
+  password?: string
 }
 
 interface StaffTabProps {
@@ -30,7 +31,6 @@ const AVAILABLE_TABS = [
   { id: 'teachers', label: 'Teacher Management' },
   { id: 'batches', label: 'Batches & Class Timings' },
   { id: 'attendance', label: 'Daily Attendance Marker' },
-  { id: 'calendar', label: 'Attendance Calendar' },
   { id: 'fees', label: 'Fee Management & Dues' },
   { id: 'gallery', label: 'Gallery Photo Manager' },
   { id: 'packages', label: 'Party Packages & Pricing' },
@@ -53,6 +53,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
   const [successMsg, setSuccessMsg] = useState('')
 
   // Form states
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -87,7 +88,8 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             email: rec.email,
             phone: rec.phone,
             roleName: rec.child_name || 'Staff Member',
-            permissions: notesObj.permissions || []
+            permissions: notesObj.permissions || [],
+            password: notesObj.password || ''
           }
         })
         setStaffList(formatted)
@@ -121,8 +123,8 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
     }
   }
 
-  // Create staff account handler
-  const handleCreateStaff = async (e: React.FormEvent) => {
+  // Save or update staff account
+  const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
     setSuccessMsg('')
@@ -139,37 +141,60 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
 
     setLoading(true)
     try {
-      // Build JSON notes payload
       const notesJson = {
         password: password,
         permissions: selectedPermissions,
         created_by: 'Master Admin'
       }
 
-      // Check if email already exists in staff list
-      const emailExists = staffList.some(s => s.email.toLowerCase() === email.toLowerCase().trim())
-      if (emailExists) {
-        throw new Error('A staff account with this email/username already exists.')
+      if (editingStaff) {
+        // Update staff
+        const emailExists = staffList.some(s => s.id !== editingStaff.id && s.email.toLowerCase() === email.toLowerCase().trim())
+        if (emailExists) {
+          throw new Error('A staff account with this email/username already exists.')
+        }
+
+        const { error } = await supabase
+          .from('bookings')
+          .update({
+            parent_name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim().toLowerCase(),
+            child_name: roleName, // Designation
+            notes: JSON.stringify(notesJson)
+          })
+          .eq('id', editingStaff.id)
+
+        if (error) throw error
+
+        setSuccessMsg(`Staff account for ${name} updated successfully!`)
+        setEditingStaff(null)
+      } else {
+        // Create new staff
+        const emailExists = staffList.some(s => s.email.toLowerCase() === email.toLowerCase().trim())
+        if (emailExists) {
+          throw new Error('A staff account with this email/username already exists.')
+        }
+
+        const { error } = await supabase.from('bookings').insert([
+          {
+            booking_type: 'Staff Account',
+            parent_name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim().toLowerCase(),
+            child_name: roleName, // designation
+            child_age: null,
+            event_date: null,
+            status: 'active',
+            notes: JSON.stringify(notesJson)
+          }
+        ])
+
+        if (error) throw error
+
+        setSuccessMsg(`Staff account for ${name} created successfully!`)
       }
 
-      const { data, error } = await supabase.from('bookings').insert([
-        {
-          booking_type: 'Staff Account',
-          parent_name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim().toLowerCase(),
-          child_name: roleName, // Store designation here
-          child_age: null,
-          event_date: null,
-          status: 'active',
-          notes: JSON.stringify(notesJson)
-        }
-      ]).select()
-
-      if (error) throw error
-
-      setSuccessMsg(`Staff account for ${name} created successfully!`)
-      
       // Reset form
       setName('')
       setEmail('')
@@ -180,7 +205,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
       // Reload staff
       fetchStaff()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create staff account.')
+      setErrorMsg(err.message || 'Failed to save staff account.')
     } finally {
       setLoading(false)
     }
@@ -197,6 +222,17 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
       const { error } = await supabase.from('bookings').delete().eq('id', id)
       if (error) throw error
       setSuccessMsg(`Staff account "${staffName}" deleted successfully!`)
+      
+      // If we are currently editing the deleted staff, reset form
+      if (editingStaff?.id === id) {
+        setEditingStaff(null)
+        setName('')
+        setEmail('')
+        setPhone('')
+        setPassword('')
+        setSelectedPermissions(['dashboard', 'enquiries'])
+      }
+
       fetchStaff()
     } catch (err: any) {
       setErrorMsg('Failed to delete staff: ' + err.message)
@@ -220,14 +256,14 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* CREATE STAFF ACCOUNT FORM */}
+        {/* CREATE / EDIT STAFF ACCOUNT FORM */}
         <div className={`${bgCard} p-6 rounded-3xl border border-slate-200/50 shadow-sm col-span-1 h-fit`}>
           <div className="flex items-center gap-2 mb-5">
             <UserPlus className="w-5 h-5 text-blue-600" />
-            <h3 className={`font-black text-sm ${textPrimary}`}>Create Staff Account</h3>
+            <h3 className={`font-black text-sm ${textPrimary}`}>{editingStaff ? 'Edit Staff Account' : 'Create Staff Account'}</h3>
           </div>
 
-          <form onSubmit={handleCreateStaff} className="space-y-4 text-xs">
+          <form onSubmit={handleSaveStaff} className="space-y-4 text-xs">
             <div>
               <label className={`block font-bold mb-1 ${textSecondary}`}>Staff Full Name *</label>
               <input 
@@ -263,7 +299,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -302,8 +338,25 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/10 cursor-pointer flex items-center justify-center gap-2"
             >
               <UserPlus className="w-4 h-4" />
-              <span>{loading ? 'Creating...' : 'Create Account'}</span>
+              <span>{loading ? 'Saving...' : editingStaff ? 'Update Account' : 'Create Account'}</span>
             </button>
+
+            {editingStaff && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingStaff(null)
+                  setName('')
+                  setEmail('')
+                  setPhone('')
+                  setPassword('')
+                  setSelectedPermissions(['dashboard', 'enquiries'])
+                }}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-center cursor-pointer transition"
+              >
+                Cancel Edit
+              </button>
+            )}
           </form>
         </div>
 
@@ -317,7 +370,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             <button 
               type="button" 
               onClick={handleToggleSelectAll} 
-              className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-bold text-slate-600"
+              className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-bold text-slate-600 cursor-pointer"
             >
               {selectedPermissions.length === AVAILABLE_TABS.length ? 'Clear All' : 'Select All'}
             </button>
@@ -331,7 +384,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
                   key={tab.id}
                   type="button"
                   onClick={() => handleTogglePermission(tab.id)}
-                  className={`w-full flex items-center justify-between p-3 rounded-xl border text-left font-bold transition ${
+                  className={`w-full flex items-center justify-between p-3 rounded-xl border text-left font-bold transition cursor-pointer ${
                     isChecked 
                       ? 'bg-indigo-500/5 border-indigo-200 text-indigo-700' 
                       : 'border-slate-150 hover:bg-slate-50 text-slate-700'
@@ -350,7 +403,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
         </div>
 
         {/* ACTIVE STAFF DIRECTORY */}
-        <div className={`${bgCard} p-6 rounded-3xl border border-slate-200/50 shadow-sm col-span-1 lg:col-span-1 flex flex-col h-full max-h-[580px]`}>
+        <div className={`${bgCard} p-6 rounded-3xl border border-slate-200/50 shadow-sm col-span-1 flex flex-col h-full max-h-[580px]`}>
           <h3 className={`font-black text-sm mb-4 ${textPrimary}`}>Active Staff Directory</h3>
 
           <div className="overflow-y-auto flex-1 space-y-3">
@@ -366,13 +419,31 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
                     isLight ? 'bg-slate-50 border-slate-200/60' : 'bg-slate-900 border-slate-800'
                   }`}
                 >
-                  <button 
-                    onClick={() => handleDeleteStaff(staff.id, staff.name)}
-                    className="absolute top-4 right-4 text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg opacity-80 md:opacity-0 md:group-hover:opacity-100 transition shrink-0"
-                    title="Delete Staff Account"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="absolute top-4 right-4 flex items-center space-x-1 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition">
+                    <button 
+                      onClick={() => {
+                        setEditingStaff(staff)
+                        setName(staff.name)
+                        setEmail(staff.email)
+                        setPhone(staff.phone)
+                        setRoleName(staff.roleName)
+                        setPassword(staff.password || '')
+                        setSelectedPermissions(staff.permissions)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }}
+                      className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                      title="Edit Staff Permissions & Info"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteStaff(staff.id, staff.name)}
+                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                      title="Delete Staff Account"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
 
                   <div className="space-y-0.5">
                     <p className={`font-extrabold ${textPrimary}`}>{staff.name}</p>

@@ -7,6 +7,7 @@ interface BatchesTabProps {
   textSecondary: string;
   badgeClass: string;
   batches: any[];
+  batchSchedules: any[];
   setIsAddBatchOpen: (v: boolean) => void;
   setEditingBatch: (batch: any) => void;
   handleDeleteBatch: (id: string, name: string) => void;
@@ -15,9 +16,11 @@ interface BatchesTabProps {
 
 export default function BatchesTab({
   bgCard, textPrimary, textSecondary, badgeClass,
-  batches, setIsAddBatchOpen, setEditingBatch,
+  batches, batchSchedules, setIsAddBatchOpen, setEditingBatch,
   handleDeleteBatch, handleToggleBatchVisibility
 }: BatchesTabProps) {
+  const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
+
   return (
     <div className="space-y-4">
       <div className={`${bgCard} p-6 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
@@ -27,16 +30,30 @@ export default function BatchesTab({
           </h3>
           <p className={`text-xs ${textSecondary}`}>Manage batch timings, age groups, validity, and student capacities.</p>
         </div>
-        <button
-          onClick={() => setIsAddBatchOpen(true)}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Batch</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedBatchIdFilter}
+            onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
+            className={`text-xs px-3.5 py-2.5 rounded-xl border outline-none font-bold shrink-0 ${
+              textPrimary === 'text-white' ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-100 border-slate-300 text-slate-800'
+            }`}
+          >
+            <option value="All">All Batches</option>
+            {batches.map(b => (
+              <option key={b.id} value={b.id}>{b.batch_name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setIsAddBatchOpen(true)}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Batch</span>
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {batches.map((bt) => {
+        {batches.filter(b => selectedBatchIdFilter === 'All' || b.id === selectedBatchIdFilter).map((bt) => {
           const isVisible = bt.is_visible !== false; // Default to true if undefined
           return (
             <div key={bt.id} className={`${bgCard} p-6 rounded-2xl space-y-4 flex flex-col justify-between`}>
@@ -66,6 +83,22 @@ export default function BatchesTab({
                   <p>Days: <strong className={textPrimary}>{bt.days}</strong></p>
                   <p>Capacity: <strong className="text-blue-500">{bt.capacity} Students</strong></p>
                 </div>
+
+                {/* Schedules list */}
+                {batchSchedules && batchSchedules.filter(s => s.batch_id === bt.id).length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1">
+                    <p className={`text-[10px] font-bold uppercase tracking-wider ${textSecondary}`}>Schedules (Class Master):</p>
+                    <div className="grid grid-cols-1 gap-1.5 pl-1">
+                      {batchSchedules.filter(s => s.batch_id === bt.id).map(sch => (
+                        <div key={sch.id} className={`text-[11px] font-semibold flex items-center justify-between p-1 px-2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-700 dark:text-slate-300`}>
+                          <span>📅 {sch.day_of_week}</span>
+                          <span className="font-mono text-blue-500">{sch.start_time} - {sch.end_time}</span>
+                          <span className="bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{sch.class_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Visibility Toggle Row */}

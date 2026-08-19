@@ -259,6 +259,10 @@ export default function AdminDashboardPage() {
   const [waReminderModal, setWaReminderModal] = useState({ isOpen: false, phone: '', message: '' })
 
   const [batches, setBatches] = useState<any[]>([])
+  const [batchSchedules, setBatchSchedules] = useState<any[]>([])
+  const [studentCustomSchedules, setStudentCustomSchedules] = useState<any[]>([])
+  const [holidays, setHolidays] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])
   const [attendance, setAttendance] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
@@ -316,7 +320,8 @@ export default function AdminDashboardPage() {
     validity_days: '30',
     fee_amount: '3500',
     age_group: '1 - 3 Years',
-    capacity: '20'
+    capacity: '20',
+    schedules: [] as Array<{ day_of_week: string; start_time: string; end_time: string; class_name: string }>
   })
 
   // Fee Filters & Month
@@ -389,6 +394,7 @@ export default function AdminDashboardPage() {
     hospital_preference: '',
     consent_accepted: true,
     custom_days: '',
+    custom_schedules: [] as Array<{ day_of_week: string; start_time: string; end_time: string; class_name: string }>,
     classes_total: 12,
     classes_consumed: 0,
     category: 'Child Activity',
@@ -659,12 +665,18 @@ export default function AdminDashboardPage() {
           try { localStorage.setItem('phulwari_party_packages', JSON.stringify(dbPackages)) } catch (e) {}
         } else {
           const savedPkg = localStorage.getItem('phulwari_party_packages')
-          if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
+          if (savedPkg) {
+            const parsed = JSON.parse(savedPkg)
+            setPartyPackages(parsed.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')))
+          }
         }
       } catch (e) {
         console.error('❌ [PACKAGES FETCH EXCEPTION]:', e)
         const savedPkg = localStorage.getItem('phulwari_party_packages')
-        if (savedPkg) setPartyPackages(JSON.parse(savedPkg))
+        if (savedPkg) {
+          const parsed = JSON.parse(savedPkg)
+          setPartyPackages(parsed.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')))
+        }
       }
 
       // 7. Load Gallery Images from DB
@@ -680,6 +692,41 @@ export default function AdminDashboardPage() {
         }
       } catch (e) {
         console.error('❌ [ENQUIRIES FETCH ERROR]:', e)
+      }
+
+      // 9. Fetch Bookings/Registrations from DB (excluding Staff Account)
+      try {
+        const { data: dbBookings, error: bookingsErr } = await supabase
+          .from('bookings')
+          .select('*')
+          .neq('booking_type', 'Staff Account')
+          .order('created_at', { ascending: false })
+        if (dbBookings) {
+          setBookings(dbBookings)
+          console.log(`✅ [BOOKINGS] Loaded ${dbBookings.length} bookings from DB`)
+        }
+      } catch (e) {
+        console.error('❌ [BOOKINGS FETCH EXCEPTION]:', e)
+      }
+
+      // Fetch batch schedules, student customized schedules, holidays, classes, and attendance
+      try {
+        const { data: dbBatchSch } = await supabase.from('batch_schedules').select('*')
+        if (dbBatchSch) setBatchSchedules(dbBatchSch)
+        
+        const { data: dbCustSch } = await supabase.from('student_custom_schedules').select('*')
+        if (dbCustSch) setStudentCustomSchedules(dbCustSch)
+        
+        const { data: dbHolidays } = await supabase.from('holidays').select('*')
+        if (dbHolidays) setHolidays(dbHolidays)
+        
+        const { data: dbClasses } = await supabase.from('classes').select('*')
+        if (dbClasses) setClasses(dbClasses)
+
+        const { data: dbAttendance } = await supabase.from('attendance').select('*')
+        if (dbAttendance) setAttendance(dbAttendance)
+      } catch (e) {
+        console.error('❌ [SCHEDULES/HOLIDAYS/ATTENDANCE FETCH EXCEPTION]:', e)
       }
 
     } catch (err) {
@@ -741,6 +788,23 @@ export default function AdminDashboardPage() {
     const { error } = await supabase.from('enquiries').delete().eq('id', id)
     if (!error) {
       setEnquiries(enquiries.filter(e => e.id !== id))
+    }
+  }
+
+  const handleUpdateBookingStatus = async (id: string, status: string) => {
+    const supabase = createClient()
+    const { error } = await supabase.from('bookings').update({ status }).eq('id', id)
+    if (!error) {
+      setBookings(bookings.map(b => b.id === id ? { ...b, status } : b))
+    }
+  }
+
+  const handleDeleteBooking = async (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this registration/booking?')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('bookings').delete().eq('id', id)
+    if (!error) {
+      setBookings(bookings.filter(b => b.id !== id))
     }
   }
 
@@ -824,6 +888,24 @@ export default function AdminDashboardPage() {
         const inserted = savedBatch[0] || dbPayload
         console.log('✅ [BATCH INSERT SUCCESS]:', inserted)
 
+        // Insert schedules to batch_schedules table
+        if (newBatchForm.schedules && newBatchForm.schedules.length > 0) {
+          const supabase = createClient()
+          const schedulesPayload = newBatchForm.schedules.map(sch => ({
+            batch_id: batchUuid,
+            day_of_week: sch.day_of_week,
+            start_time: sch.start_time,
+            end_time: sch.end_time,
+            class_name: sch.class_name
+          }))
+          const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schedulesPayload).select()
+          if (schErr) {
+            console.error('❌ [BATCH SCHEDULES INSERT ERROR]:', schErr)
+          } else if (schData) {
+            setBatchSchedules(prev => [...prev, ...schData])
+          }
+        }
+
         // Only update UI AFTER DB confirms success
         setBatches(prev => [inserted, ...prev])
 
@@ -838,7 +920,8 @@ export default function AdminDashboardPage() {
           validity_days: '30',
           fee_amount: '3500',
           age_group: '1 - 3 Years',
-          capacity: '20'
+          capacity: '20',
+          schedules: []
         })
         setIsAddBatchOpen(false)
       } else {
@@ -962,7 +1045,7 @@ export default function AdminDashboardPage() {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
     try {
-      const res = await fetch(`${supabaseUrl}/rest/v1/students`, {
+      let res = await fetch(`${supabaseUrl}/rest/v1/students`, {
         method: 'POST',
         headers: {
           'apikey': supabaseKey,
@@ -973,12 +1056,53 @@ export default function AdminDashboardPage() {
         body: JSON.stringify([dbPayload])
       })
 
+      if (!res.ok) {
+        const errJson = await res.clone().json().catch(() => ({}));
+        if (errJson.message && (errJson.message.includes('column') || errJson.message.includes('schema cache') || errJson.code === 'PGRST204')) {
+          console.warn('⚠️ Supabase missing student columns, retrying with stripped payload...');
+          const strippedPayload = { ...dbPayload };
+          delete (strippedPayload as any).category;
+          delete (strippedPayload as any).custom_days;
+          delete (strippedPayload as any).classes_total;
+          delete (strippedPayload as any).classes_consumed;
+
+          res = await fetch(`${supabaseUrl}/rest/v1/students`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify([strippedPayload])
+          });
+        }
+      }
+
       if (res.ok) {
         const responseData = await res.json()
         const inserted = responseData[0] || newStudentObj
         const enriched = {
           ...inserted,
           batch_name: selectedBatchObj?.batch_name || inserted.batch_name
+        }
+
+        // If Customized Batch is selected, insert schedules to student_custom_schedules table
+        if (selectedBatchObj?.id === '00000000-0000-0000-0000-000000000000' && newStudentForm.custom_schedules && newStudentForm.custom_schedules.length > 0) {
+          const supabase = createClient()
+          const customSchedulesPayload = newStudentForm.custom_schedules.map((sch: any) => ({
+            student_id: studentUuid,
+            day_of_week: sch.day_of_week,
+            start_time: sch.start_time,
+            end_time: sch.end_time,
+            class_name: sch.class_name
+          }))
+          const { data: custSchData, error: custSchErr } = await supabase.from('student_custom_schedules').insert(customSchedulesPayload).select()
+          if (custSchErr) {
+            console.error('❌ [STUDENT CUSTOM SCHEDULES INSERT ERROR]:', custSchErr)
+          } else if (custSchData) {
+            setStudentCustomSchedules(prev => [...prev, ...custSchData])
+          }
         }
 
         const updatedList = [enriched, ...students]
@@ -1238,13 +1362,10 @@ export default function AdminDashboardPage() {
   const handleSavePartyPackages = async () => {
     setPkgSaveStatus('Saving packages to database...')
 
-    // Always persist to localStorage first
-    try { localStorage.setItem('phulwari_party_packages', JSON.stringify(partyPackages)) } catch (e) {}
-
     try {
       const supabase = createClient()
 
-      // Build clean rows – use existing ID if valid, else let DB auto-assign
+      // Build clean rows for database upsert
       const rows = partyPackages.map((pkg, idx) => {
         const row: any = {
           name: pkg.name || `Package ${idx + 1}`,
@@ -1252,28 +1373,46 @@ export default function AdminDashboardPage() {
           tagline: pkg.tagline || '',
           includes: pkg.includes || '',
           is_visible: pkg.is_visible !== false
-        };
-        if (pkg.id && String(pkg.id).length > 5 && pkg.id !== 'p1' && pkg.id !== 'p2' && pkg.id !== 'p3') {
-          row.id = pkg.id;
         }
-        return row;
-      });
+        
+        // If the ID is a valid number, it's an existing database record
+        const isDbId = pkg.id !== undefined && pkg.id !== null && !String(pkg.id).startsWith('new-') && !isNaN(Number(pkg.id))
+        if (isDbId) {
+          row.id = Number(pkg.id)
+        }
+        return row
+      })
 
-      const { data, error } = await supabase.from('party_packages').upsert(rows).select()
+      // Explicitly specify onConflict: 'id' to guarantee updates on existing keys
+      const { data, error } = await supabase
+        .from('party_packages')
+        .upsert(rows, { onConflict: 'id' })
+        .select()
 
       if (error) throw error
 
-      // Update the in-memory partyPackages with DB-assigned integer/UUID IDs
       if (data) {
-        setPartyPackages(data)
+        // Sort returning data by name to guarantee stable sorting on frontend
+        const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name))
+        setPartyPackages(sorted)
+        try { localStorage.setItem('phulwari_party_packages', JSON.stringify(sorted)) } catch (e) {}
       }
 
       // Also embed into birthday_landing_config as a backup for the frontend
       try {
         const { data: cfgData } = await supabase.from('birthday_landing_config').select('*').eq('id', 1).single()
         if (cfgData) {
+          const sortedList = (data || rows).map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            price: r.price,
+            tagline: r.tagline,
+            includes: r.includes,
+            is_visible: r.is_visible
+          })).sort((a: any, b: any) => a.name.localeCompare(b.name))
+
           await supabase.from('birthday_landing_config').update({
-            hero_section: { ...cfgData.hero_section, packages: rows }
+            hero_section: { ...cfgData.hero_section, packages: sortedList }
           }).eq('id', 1)
         }
       } catch (_) {}
@@ -1281,26 +1420,91 @@ export default function AdminDashboardPage() {
       setPkgSaveStatus('✅ Party packages saved & published live!')
     } catch (err: any) {
       console.error('Failed to save party packages to DB:', err)
-      setPkgSaveStatus(`✅ Saved locally (DB: ${err?.message || 'check table exists'})`)
+      setPkgSaveStatus(`❌ Failed to save: ${err?.message || 'unknown error'}`)
     }
 
     setTimeout(() => setPkgSaveStatus(''), 4000)
   }
 
-  const handleAddNewPackage = () => {
-    const newPkg = {
-      id: `p-${Date.now()}`,
-      name: '',
-      tagline: '',
-      price: '',
-      includes: '',
-      is_visible: true
+  const handleCreateNewPackage = async (newPkgData: { name: string; tagline: string; price: string; includes: string; is_visible: boolean }) => {
+    try {
+      const supabase = createClient()
+      
+      // Fetch existing packages to find max ID
+      const { data: dbPkgs, error: fetchErr } = await supabase.from('party_packages').select('id')
+      if (fetchErr) throw fetchErr
+
+      let maxId = 0
+      if (dbPkgs && dbPkgs.length > 0) {
+        maxId = Math.max(...dbPkgs.map(p => Number(p.id)))
+      }
+      const nextId = maxId + 1
+
+      const payload = {
+        id: nextId,
+        name: newPkgData.name || 'New Package',
+        tagline: newPkgData.tagline || '',
+        price: newPkgData.price || '',
+        includes: newPkgData.includes || '',
+        is_visible: newPkgData.is_visible !== false
+      }
+
+      const { data, error } = await supabase
+        .from('party_packages')
+        .insert([payload])
+        .select()
+
+      if (error) throw error
+
+      if (data && data[0]) {
+        // Prepend or append to state
+        setPartyPackages(prev => {
+          const updated = [...prev, data[0]]
+          return updated.sort((a, b) => a.name.localeCompare(b.name))
+        })
+        try {
+          const local = localStorage.getItem('phulwari_party_packages')
+          const currentLocal = local ? JSON.parse(local) : []
+          localStorage.setItem('phulwari_party_packages', JSON.stringify([...currentLocal, data[0]].sort((a, b) => a.name.localeCompare(b.name))))
+        } catch (_) {}
+
+        // Also update birthday_landing_config
+        try {
+          const { data: cfgData } = await supabase.from('birthday_landing_config').select('*').eq('id', 1).single()
+          if (cfgData) {
+            const currentPackages = cfgData.hero_section?.packages || []
+            const updatedPackagesList = [...currentPackages.filter((p: any) => p.id !== nextId), data[0]]
+              .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+            await supabase.from('birthday_landing_config').update({
+              hero_section: { ...cfgData.hero_section, packages: updatedPackagesList }
+            }).eq('id', 1)
+          }
+        } catch (_) {}
+      }
+      return true
+    } catch (err: any) {
+      console.error('Failed to create new package:', err)
+      alert(`❌ Failed to create package: ${err.message || err}`)
+      return false
     }
-    setPartyPackages(prev => [newPkg, ...prev])
   }
 
-  const handleDeletePackage = (pkgId: string) => {
+  const handleDeletePackage = async (pkgId: string | number) => {
     if (!confirm('Are you sure you want to delete this party package?')) return
+    const isDbId = pkgId !== undefined && pkgId !== null && !String(pkgId).startsWith('new-') && !isNaN(Number(pkgId))
+    if (isDbId) {
+      try {
+        const supabase = createClient()
+        const { error } = await supabase.from('party_packages').delete().eq('id', Number(pkgId))
+        if (error) throw error
+        console.log('✅ Package deleted from database')
+      } catch (err: any) {
+        console.error('Failed to delete package from DB:', err)
+        alert(`❌ Failed to delete from DB: ${err.message || err}`)
+        return
+      }
+    }
     setPartyPackages(prev => prev.filter(p => p.id !== pkgId))
   }
 
@@ -1491,16 +1695,26 @@ export default function AdminDashboardPage() {
   }
 
   // Mark Attendance
-  const handleMarkAttendance = async (studentId: string, targetDate: string, status: 'present' | 'absent') => {
+  const handleMarkAttendance = async (
+    studentId: string,
+    targetDate: string,
+    status: 'present' | 'absent',
+    className: string = 'General',
+    classTime: string = 'General'
+  ) => {
     const targetStudent = students.find(s => s.id === studentId || s.admission_id === studentId)
 
     setAttendance(prev => {
-      const filtered = prev.filter(a => !(a.student_id === studentId && a.date === targetDate))
+      const filtered = prev.filter(
+        a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
+      )
       const newEntry = {
         student_id: studentId,
         date: targetDate,
         status: status,
-        remarks: `Marked ${status} on ${targetDate}`,
+        class_name: className,
+        class_time: classTime,
+        remarks: `Marked ${status} for ${className} on ${targetDate}`,
         students: targetStudent ? {
           full_name: targetStudent.full_name,
           admission_id: targetStudent.admission_id,
@@ -1513,8 +1727,48 @@ export default function AdminDashboardPage() {
 
     try {
       const supabase = createClient()
-      await supabase.from('attendance').upsert([{ student_id: studentId, date: targetDate, status, remarks: `Marked on ${targetDate}` }])
-    } catch (err) {}
+      await supabase.from('attendance').upsert([
+        {
+          student_id: studentId,
+          date: targetDate,
+          status,
+          class_name: className,
+          class_time: classTime,
+          remarks: `Marked on ${targetDate}`
+        }
+      ])
+    } catch (err) {
+      console.error('❌ [ATTENDANCE UPSERT ERROR]:', err)
+    }
+  }
+
+  // Toggle Holiday Mark
+  const handleToggleHoliday = async (date: string, description: string = 'Public Holiday / Center Closed') => {
+    const currentHoliday = holidays.find(h => h.date === date)
+    const supabase = createClient()
+    
+    if (currentHoliday) {
+      try {
+        const { error } = await supabase.from('holidays').delete().eq('date', date)
+        if (error) throw error
+        setHolidays(prev => prev.filter(h => h.date !== date))
+      } catch (err) {
+        console.error('Failed to remove holiday:', err)
+        alert('Failed to remove holiday mark from database.')
+      }
+    } else {
+      try {
+        const payload = { date, description }
+        const { data, error } = await supabase.from('holidays').insert([payload]).select()
+        if (error) throw error
+        if (data) {
+          setHolidays(prev => [...prev, ...data])
+        }
+      } catch (err) {
+        console.error('Failed to add holiday:', err)
+        alert('Failed to save holiday mark to database.')
+      }
+    }
   }
 
   // Save Batch
@@ -1522,13 +1776,46 @@ export default function AdminDashboardPage() {
     e.preventDefault()
     if (!editingBatch) return
 
-    setBatches(prev => prev.map(b => b.id === editingBatch.id ? editingBatch : b))
+    // Create a version without schedules for batches table upsert
+    const { schedules, ...dbBatchDetails } = editingBatch
+
+    setBatches(prev => prev.map(b => b.id === editingBatch.id ? dbBatchDetails : b))
     try {
       const supabase = createClient()
-      await supabase.from('batches').upsert([editingBatch])
-    } catch (err) {}
+      await supabase.from('batches').upsert([dbBatchDetails])
+
+      // Delete existing and insert new schedules
+      await supabase.from('batch_schedules').delete().eq('batch_id', editingBatch.id)
+      if (schedules && schedules.length > 0) {
+        const schPayload = schedules.map((sch: any) => ({
+          batch_id: editingBatch.id,
+          day_of_week: sch.day_of_week,
+          start_time: sch.start_time,
+          end_time: sch.end_time,
+          class_name: sch.class_name
+        }))
+        const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schPayload).select()
+        if (schErr) {
+          console.error('❌ [BATCH SCHEDULES UPDATE ERROR]:', schErr)
+        } else if (schData) {
+          setBatchSchedules(prev => [...prev.filter(s => s.batch_id !== editingBatch.id), ...schData])
+        }
+      } else {
+        setBatchSchedules(prev => prev.filter(s => s.batch_id !== editingBatch.id))
+      }
+    } catch (err) {
+      console.error('❌ [BATCH SAVE EXCEPTION]:', err)
+    }
 
     setEditingBatch(null)
+  }
+
+  const handleStartEditBatch = (batch: any) => {
+    const schedulesForBatch = batchSchedules.filter(s => s.batch_id === batch.id)
+    setEditingBatch({
+      ...batch,
+      schedules: schedulesForBatch
+    })
   }
 
   // Delete Batch
@@ -1927,7 +2214,6 @@ export default function AdminDashboardPage() {
               { id: 'teachers', label: 'Teacher Management', icon: UserPlus, count: teachers.length },
               { id: 'batches', label: 'Batches & Class Timings', icon: Clock, count: batches.length },
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
-              { id: 'calendar', label: 'Attendance Calendar', icon: CalendarDays },
               { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
@@ -2042,7 +2328,6 @@ export default function AdminDashboardPage() {
               {activeTab === 'students' && 'Student Management & Admissions'}
               {activeTab === 'teachers' && 'Teacher & Faculty Staff Management'}
               {activeTab === 'attendance' && 'Daily Class Attendance Marker'}
-              {activeTab === 'calendar' && 'Interactive Attendance Calendar'}
               {activeTab === 'fees' && 'Class & Monthly Fee Management Dashboard'}
               {activeTab === 'gallery' && 'Dynamic Gallery Photo Manager'}
               {activeTab === 'packages' && 'Birthday & Party Packages Configuration'}
@@ -2079,7 +2364,7 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* ROLE TOGGLE SELECTOR */}
             <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
               <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
@@ -2409,25 +2694,10 @@ export default function AdminDashboardPage() {
             setActiveTab={setActiveTab}
             handleMarkAttendance={handleMarkAttendance}
             searchQuery={searchQuery}
-          />
-        )}
-
-        {/* TAB 3: ATTENDANCE CALENDAR */}
-        {activeTab === 'calendar' && (
-          <CalendarTab
-            bgCard={bgCard}
-            textPrimary={textPrimary}
-            textSecondary={textSecondary}
-            isLight={isLight}
-            badgeClass={badgeClass}
-            badgeStatus={badgeStatus}
-            monthName={monthName}
-            currentYear={currentYear}
-            selectedBatchId={selectedBatchId}
-            calendarDays={calendarDays}
-            handlePrevMonth={handlePrevMonth}
-            handleNextMonth={handleNextMonth}
-            setSelectedCalendarDate={setSelectedCalendarDate}
+            batchSchedules={batchSchedules}
+            studentCustomSchedules={studentCustomSchedules}
+            holidays={holidays}
+            handleToggleHoliday={handleToggleHoliday}
           />
         )}
 
@@ -2450,6 +2720,7 @@ export default function AdminDashboardPage() {
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
             handleSendWhatsAppFeeReminder={handleSendWhatsAppFeeReminder}
+            batches={batches}
           />
         )}
 
@@ -2483,7 +2754,7 @@ export default function AdminDashboardPage() {
             isLight={isLight}
             partyPackages={partyPackages}
             setPartyPackages={setPartyPackages}
-            handleAddNewPackage={handleAddNewPackage}
+            handleCreateNewPackage={handleCreateNewPackage}
             handleSavePartyPackages={handleSavePartyPackages}
             pkgSaveStatus={pkgSaveStatus}
             handleDeletePackage={handleDeletePackage}
@@ -2526,8 +2797,9 @@ export default function AdminDashboardPage() {
             textSecondary={textSecondary}
             badgeClass={badgeClass}
             batches={batches}
+            batchSchedules={batchSchedules}
             setIsAddBatchOpen={setIsAddBatchOpen}
-            setEditingBatch={setEditingBatch}
+            setEditingBatch={handleStartEditBatch}
             handleDeleteBatch={handleDeleteBatch}
             handleToggleBatchVisibility={handleToggleBatchVisibility}
           />
@@ -2554,6 +2826,10 @@ export default function AdminDashboardPage() {
             textSecondary={textSecondary}
             badgePassword={badgePassword}
             bookings={bookings}
+            handleUpdateBookingStatus={handleUpdateBookingStatus}
+            handleDeleteBooking={handleDeleteBooking}
+            partyPackages={partyPackages}
+            isLight={isLight}
           />
         )}
 
@@ -2687,6 +2963,85 @@ export default function AdminDashboardPage() {
                     }`}
                   />
                 </div>
+              </div>
+
+              {/* Class schedules sub-form for editing */}
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <label className={`font-bold ${textSecondary} block`}>Class Schedules (Day → Time → Class)</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                  {(editingBatch.schedules || []).map((sch: any, schIdx: number) => (
+                    <div key={schIdx} className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+                      <select
+                        value={sch.day_of_week}
+                        onChange={(e) => {
+                          const updated = [...editingBatch.schedules]
+                          updated[schIdx].day_of_week = e.target.value
+                          setEditingBatch({ ...editingBatch, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
+                      >
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Start Time"
+                        value={sch.start_time}
+                        onChange={(e) => {
+                          const updated = [...editingBatch.schedules]
+                          updated[schIdx].start_time = e.target.value
+                          setEditingBatch({ ...editingBatch, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                      />
+                      <input
+                        type="text"
+                        placeholder="End Time"
+                        value={sch.end_time}
+                        onChange={(e) => {
+                          const updated = [...editingBatch.schedules]
+                          updated[schIdx].end_time = e.target.value
+                          setEditingBatch({ ...editingBatch, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                      />
+                      <select
+                        value={sch.class_name}
+                        onChange={(e) => {
+                          const updated = [...editingBatch.schedules]
+                          updated[schIdx].class_name = e.target.value
+                          setEditingBatch({ ...editingBatch, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
+                      >
+                        {['Skating', 'Cricket', 'Gymnastics', 'Dance', 'Zumba', 'Yoga', 'Karate', 'Other'].map(cls => (
+                          <option key={cls} value={cls}>{cls}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = editingBatch.schedules.filter((_: any, idx: number) => idx !== schIdx)
+                          setEditingBatch({ ...editingBatch, schedules: updated })
+                        }}
+                        className="p-1 bg-rose-600/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: 'Skating' }
+                    setEditingBatch({ ...editingBatch, schedules: [...(editingBatch.schedules || []), newSch] })
+                  }}
+                  className="px-3 py-1.5 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition"
+                >
+                  + Add Schedule Entry
+                </button>
               </div>
 
               <div className="pt-3 flex items-center justify-end space-x-3">
@@ -2862,7 +3217,37 @@ export default function AdminDashboardPage() {
         setNewStudentForm={setNewStudentForm}
         allAvailableBatches={allAvailableBatches}
         handleAddStudentSubmit={handleAddStudentSubmit}
+        batchSchedules={batchSchedules}
       />
+      {selectedERPStudent && (
+        <StudentErpModal
+          isOpen={!!selectedERPStudent}
+          onClose={() => setSelectedERPStudent(null)}
+          student={selectedERPStudent}
+          adminRole={adminRole}
+          isLight={isLight}
+          bgCard={bgCard}
+          bgSubCard={bgSubCard}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+          badgeStatus={badgeStatus}
+          badgePassword={badgePassword}
+          tipBannerBg={tipBannerBg}
+          fees={fees}
+          handlePrintRegistrationForm={handlePrintRegistrationForm}
+          handleDeactivateStudent={handleDeactivateStudent}
+          handleDeleteStudent={handleDeleteStudent}
+          handleFeeSubmit={handleFeeSubmit}
+          handleERPPasswordSubmit={handleERPPasswordSubmit}
+          feeForm={feeForm}
+          setFeeForm={setFeeForm}
+          erpPassword={erpPassword}
+          setErpPassword={setErpPassword}
+          erpPasswordMsg={erpPasswordMsg}
+          batchSchedules={batchSchedules}
+          studentCustomSchedules={studentCustomSchedules}
+        />
+      )}
 
       {/* MODAL: DAY ATTENDANCE BREAKDOWN CALENDAR POPUP */}
       {selectedCalendarDate && (
@@ -3433,6 +3818,85 @@ export default function AdminDashboardPage() {
                     }`}
                   />
                 </div>
+              </div>
+
+              {/* Class schedules sub-form */}
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <label className={`font-bold ${textSecondary} block`}>Class Schedules (Day → Time → Class)</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                  {(newBatchForm.schedules || []).map((sch, schIdx) => (
+                    <div key={schIdx} className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+                      <select
+                        value={sch.day_of_week}
+                        onChange={(e) => {
+                          const updated = [...newBatchForm.schedules]
+                          updated[schIdx].day_of_week = e.target.value
+                          setNewBatchForm({ ...newBatchForm, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
+                      >
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Start Time (e.g. 4 PM)"
+                        value={sch.start_time}
+                        onChange={(e) => {
+                          const updated = [...newBatchForm.schedules]
+                          updated[schIdx].start_time = e.target.value
+                          setNewBatchForm({ ...newBatchForm, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                      />
+                      <input
+                        type="text"
+                        placeholder="End Time (e.g. 5 PM)"
+                        value={sch.end_time}
+                        onChange={(e) => {
+                          const updated = [...newBatchForm.schedules]
+                          updated[schIdx].end_time = e.target.value
+                          setNewBatchForm({ ...newBatchForm, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                      />
+                      <select
+                        value={sch.class_name}
+                        onChange={(e) => {
+                          const updated = [...newBatchForm.schedules]
+                          updated[schIdx].class_name = e.target.value
+                          setNewBatchForm({ ...newBatchForm, schedules: updated })
+                        }}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
+                      >
+                        {['Skating', 'Cricket', 'Gymnastics', 'Dance', 'Zumba', 'Yoga', 'Karate', 'Other'].map(cls => (
+                          <option key={cls} value={cls}>{cls}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = newBatchForm.schedules.filter((_, idx) => idx !== schIdx)
+                          setNewBatchForm({ ...newBatchForm, schedules: updated })
+                        }}
+                        className="p-1 bg-rose-600/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: 'Skating' }
+                    setNewBatchForm({ ...newBatchForm, schedules: [...(newBatchForm.schedules || []), newSch] })
+                  }}
+                  className="px-3 py-1.5 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition"
+                >
+                  + Add Schedule Entry
+                </button>
               </div>
 
               <div className="pt-3 flex items-center justify-end space-x-3">

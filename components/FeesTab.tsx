@@ -18,14 +18,18 @@ interface FeesTabProps {
   setSelectedERPStudent: (st: any) => void;
   setErpModalTab: (tab: any) => void;
   handleSendWhatsAppFeeReminder: (name: string, id: string, phone: string, month: string, amount: number, due: string) => void;
+  batches: any[];
 }
 
 export default function FeesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight, badgeStatus,
   filteredStudents, fees, feeSelectedMonth, setFeeSelectedMonth,
   feeStatusFilter, setFeeStatusFilter, setIsClassFeeModalOpen,
-  setSelectedERPStudent, setErpModalTab, handleSendWhatsAppFeeReminder
+  setSelectedERPStudent, setErpModalTab, handleSendWhatsAppFeeReminder,
+  batches
 }: FeesTabProps) {
+  const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
+
   return (
     <div className="space-y-6">
       <div className={`${bgCard} rounded-2xl p-6 space-y-5`}>
@@ -44,6 +48,18 @@ export default function FeesTab({
               <IndianRupee className="w-4 h-4" />
               <span>View &amp; Edit All Class Fees</span>
             </button>
+            <select
+              value={selectedBatchIdFilter}
+              onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
+              className={`text-xs px-3.5 py-2 rounded-xl border outline-none font-bold shrink-0 ${
+                isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+              }`}
+            >
+              <option value="All">All Batches</option>
+              {batches.map(b => (
+                <option key={b.id} value={b.id}>{b.batch_name}</option>
+              ))}
+            </select>
             <select
               value={feeSelectedMonth}
               onChange={(e) => setFeeSelectedMonth(e.target.value)}
@@ -71,6 +87,7 @@ export default function FeesTab({
         </div>
         <div className="flex flex-col space-y-3 pt-2">
           {filteredStudents.map((st) => {
+            if (selectedBatchIdFilter !== 'All' && st.batch_id !== selectedBatchIdFilter) return null;
             const studentFee = fees.find((f: any) =>
               (f.student_id === st.id || f.students?.admission_id === st.admission_id) &&
               (f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))

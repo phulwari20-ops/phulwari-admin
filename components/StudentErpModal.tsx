@@ -27,6 +27,8 @@ interface StudentErpModalProps {
   erpPassword: string
   setErpPassword: (val: string) => void
   erpPasswordMsg: string
+  batchSchedules: any[]
+  studentCustomSchedules: any[]
 }
 
 export default function StudentErpModal({
@@ -52,7 +54,9 @@ export default function StudentErpModal({
   setFeeForm,
   erpPassword,
   setErpPassword,
-  erpPasswordMsg
+  erpPasswordMsg,
+  batchSchedules,
+  studentCustomSchedules
 }: StudentErpModalProps) {
   const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'password'>('collect_fee')
 
@@ -412,6 +416,33 @@ export default function StudentErpModal({
                 <p><strong className={textSecondary}>Preferred Time Slot:</strong> {student.preferred_time_slot || 'Morning'}</p>
                 <p><strong className={textSecondary}>Joined On:</strong> {student.created_at ? new Date(student.created_at).toLocaleDateString('en-GB') : 'N/A'}</p>
                 
+                {/* Active class timings schedule */}
+                <h4 className="font-bold text-indigo-600 uppercase tracking-wider text-[10px] border-b pb-1 pt-1">Active Timings (Schedule)</h4>
+                {(() => {
+                  let schedules: any[] = [];
+                  if (student.batch_id === '00000000-0000-0000-0000-000000000000') {
+                    schedules = studentCustomSchedules.filter(sch => sch.student_id === student.id);
+                  } else {
+                    schedules = batchSchedules.filter(sch => sch.batch_id === student.batch_id);
+                  }
+                  
+                  if (schedules.length === 0) {
+                    return <p className="text-[10px] text-slate-400 italic">No scheduled classes configured.</p>;
+                  }
+                  
+                  return (
+                    <div className="space-y-1 mt-1 max-h-32 overflow-y-auto custom-scrollbar pr-0.5">
+                      {schedules.map((sch, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-[10px] p-1 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200/40 rounded">
+                          <span className="font-bold text-slate-700 dark:text-slate-300">📅 {sch.day_of_week}</span>
+                          <span className="font-mono text-blue-500 font-semibold">{sch.start_time} - {sch.end_time}</span>
+                          <span className="font-bold text-pink-600">{sch.class_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <h4 className="font-bold text-blue-600 uppercase tracking-wider text-[10px] border-b pb-1 pt-2">Medical Information</h4>
                 <p><strong className={textSecondary}>Condition:</strong> {student.has_medical_condition ? (student.medical_condition_details || 'Yes') : 'None'}</p>
                 <p><strong className={textSecondary}>Medication:</strong> {student.regular_medication || 'None'}</p>

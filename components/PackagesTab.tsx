@@ -9,10 +9,10 @@ interface PackagesTabProps {
   isLight: boolean;
   partyPackages: any[];
   setPartyPackages: React.Dispatch<React.SetStateAction<any[]>>;
-  handleAddNewPackage: () => void;
+  handleCreateNewPackage: (newPkg: any) => Promise<boolean>;
   handleSavePartyPackages: () => void;
   pkgSaveStatus: string;
-  handleDeletePackage: (id: string) => void;
+  handleDeletePackage: (id: string | number) => void;
   adminRole?: string;
 }
 
@@ -24,13 +24,21 @@ export default function PackagesTab({
   isLight,
   partyPackages,
   setPartyPackages,
-  handleAddNewPackage,
+  handleCreateNewPackage,
   handleSavePartyPackages,
   pkgSaveStatus,
   handleDeletePackage,
   adminRole
 }: PackagesTabProps) {
   const isStaff = adminRole === 'Staff';
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [newPkgForm, setNewPkgForm] = React.useState({
+    name: '',
+    tagline: '',
+    price: '',
+    includes: '',
+    is_visible: true
+  });
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
@@ -45,7 +53,7 @@ export default function PackagesTab({
         {!isStaff && (
           <div className="flex items-center space-x-3">
             <button
-              onClick={handleAddNewPackage}
+              onClick={() => setShowAddForm(true)}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -76,6 +84,95 @@ export default function PackagesTab({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {showAddForm && (
+          <div className={`p-5 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/5 dark:bg-blue-950/5 space-y-4`}>
+            <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-800">
+              <h4 className={`text-sm font-bold ${textPrimary}`}>Create New Package</h4>
+              <button 
+                onClick={() => setShowAddForm(false)}
+                className="text-xs text-rose-500 font-bold hover:underline"
+              >Cancel</button>
+            </div>
+            
+            <div className="space-y-1">
+              <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Package Name *</label>
+              <input
+                type="text"
+                placeholder="e.g. Silver Party Package"
+                value={newPkgForm.name}
+                onChange={(e) => setNewPkgForm(prev => ({ ...prev, name: e.target.value }))}
+                className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Package Tagline</label>
+              <input
+                type="text"
+                placeholder="e.g. Perfect for active kids"
+                value={newPkgForm.tagline}
+                onChange={(e) => setNewPkgForm(prev => ({ ...prev, tagline: e.target.value }))}
+                className={`w-full text-xs font-semibold px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Display Price</label>
+              <input
+                type="text"
+                placeholder="e.g. ₹7,999"
+                value={newPkgForm.price}
+                onChange={(e) => setNewPkgForm(prev => ({ ...prev, price: e.target.value }))}
+                className={`w-full text-xs font-mono font-bold px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className={`text-[10px] font-bold uppercase ${textSecondary}`}>Includes / Features</label>
+              <textarea
+                rows={3}
+                placeholder="e.g. Space decoration, soft play area, music"
+                value={newPkgForm.includes}
+                onChange={(e) => setNewPkgForm(prev => ({ ...prev, includes: e.target.value }))}
+                className={`w-full text-xs font-medium px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                }`}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="new-pkg-visible"
+                checked={newPkgForm.is_visible}
+                onChange={(e) => setNewPkgForm(prev => ({ ...prev, is_visible: e.target.checked }))}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="new-pkg-visible" className={`text-xs font-bold ${textPrimary} cursor-pointer`}>Show in User Panel</label>
+            </div>
+
+            {newPkgForm.name.trim() !== '' && (
+              <button
+                onClick={async () => {
+                  const success = await handleCreateNewPackage(newPkgForm);
+                  if (success) {
+                    setNewPkgForm({ name: '', tagline: '', price: '', includes: '', is_visible: true });
+                    setShowAddForm(false);
+                  }
+                }}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md"
+              >
+                Create &amp; Save Package to Database
+              </button>
+            )}
+          </div>
+        )}
         {partyPackages.map((pkg) => (
           <div key={pkg.id} className={`p-5 rounded-2xl border space-y-4 ${bgSubCard}`}>
             <div className="flex items-center justify-between">
