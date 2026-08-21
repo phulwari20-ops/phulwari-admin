@@ -108,6 +108,26 @@ export default function AdminDashboardPage() {
   // Theme Toggle
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
+  // Restore the operator's chosen theme. Read in an effect rather than in the
+  // initial state so the server and first client render agree.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('phulwari_admin_theme')
+      if (saved === 'light' || saved === 'dark') setTheme(saved)
+    } catch (_) {}
+  }, [])
+
+  // The `.dark` class on <html> is what every `dark:` utility keys off, so the
+  // toggle — not the device's OS setting — decides how the panel renders.
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('dark', theme === 'dark')
+    root.style.colorScheme = theme
+    try {
+      localStorage.setItem('phulwari_admin_theme', theme)
+    } catch (_) {}
+  }, [theme])
+
   // Sidebar Resizable & Collapsible State
   const [sidebarWidth, setSidebarWidth] = useState<number>(270)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false)
