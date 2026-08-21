@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '../lib/supabase/client'
+import { getSupabaseKey, getSupabaseUrl } from '../lib/supabase/env'
 import {
   LayoutDashboard,
   Users,
@@ -263,6 +264,18 @@ export default function AdminDashboardPage() {
   const [studentCustomSchedules, setStudentCustomSchedules] = useState<any[]>([])
   const [holidays, setHolidays] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
+
+  // Class Master drives every "which class" dropdown (batch schedules, custom
+  // student schedules). Falls back to the built-in list until the `classes`
+  // table is populated so the UI is never left with an empty select.
+  const DEFAULT_CLASS_NAMES = ['Skating', 'Cricket', 'Gymnastics', 'Dance', 'Zumba', 'Yoga', 'Karate', 'Other']
+  const classMasterNames = useMemo(() => {
+    const fromDb = classes
+      .map((c: any) => c?.class_name)
+      .filter((n: any): n is string => typeof n === 'string' && n.trim() !== '')
+    const merged = fromDb.length > 0 ? [...fromDb, 'Other'] : DEFAULT_CLASS_NAMES
+    return Array.from(new Set(merged))
+  }, [classes])
   const [fees, setFees] = useState<any[]>([])
   const [attendance, setAttendance] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
@@ -490,6 +503,7 @@ export default function AdminDashboardPage() {
     try {
       const { data: staffRec, error } = await supabase
         .from('bookings')
+        .select('*')
         .eq('booking_type', 'Staff Account')
         .eq('email', cleanEmail)
       
@@ -776,7 +790,8 @@ export default function AdminDashboardPage() {
       classes_total: 12,
       classes_consumed: 0,
       category: 'Child Activity',
-      status: 'active'
+      status: 'active',
+      custom_schedules: []
     })
     setActiveTab('students')
     setIsAddStudentOpen(true)
@@ -868,8 +883,8 @@ export default function AdminDashboardPage() {
     console.log('📡 [BATCH INSERT] Sending to Supabase:', dbPayload)
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      const supabaseUrl = getSupabaseUrl()
+      const supabaseKey = getSupabaseKey()
       if (!supabaseUrl || !supabaseKey) throw new Error('Supabase config missing')
 
       const res = await fetch(`${supabaseUrl}/rest/v1/batches`, {
@@ -1041,8 +1056,8 @@ export default function AdminDashboardPage() {
       category: newStudentObj.category
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    const supabaseUrl = getSupabaseUrl()
+    const supabaseKey = getSupabaseKey()
 
     try {
       let res = await fetch(`${supabaseUrl}/rest/v1/students`, {
@@ -1209,8 +1224,8 @@ export default function AdminDashboardPage() {
 
   const fetchAdminGallery = async () => {
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      const supabaseUrl = getSupabaseUrl()
+      const supabaseKey = getSupabaseKey()
       if (supabaseUrl && supabaseKey) {
         const res = await fetch(`${supabaseUrl}/rest/v1/gallery?select=*&order=created_at.desc`, {
           headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
@@ -1283,8 +1298,8 @@ export default function AdminDashboardPage() {
           const compressedBase64 = await compressImage(base64Url)
 
           // Post directly to Supabase REST API with public anon headers
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-          const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+          const supabaseUrl = getSupabaseUrl()
+          const supabaseKey = getSupabaseKey()
           if (supabaseUrl && supabaseKey) {
             const res = await fetch(`${supabaseUrl}/rest/v1/gallery`, {
               method: 'POST',
@@ -1318,8 +1333,8 @@ export default function AdminDashboardPage() {
 
     // Safe REST DELETE query to Supabase
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      const supabaseUrl = getSupabaseUrl()
+      const supabaseKey = getSupabaseKey()
       if (supabaseUrl && supabaseKey) {
         const isCleanUuid = typeof img.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(img.id)
         const deleteQueryParam = isCleanUuid ? `id=eq.${img.id}` : `image_url=eq.${encodeURIComponent(img.url || img.image_url)}`
@@ -1644,8 +1659,8 @@ export default function AdminDashboardPage() {
     })
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      const supabaseUrl = getSupabaseUrl()
+      const supabaseKey = getSupabaseKey()
       
       const dbNotice = {
         id: newNotice.id,
@@ -1694,6 +1709,75 @@ export default function AdminDashboardPage() {
     } catch (err) {}
   }
 
+  // ---- Class Master (the `classes` table) ----
+  // The Class Master is the catalogue of activities the centre runs. It feeds
+  // every Day -> Time -> Class dropdown, including the Customized Batch builder
+  // used during student registration.
+  const handleAddClass = async (rawName: string) => {
+    const className = rawName.trim()
+    if (!className) return false
+
+    const exists = classes.some(
+      (c: any) => (c.class_name || '').trim().toLowerCase() === className.toLowerCase()
+    )
+    if (exists) {
+      alert(`"${className}" is already in the Class Master.`)
+      return false
+    }
+
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('classes')
+        .insert([{ class_name: className }])
+        .select()
+      if (error) throw error
+      if (data) setClasses(prev => [...prev, ...data])
+      return true
+    } catch (err: any) {
+      console.error('❌ [CLASS MASTER INSERT ERROR]:', err)
+      alert(`Could not add the class: ${err?.message || 'unknown error'}`)
+      return false
+    }
+  }
+
+  const handleDeleteClass = async (classId: string, className: string) => {
+    // A class still referenced by a batch schedule would leave that schedule
+    // pointing at an activity that no longer exists, so block it.
+    const inUse = batchSchedules.filter((sch: any) => sch.class_name === className)
+    if (inUse.length > 0) {
+      alert(
+        `"${className}" is used by ${inUse.length} batch schedule entr${inUse.length === 1 ? 'y' : 'ies'}. ` +
+          'Remove those schedule entries first.'
+      )
+      return
+    }
+
+    if (!confirm(`Remove "${className}" from the Class Master?`)) return
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('classes').delete().eq('id', classId)
+      if (error) throw error
+      setClasses(prev => prev.filter((c: any) => c.id !== classId))
+    } catch (err: any) {
+      console.error('❌ [CLASS MASTER DELETE ERROR]:', err)
+      alert(`Could not remove the class: ${err?.message || 'unknown error'}`)
+    }
+  }
+
+  // Re-read attendance from the database. Used to undo an optimistic update
+  // when the write turns out to have failed.
+  const refreshAttendanceFromDb = async () => {
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('attendance').select('*')
+      if (data) setAttendance(data)
+    } catch (err) {
+      console.error('❌ [ATTENDANCE REFRESH ERROR]:', err)
+    }
+  }
+
   // Mark Attendance
   const handleMarkAttendance = async (
     studentId: string,
@@ -1727,18 +1811,36 @@ export default function AdminDashboardPage() {
 
     try {
       const supabase = createClient()
-      await supabase.from('attendance').upsert([
-        {
-          student_id: studentId,
-          date: targetDate,
-          status,
-          class_name: className,
-          class_time: classTime,
-          remarks: `Marked on ${targetDate}`
-        }
-      ])
+      // `attendance` has a unique index on
+      // (student_id, date, class_name, class_time) — one row per class, per the
+      // batch/attendance blueprint. Without naming it via onConflict, PostgREST
+      // resolves against the primary key instead and re-marking an already
+      // marked class fails with 23505, leaving the optimistic UI showing a
+      // status the database never accepted.
+      const { error } = await supabase
+        .from('attendance')
+        .upsert(
+          [
+            {
+              student_id: studentId,
+              date: targetDate,
+              status,
+              class_name: className,
+              class_time: classTime,
+              remarks: `Marked on ${targetDate}`
+            }
+          ],
+          { onConflict: 'student_id,date,class_name,class_time' }
+        )
+
+      if (error) throw error
     } catch (err) {
       console.error('❌ [ATTENDANCE UPSERT ERROR]:', err)
+      alert(
+        'Attendance could not be saved to the database. Please check your connection and mark it again.'
+      )
+      // Roll back to what the database actually holds.
+      await refreshAttendanceFromDb()
     }
   }
 
@@ -2453,7 +2555,8 @@ export default function AdminDashboardPage() {
                     payment_mode: 'Cash',
                     amount_paid: '',
                     plan_validity_date: '',
-                    remarks: ''
+                    remarks: '',
+                    custom_schedules: []
                   })
                   setIsAddStudentOpen(true)
                 }}
@@ -2798,6 +2901,9 @@ export default function AdminDashboardPage() {
             badgeClass={badgeClass}
             batches={batches}
             batchSchedules={batchSchedules}
+            classes={classes}
+            handleAddClass={handleAddClass}
+            handleDeleteClass={handleDeleteClass}
             setIsAddBatchOpen={setIsAddBatchOpen}
             setEditingBatch={handleStartEditBatch}
             handleDeleteBatch={handleDeleteBatch}
@@ -3015,7 +3121,7 @@ export default function AdminDashboardPage() {
                         }}
                         className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
                       >
-                        {['Skating', 'Cricket', 'Gymnastics', 'Dance', 'Zumba', 'Yoga', 'Karate', 'Other'].map(cls => (
+                        {classMasterNames.map(cls => (
                           <option key={cls} value={cls}>{cls}</option>
                         ))}
                       </select>
@@ -3035,7 +3141,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: 'Skating' }
+                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: classMasterNames[0] || 'Skating' }
                     setEditingBatch({ ...editingBatch, schedules: [...(editingBatch.schedules || []), newSch] })
                   }}
                   className="px-3 py-1.5 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition"
@@ -3870,7 +3976,7 @@ export default function AdminDashboardPage() {
                         }}
                         className={`border rounded-lg px-2 py-1 outline-none text-xs font-semibold ${isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
                       >
-                        {['Skating', 'Cricket', 'Gymnastics', 'Dance', 'Zumba', 'Yoga', 'Karate', 'Other'].map(cls => (
+                        {classMasterNames.map(cls => (
                           <option key={cls} value={cls}>{cls}</option>
                         ))}
                       </select>
@@ -3890,7 +3996,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: 'Skating' }
+                    const newSch = { day_of_week: 'Monday', start_time: '4 PM', end_time: '5 PM', class_name: classMasterNames[0] || 'Skating' }
                     setNewBatchForm({ ...newBatchForm, schedules: [...(newBatchForm.schedules || []), newSch] })
                   }}
                   className="px-3 py-1.5 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition"

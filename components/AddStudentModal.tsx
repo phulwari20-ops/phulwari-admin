@@ -358,7 +358,19 @@ export default function AddStudentModal({
                     
                     <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar p-1">
                       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
-                        const dayClasses = batchSchedules.filter(sch => sch.day_of_week === day);
+                        // Class Master view for this day: the same slot can be
+                        // scheduled by several batches, so collapse duplicates
+                        // to one selectable entry and order them by start time.
+                        const dayClasses = Array.from(
+                          new Map(
+                            batchSchedules
+                              .filter(sch => sch.day_of_week === day)
+                              .map(sch => [
+                                `${sch.class_name}|${sch.start_time}|${sch.end_time}`,
+                                sch
+                              ])
+                          ).values()
+                        );
                         const currentCustomSch = newStudentForm.custom_schedules || [];
                         
                         return (
@@ -373,7 +385,7 @@ export default function AddStudentModal({
                                     (s: any) => s.day_of_week === day && s.class_name === cls.class_name && s.start_time === cls.start_time && s.end_time === cls.end_time
                                   );
                                   return (
-                                    <label key={cls.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:border-orange-300 transition cursor-pointer text-[11px] font-semibold text-slate-700 bg-slate-50/50">
+                                    <label key={`${cls.class_name}|${cls.start_time}|${cls.end_time}`} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:border-orange-300 transition cursor-pointer text-[11px] font-semibold text-slate-700 bg-slate-50/50">
                                       <input
                                         type="checkbox"
                                         checked={isChecked}
