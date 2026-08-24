@@ -1534,6 +1534,19 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('party_packages').delete().eq('id', Number(pkgId))
         if (error) throw error
         console.log('✅ Package deleted from database')
+
+        // Keep the birthday_landing_config backup copy in sync so the public
+        // site never shows a package that was deleted from the master table.
+        try {
+          const { data: cfgData } = await supabase.from('birthday_landing_config').select('*').eq('id', 1).single()
+          if (cfgData) {
+            const currentPackages = cfgData.hero_section?.packages || []
+            const updatedPackagesList = currentPackages.filter((p: any) => Number(p.id) !== Number(pkgId))
+            await supabase.from('birthday_landing_config').update({
+              hero_section: { ...cfgData.hero_section, packages: updatedPackagesList }
+            }).eq('id', 1)
+          }
+        } catch (_) {}
       } catch (err: any) {
         console.error('Failed to delete package from DB:', err)
         alert(`❌ Failed to delete from DB: ${err.message || err}`)
@@ -1541,6 +1554,13 @@ export default function AdminDashboardPage() {
       }
     }
     setPartyPackages(prev => prev.filter(p => p.id !== pkgId))
+    try {
+      const local = localStorage.getItem('phulwari_party_packages')
+      if (local) {
+        const parsed = JSON.parse(local).filter((p: any) => p.id !== pkgId)
+        localStorage.setItem('phulwari_party_packages', JSON.stringify(parsed))
+      }
+    } catch (_) {}
   }
 
   // Submit Fee Payment & Record Discount System
@@ -2250,9 +2270,14 @@ export default function AdminDashboardPage() {
     )
   }
 
+  // Whether the currently logged-in account is a restricted Staff account.
+  // Staff accounts must NEVER be able to unlock Admin-only tabs by toggling the
+  // Role switch — their access is always bound to their granted permissions.
+  const isStaffAccount = (adminUser as any)?.role === 'Staff'
+
   return (
     <div className={`min-h-screen ${bgMain} font-sans flex flex-col md:flex-row transition-colors duration-200`}>
-      
+
       {/* MOBILE TOP HEADER BAR */}
       <header className={`md:hidden flex items-center justify-between p-4 border-b ${bgSidebar} sticky top-0 z-30`}>
         <div className="flex items-center space-x-2.5">
@@ -2346,9 +2371,11 @@ export default function AdminDashboardPage() {
               { id: 'reviews', label: 'Parent Reviews & Ratings', icon: Star },
               { id: 'birthdays', label: 'Birthday Alerts', icon: Cake, count: birthdayAlertsCount },
               { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
-              ...(adminRole === 'Admin' ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
+              ...(!isStaffAccount ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
             ].filter(item => {
-              if (adminRole === 'Staff') {
+              // Restrict by granted permissions for real Staff accounts, regardless
+              // of the Role toggle. Admin accounts may preview the Staff view.
+              if (isStaffAccount || adminRole === 'Staff') {
                 return (adminUser as any)?.permissions?.includes(item.id)
               }
               return true
@@ -2387,14 +2414,16 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className={`pt-3 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'} space-y-2`}>
-          <button
-            onClick={() => setIsAddAdminOpen(true)}
-            className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
-            title="Register a new Admin User"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            {!isSidebarCollapsed && <span>Manage Admin Users</span>}
-          </button>
+          {!isStaffAccount && (
+            <button
+              onClick={() => setIsAddAdminOpen(true)}
+              className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Register a new Admin User"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              {!isSidebarCollapsed && <span>Manage Admin Users</span>}
+            </button>
+          )}
 
           <button
             onClick={handleAdminLogout}
@@ -2490,15 +2519,22 @@ export default function AdminDashboardPage() {
             {/* ROLE TOGGLE SELECTOR */}
             <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
               <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
-              {(['Admin', 'Staff'] as const).map(role => (
-                <button
-                  key={role}
-                  onClick={() => setAdminRole(role)}
-                  className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                    adminRole === role ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
-                  }`}
-                >{role}</button>
-              ))}
+              {isStaffAccount ? (
+                // Staff accounts are locked to the Staff role — no Admin escalation.
+                <span className="px-3 py-1 rounded-lg font-bold bg-blue-600 text-white shadow-sm flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Staff
+                </span>
+              ) : (
+                (['Admin', 'Staff'] as const).map(role => (
+                  <button
+                    key={role}
+                    onClick={() => setAdminRole(role)}
+                    className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                      adminRole === role ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
+                    }`}
+                  >{role}</button>
+                ))
+              )}
             </div>
 
             {/* Active Logged-in Admin Identity Profile Card */}
