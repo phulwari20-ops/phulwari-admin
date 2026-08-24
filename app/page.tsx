@@ -477,8 +477,9 @@ export default function AdminDashboardPage() {
       if (sessionStr) {
         const parsed = JSON.parse(sessionStr)
         setAdminUser(parsed)
-        setAdminRole(parsed.role || 'Admin')
-        if (parsed.role === 'Staff' && parsed.permissions && parsed.permissions.length > 0) {
+        const isStaff = parsed.role === 'Staff' || parsed.role === 'Management' || (parsed.role && parsed.role !== 'Admin')
+        setAdminRole(isStaff ? 'Staff' : (parsed.role || 'Admin'))
+        if (isStaff && parsed.permissions && parsed.permissions.length > 0) {
           setActiveTab(parsed.permissions[0])
         }
       }
@@ -2270,10 +2271,10 @@ export default function AdminDashboardPage() {
     )
   }
 
-  // Whether the currently logged-in account is a restricted Staff account.
-  // Staff accounts must NEVER be able to unlock Admin-only tabs by toggling the
-  // Role switch — their access is always bound to their granted permissions.
-  const isStaffAccount = (adminUser as any)?.role === 'Staff'
+  // Whether the currently logged-in account is a restricted Staff/Management account.
+  // Staff/Management accounts must NEVER be able to unlock Admin-only tabs by toggling the
+  // Role switch — their access is strictly bound to their granted permissions and the toggle is hidden.
+  const isStaffAccount = (adminUser as any)?.role === 'Staff' || (adminUser as any)?.role === 'Management' || ((adminUser as any)?.role && (adminUser as any)?.role !== 'Admin')
 
   return (
     <div className={`min-h-screen ${bgMain} font-sans flex flex-col md:flex-row transition-colors duration-200`}>
@@ -2516,16 +2517,11 @@ export default function AdminDashboardPage() {
         )}
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* ROLE TOGGLE SELECTOR */}
-            <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-              <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
-              {isStaffAccount ? (
-                // Staff accounts are locked to the Staff role — no Admin escalation.
-                <span className="px-3 py-1 rounded-lg font-bold bg-blue-600 text-white shadow-sm flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Staff
-                </span>
-              ) : (
-                (['Admin', 'Staff'] as const).map(role => (
+            {/* ROLE TOGGLE SELECTOR (Hidden completely for Staff & Management accounts) */}
+            {!isStaffAccount && (
+              <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
+                {(['Admin', 'Staff'] as const).map(role => (
                   <button
                     key={role}
                     onClick={() => setAdminRole(role)}
@@ -2533,9 +2529,9 @@ export default function AdminDashboardPage() {
                       adminRole === role ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
                     }`}
                   >{role}</button>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Active Logged-in Admin Identity Profile Card */}
             {adminUser && (
