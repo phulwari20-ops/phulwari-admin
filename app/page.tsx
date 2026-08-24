@@ -2517,21 +2517,7 @@ export default function AdminDashboardPage() {
         )}
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* ROLE TOGGLE SELECTOR (Hidden completely for Staff & Management accounts) */}
-            {!isStaffAccount && (
-              <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 text-xs shadow-sm ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-                <span className={`font-bold px-2 ${textSecondary}`}>Role:</span>
-                {(['Admin', 'Staff'] as const).map(role => (
-                  <button
-                    key={role}
-                    onClick={() => setAdminRole(role)}
-                    className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      adminRole === role ? 'bg-blue-600 text-white shadow-sm' : `${textSecondary} hover:text-blue-500`
-                    }`}
-                  >{role}</button>
-                ))}
-              </div>
-            )}
+
 
             {/* Active Logged-in Admin Identity Profile Card */}
             {adminUser && (
