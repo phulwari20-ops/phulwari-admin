@@ -34,7 +34,7 @@ export default function AddTeacherModal({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className={`${bgCard} rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto`}>
+      <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto`}>
         <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
           <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
             <UserPlus className="w-5 h-5 text-indigo-500" /> {editingTeacher ? 'Edit Teacher Details' : 'Add New Faculty Teacher'}
@@ -45,18 +45,43 @@ export default function AddTeacherModal({
         </div>
 
         <form onSubmit={handleTeacherSubmit} className="space-y-3 text-xs">
-          <div>
-            <label className={`font-bold ${textSecondary}`}>Full Name</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Sunita Sharma"
-              value={teacherForm.name}
-              onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })}
-              className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-              }`}
-            />
+          {/* Photo + Name */}
+          <div className="flex items-center gap-4">
+            <div className="shrink-0">
+              {teacherForm.photo_url ? (
+                <img src={teacherForm.photo_url} alt="Teacher" className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-200" />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center text-2xl font-black text-indigo-500">
+                  {teacherForm.name?.charAt(0) || 'T'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <label className={`font-bold ${textSecondary}`}>Full Name</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Sunita Sharma"
+                value={teacherForm.name}
+                onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })}
+                className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                  isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                }`}
+              />
+              <label className={`font-bold ${textSecondary} block mt-1.5`}>Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => setTeacherForm({ ...teacherForm, photo_url: reader.result as string })
+                  reader.readAsDataURL(file)
+                }}
+                className={`w-full text-[11px] ${textSecondary}`}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -119,20 +144,88 @@ export default function AddTeacherModal({
             </div>
           </div>
 
-          <div>
-            <label className={`font-bold ${textSecondary}`}>Status</label>
-            <select
-              value={teacherForm.status}
-              onChange={(e) => setTeacherForm({ ...teacherForm, status: e.target.value })}
-              className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-              }`}
-            >
-              <option value="Active">Active</option>
-              <option value="On Leave">On Leave</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
+          {(() => {
+            const cls = `w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Qualification</label>
+                    <input type="text" placeholder="e.g. B.Ed, M.A." value={teacherForm.qualification || ''} onChange={(e) => setTeacherForm({ ...teacherForm, qualification: e.target.value })} className={cls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Subject</label>
+                    <input type="text" placeholder="e.g. Gymnastics" value={teacherForm.subject || ''} onChange={(e) => setTeacherForm({ ...teacherForm, subject: e.target.value })} className={cls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Designation</label>
+                    <input type="text" placeholder="e.g. Senior Coach" value={teacherForm.designation || ''} onChange={(e) => setTeacherForm({ ...teacherForm, designation: e.target.value })} className={cls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Joining Date</label>
+                    <input type="date" value={teacherForm.join_date || ''} onChange={(e) => setTeacherForm({ ...teacherForm, join_date: e.target.value })} className={cls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Employment Type</label>
+                    <select value={teacherForm.employment_type || 'Full Time'} onChange={(e) => setTeacherForm({ ...teacherForm, employment_type: e.target.value })} className={cls}>
+                      <option>Full Time</option>
+                      <option>Part Time</option>
+                      <option>Guest</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Status</label>
+                    <select value={teacherForm.status} onChange={(e) => setTeacherForm({ ...teacherForm, status: e.target.value })} className={cls}>
+                      <option value="Active">Active</option>
+                      <option value="On Leave">On Leave</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <p className="font-bold text-emerald-600 uppercase tracking-wider text-[10px] mb-2">Salary Configuration</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Salary Type</label>
+                      <select value={teacherForm.salary_type || 'Monthly'} onChange={(e) => setTeacherForm({ ...teacherForm, salary_type: e.target.value })} className={cls}>
+                        <option>Monthly</option>
+                        <option>Daily</option>
+                        <option>Hourly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Monthly Salary (₹)</label>
+                      <input type="number" placeholder="e.g. 25000" value={teacherForm.monthly_salary || ''} onChange={(e) => setTeacherForm({ ...teacherForm, monthly_salary: e.target.value })} className={cls} />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Effective From</label>
+                      <input type="date" value={teacherForm.salary_effective_from || ''} onChange={(e) => setTeacherForm({ ...teacherForm, salary_effective_from: e.target.value })} className={cls} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Address</label>
+                  <input type="text" placeholder="Residential address" value={teacherForm.address || ''} onChange={(e) => setTeacherForm({ ...teacherForm, address: e.target.value })} className={cls} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Bank Details</label>
+                    <input type="text" placeholder="A/C no, IFSC, bank" value={teacherForm.bank_details || ''} onChange={(e) => setTeacherForm({ ...teacherForm, bank_details: e.target.value })} className={cls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Emergency Contact</label>
+                    <input type="text" placeholder="Name & phone" value={teacherForm.emergency_contact || ''} onChange={(e) => setTeacherForm({ ...teacherForm, emergency_contact: e.target.value })} className={cls} />
+                  </div>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Documents / Notes</label>
+                  <input type="text" placeholder="e.g. Aadhaar, PAN, certificates on file" value={teacherForm.documents || ''} onChange={(e) => setTeacherForm({ ...teacherForm, documents: e.target.value })} className={cls} />
+                </div>
+              </>
+            )
+          })()}
 
           <div className="pt-3 flex items-center justify-end space-x-3">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">

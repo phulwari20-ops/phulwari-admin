@@ -10,6 +10,7 @@ interface EnquiriesTabProps {
   isLight: boolean;
   enquiries: any[];
   onUpdateStatus: (id: string, status: string) => void;
+  onUpdateFollowUpDate?: (id: string, date: string) => void;
   onAddEnquiry: (enquiry: any) => void;
   onConvertToAdmission: (enquiry: any) => void;
   onDeleteEnquiry?: (id: string) => void;
@@ -17,7 +18,7 @@ interface EnquiriesTabProps {
 
 export default function EnquiriesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, badgePassword, isLight,
-  enquiries, onUpdateStatus, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
+  enquiries, onUpdateStatus, onUpdateFollowUpDate, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
 }: EnquiriesTabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({
@@ -86,13 +87,14 @@ export default function EnquiriesTab({
                 <th className="py-3 px-4">Parent Details</th>
                 <th className="py-3 px-4">Interested Program</th>
                 <th className="py-3 px-4">Follow-up Status</th>
+                <th className="py-3 px-4">Next Follow-up Date</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
               {enquiries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-slate-400 font-semibold">No enquiries tracked yet.</td>
+                  <td colSpan={7} className="text-center py-8 text-slate-400 font-semibold">No enquiries tracked yet.</td>
                 </tr>
               ) : (
                 enquiries.map((enq) => (
@@ -143,6 +145,17 @@ export default function EnquiriesTab({
                         <option value="Trial Scheduled">Trial Scheduled</option>
                         <option value="Admission Done">Admission Done</option>
                       </select>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-1.5">
+                        <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <input
+                          type="date"
+                          value={enq.next_follow_up_date ? String(enq.next_follow_up_date).split('T')[0] : ''}
+                          onChange={(e) => onUpdateFollowUpDate && onUpdateFollowUpDate(enq.id, e.target.value)}
+                          className={`text-[11px] font-mono font-bold px-2 py-1 rounded-lg border outline-none cursor-pointer ${isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-200'}`}
+                        />
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-2">
                       {enq.status !== 'Admission Done' && (

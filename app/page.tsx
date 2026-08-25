@@ -96,6 +96,7 @@ import AddStudentModal from '../components/AddStudentModal'
 import StudentErpModal from '../components/StudentErpModal'
 import BroadcastNoticeModal from '../components/BroadcastNoticeModal'
 import AddTeacherModal from '../components/AddTeacherModal'
+import TeacherProfileModal from '../components/TeacherProfileModal'
 import ExportModal from '../components/ExportModal'
 import {
   handleExportStudentsCSV,
@@ -278,6 +279,7 @@ export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<'Admin' | 'Staff'>('Admin')
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<'Child Activity' | 'Zumba & Yoga'>('Child Activity')
   const [waReminderModal, setWaReminderModal] = useState({ isOpen: false, phone: '', message: '' })
+  const [leadAlert, setLeadAlert] = useState<{ name: string; phone: string; service: string; id: string } | null>(null)
 
   const [batches, setBatches] = useState<any[]>([])
   const [batchSchedules, setBatchSchedules] = useState<any[]>([])
@@ -334,8 +336,26 @@ export default function AdminDashboardPage() {
     phone: '',
     specialization: 'Early Learning',
     assigned_batch: 'Little Explorers (Morning)',
-    status: 'Active'
+    status: 'Active',
+    // Extended profile / payroll fields
+    photo_url: '',
+    address: '',
+    qualification: '',
+    subject: '',
+    designation: '',
+    join_date: '',
+    employment_type: 'Full Time',
+    salary_type: 'Monthly',
+    monthly_salary: '',
+    salary_effective_from: '',
+    bank_details: '',
+    emergency_contact: '',
+    documents: ''
   })
+  // Teacher payroll & attendance state (persisted to localStorage + Supabase)
+  const [teacherPayments, setTeacherPayments] = useState<any[]>([])
+  const [teacherAttendance, setTeacherAttendance] = useState<any[]>([])
+  const [selectedTeacher, setSelectedTeacher] = useState<any | null>(null)
 
   // Search & Batch Filters
   const [searchQuery, setSearchQuery] = useState('')
@@ -435,6 +455,7 @@ export default function AdminDashboardPage() {
     payment_for: '',
     payment_mode: 'Cash',
     amount_paid: '',
+    total_fee: '',
     plan_validity_date: '',
     remarks: ''
   })
@@ -593,6 +614,54 @@ export default function AdminDashboardPage() {
     loadAllAdminData()
   }, [])
 
+  // ---------------------------------------------------------------------------
+  // Lead / Enquiry push notifications.
+  // When a new enquiry row is inserted, the admin gets an immediate alert:
+  //   • a browser push notification (Name, Mobile, Service) that, when clicked,
+  //     jumps straight to the Lead & Enquiry Manager, and
+  //   • an in-app banner (leadAlert) as a fallback when notifications are off.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel('enquiries-inserts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'enquiries' },
+        (payload: any) => {
+          const lead = payload.new || {}
+          const name = lead.parent_name || lead.child_name || 'New lead'
+          const phone = lead.phone || ''
+          const service = lead.program_interested || 'General Inquiry'
+
+          // Keep the enquiries list live
+          setEnquiries(prev => (prev.some(e => e.id === lead.id) ? prev : [lead, ...prev]))
+
+          // In-app banner
+          setLeadAlert({ name, phone, service, id: lead.id })
+
+          // Browser push notification
+          try {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              const n = new Notification('🔔 New Lead Enquiry', {
+                body: `${name}${phone ? ` • ${phone}` : ''}\nInterested in: ${service}`,
+                tag: `lead-${lead.id}`,
+              })
+              n.onclick = () => { window.focus(); setActiveTab('enquiries'); n.close() }
+            }
+          } catch (e) { /* notifications unavailable */ }
+        }
+      )
+      .subscribe()
+
+    return () => { try { supabase.removeChannel(channel) } catch (e) {} }
+  }, [])
+
   const loadAllAdminData = async () => {
     setLoading(true)
 
@@ -666,11 +735,38 @@ export default function AdminDashboardPage() {
         if (savedFe) try { setFees(JSON.parse(savedFe)) } catch (e) {}
       }
 
-      // 4. Teachers — table does not exist in Supabase yet, use localStorage only
+      // 4. Teachers — prefer Supabase, fall back to localStorage
       try {
-        const localT = localStorage.getItem('phulwari_teachers')
-        if (localT) setTeachers(JSON.parse(localT))
-      } catch (_) {}
+        const { data: dbTeachers } = await supabase.from('teachers').select('*')
+        if (dbTeachers && dbTeachers.length > 0) {
+          setTeachers(dbTeachers)
+          try { localStorage.setItem('phulwari_teachers', JSON.stringify(dbTeachers)) } catch (_) {}
+        } else {
+          const localT = localStorage.getItem('phulwari_teachers')
+          if (localT) setTeachers(JSON.parse(localT))
+        }
+      } catch (_) {
+        try {
+          const localT = localStorage.getItem('phulwari_teachers')
+          if (localT) setTeachers(JSON.parse(localT))
+        } catch (__) {}
+      }
+
+      // 4b. Teacher payroll & attendance — Supabase with localStorage fallback
+      try {
+        const { data: dbPay } = await supabase.from('teacher_payments').select('*').order('created_at', { ascending: false })
+        if (dbPay && dbPay.length > 0) setTeacherPayments(dbPay)
+        else { const l = localStorage.getItem('phulwari_teacher_payments'); if (l) setTeacherPayments(JSON.parse(l)) }
+      } catch (_) {
+        try { const l = localStorage.getItem('phulwari_teacher_payments'); if (l) setTeacherPayments(JSON.parse(l)) } catch (__) {}
+      }
+      try {
+        const { data: dbAtt } = await supabase.from('teacher_attendance').select('*')
+        if (dbAtt && dbAtt.length > 0) setTeacherAttendance(dbAtt)
+        else { const l = localStorage.getItem('phulwari_teacher_attendance'); if (l) setTeacherAttendance(JSON.parse(l)) }
+      } catch (_) {
+        try { const l = localStorage.getItem('phulwari_teacher_attendance'); if (l) setTeacherAttendance(JSON.parse(l)) } catch (__) {}
+      }
 
       // 5. Fetch Announcements — DB first with defaults fallback
       const defaultAnnouncementsList = [
@@ -799,9 +895,34 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // Save the "Next Follow-up Date" for a lead so the admin can schedule and
+  // later update the next call. Degrades gracefully if the column is missing.
+  const handleUpdateFollowUpDate = async (id: string, next_follow_up_date: string) => {
+    setEnquiries(prev => prev.map(e => e.id === id ? { ...e, next_follow_up_date } : e))
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('enquiries').update({ next_follow_up_date }).eq('id', id)
+      if (error) console.warn('⚠️ next_follow_up_date could not persist (column may be missing):', error.message)
+    } catch (err) { /* keep optimistic local state */ }
+  }
+
+  // Auto-generate the next Admission No. so the admin never types it. Numbering
+  // is sequential from 1: the next number is one past the highest trailing
+  // number already used (deleting a student never reuses their number).
+  const generateNextAdmissionId = () => {
+    const maxNum = students.reduce((max, s) => {
+      const m = String(s.admission_id || '').match(/(\d+)\s*$/)
+      const n = m ? parseInt(m[1], 10) : 0
+      return n > max ? n : max
+    }, 0)
+    return `PH-2026-${String(maxNum + 1).padStart(3, '0')}`
+  }
+
   const handleConvertToAdmission = (enquiry: any) => {
     setNewStudentForm({
       ...newStudentForm,
+      admission_id: generateNextAdmissionId(),
+      password: '',
       full_name: enquiry.child_name,
       parent_name: enquiry.parent_name,
       parent_phone: enquiry.phone,
@@ -1074,7 +1195,15 @@ export default function AdminDashboardPage() {
       custom_days: newStudentObj.custom_days,
       classes_total: newStudentObj.classes_total,
       classes_consumed: newStudentObj.classes_consumed,
-      category: newStudentObj.category
+      category: newStudentObj.category,
+      // Payment / plan fields so the printed Registration form shows real values
+      amount_paid: (newStudentForm as any).amount_paid || null,
+      total_fee: (newStudentForm as any).total_fee || null,
+      payment_mode: (newStudentForm as any).payment_mode || null,
+      payment_for: (newStudentForm as any).payment_for || null,
+      remarks: (newStudentForm as any).remarks || null,
+      plan_validity_date: (newStudentForm as any).plan_validity_date || null,
+      validity_end_date: newStudentObj.validity_end_date || null
     }
 
     const supabaseUrl = getSupabaseUrl()
@@ -1101,6 +1230,13 @@ export default function AdminDashboardPage() {
           delete (strippedPayload as any).custom_days;
           delete (strippedPayload as any).classes_total;
           delete (strippedPayload as any).classes_consumed;
+          delete (strippedPayload as any).amount_paid;
+          delete (strippedPayload as any).total_fee;
+          delete (strippedPayload as any).payment_mode;
+          delete (strippedPayload as any).payment_for;
+          delete (strippedPayload as any).remarks;
+          delete (strippedPayload as any).plan_validity_date;
+          delete (strippedPayload as any).validity_end_date;
 
           res = await fetch(`${supabaseUrl}/rest/v1/students`, {
             method: 'POST',
@@ -1209,8 +1345,141 @@ export default function AdminDashboardPage() {
 
   const triggerExportBulk = () => {
     // Print & export helpers moved to ../lib/printUtils
-    handleExportBulkRegistrationForms(filteredStudents)
+    handleExportBulkRegistrationForms(filteredStudents.map(enrichStudentForPrint))
     setIsExportModalOpen(false)
+  }
+
+  // Attach the payment, plan-validity, consumed and (for a customised batch) the
+  // resolved schedule to a student so the printed Registration form shows real
+  // values instead of blank boxes. Missing student columns fall back to the
+  // latest fee record so existing students still print sensibly.
+  const enrichStudentForPrint = (st: any) => {
+    const studentFees = fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+    const latestFee = [...studentFees].sort((a, b) =>
+      new Date(b.paid_date || b.created_at || 0).getTime() - new Date(a.paid_date || a.created_at || 0).getTime()
+    )[0]
+
+    const customList = st.batch_id === '00000000-0000-0000-0000-000000000000'
+      ? studentCustomSchedules.filter((s: any) => s.student_id === st.id)
+      : []
+
+    const fmt = (d: any) => {
+      if (!d) return ''
+      const dt = new Date(d)
+      return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-GB')
+    }
+
+    const regDate = st.created_at ? new Date(st.created_at) : new Date()
+    const endDateRaw = st.plan_validity_date || st.validity_end_date || latestFee?.due_date || ''
+
+    // Fee breakdown: Collected = paid ledger (or amount_paid), Due = Total - Collected
+    const collectedFromLedger = studentFees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (parseFloat(f.net_amount ?? f.amount) || 0), 0)
+    const collected = collectedFromLedger > 0 ? collectedFromLedger : (parseFloat(st.amount_paid) || 0)
+    const totalFee = parseFloat(st.total_fee) || collected || 0
+    const due = Math.max(0, totalFee - collected)
+
+    return {
+      ...st,
+      print_date: st.created_at ? fmt(st.created_at) : new Date().toLocaleDateString('en-GB'),
+      amount_paid: (st.amount_paid ?? '') !== '' ? st.amount_paid : (latestFee?.net_amount ?? latestFee?.amount ?? ''),
+      total_fee_display: totalFee,
+      fee_collected_display: collected,
+      fee_due_display: due,
+      payment_mode: st.payment_mode || latestFee?.payment_method || '',
+      payment_for: st.payment_for || latestFee?.title || '',
+      remarks: st.remarks || latestFee?.remarks || '',
+      plan_start_date: fmt(regDate),
+      plan_end_date: fmt(endDateRaw),
+      custom_schedules_list: customList,
+    }
+  }
+
+  const printRegistrationFormEnriched = (st: any) => handlePrintRegistrationForm(enrichStudentForPrint(st))
+
+  // EDIT / UPDATE a student's basic details (name, phone, email, address,
+  // guardian, etc.). Used by the Student ERP modal's "Edit Details" tab so a
+  // wrong phone number entered at admission can be corrected later and reflects
+  // everywhere the student is read.
+  const handleUpdateStudent = async (studentId: string, updates: Record<string, any>) => {
+    // Optimistic local update + persist
+    setStudents(prev => {
+      const next = prev.map(s => (s.id === studentId ? { ...s, ...updates } : s))
+      try { localStorage.setItem('phulwari_admin_students', JSON.stringify(next)) } catch (e) {}
+      return next
+    })
+    setSelectedERPStudent((prev: any) => (prev && prev.id === studentId ? { ...prev, ...updates } : prev))
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('students').update(updates).eq('id', studentId)
+      if (error) {
+        console.error('❌ [STUDENT UPDATE ERROR]:', error)
+        alert(`Could not save to database: ${error.message}`)
+        return false
+      }
+    } catch (err: any) {
+      alert(`Network error while saving: ${err.message || err}`)
+      return false
+    }
+    alert('✅ Student details updated successfully!')
+    return true
+  }
+
+  // CHANGE the student's batch, or ADD an additional active batch. A student can
+  // hold multiple active batches (e.g. Skating + Chess). The primary batch stays
+  // on students.batch_id; extra batches are stored as a JSON list in
+  // students.additional_batches so fee/plan/schedule for each reflects here.
+  const handleUpdateStudentBatch = async (
+    studentId: string,
+    mode: 'change' | 'add' | 'remove',
+    batchId: string
+  ) => {
+    const student = students.find(s => s.id === studentId)
+    if (!student) return false
+    const batch = batches.find(b => b.id === batchId)
+    if (!batch && mode !== 'remove') { alert('Please select a valid batch.'); return false }
+
+    let updates: Record<string, any> = {}
+    let extras: any[] = Array.isArray(student.additional_batches)
+      ? [...student.additional_batches]
+      : (() => { try { return JSON.parse(student.additional_batches || '[]') } catch { return [] } })()
+
+    if (mode === 'change') {
+      updates = {
+        batch_id: batch.id,
+        batch_name: batch.batch_name,
+        classes_total: batch.classes_total || student.classes_total || 12,
+        validity_end_date: new Date(Date.now() + (batch.validity_days || 30) * 86400000).toISOString().split('T')[0],
+      }
+    } else if (mode === 'add') {
+      if (student.batch_id === batchId || extras.some((e: any) => e.batch_id === batchId)) {
+        alert('Student is already enrolled in this batch.'); return false
+      }
+      extras.push({ batch_id: batch.id, batch_name: batch.batch_name, fee_amount: batch.fee_amount || null, added_on: new Date().toISOString().split('T')[0] })
+      updates = { additional_batches: extras }
+    } else if (mode === 'remove') {
+      extras = extras.filter((e: any) => e.batch_id !== batchId)
+      updates = { additional_batches: extras }
+    }
+
+    setStudents(prev => {
+      const next = prev.map(s => (s.id === studentId ? { ...s, ...updates } : s))
+      try { localStorage.setItem('phulwari_admin_students', JSON.stringify(next)) } catch (e) {}
+      return next
+    })
+    setSelectedERPStudent((prev: any) => (prev && prev.id === studentId ? { ...prev, ...updates } : prev))
+
+    try {
+      const supabase = createClient()
+      // additional_batches is a jsonb column — send the array as-is (no stringify).
+      const { error } = await supabase.from('students').update(updates).eq('id', studentId)
+      if (error) {
+        console.warn('⚠️ Batch update could not persist (column may be missing):', error.message)
+      }
+    } catch (err) { /* keep optimistic local state */ }
+
+    alert(mode === 'add' ? '✅ Batch added to student.' : mode === 'remove' ? '✅ Batch removed.' : '✅ Batch changed successfully.')
+    return true
   }
 
   // Send Prerequisite WhatsApp Fee Due Reminder Message
@@ -1220,6 +1489,14 @@ export default function AdminDashboardPage() {
 
     const message = `Dear Parent, ${stName} ki ₹${dueAmount} fee ${dueDate || '15th'} ko due hai. Kindly payment complete karein.\n\nRegards,\nPhulwari Mother & Child Activity Centre`
     setWaReminderModal({ isOpen: true, phone: targetPhone, message })
+
+    // Open WhatsApp directly (chat with the parent, message pre-filled).
+    // The reminder previously only set modal state that was never rendered, so
+    // the button appeared to do nothing while Call/SMS worked.
+    if (typeof window !== 'undefined') {
+      const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`
+      window.open(waUrl, '_blank', 'noopener,noreferrer')
+    }
 
     // Also push a live notification notice into announcements for student portal login
     const feeNotice = {
@@ -1644,7 +1921,20 @@ export default function AdminDashboardPage() {
       specialization: teacherForm.specialization,
       assigned_batch: teacherForm.assigned_batch,
       status: teacherForm.status,
-      join_date: editingTeacher ? editingTeacher.join_date : new Date().toISOString().split('T')[0]
+      join_date: teacherForm.join_date || (editingTeacher ? editingTeacher.join_date : new Date().toISOString().split('T')[0]),
+      // Extended payroll / profile fields
+      photo_url: teacherForm.photo_url || '',
+      address: teacherForm.address || '',
+      qualification: teacherForm.qualification || '',
+      subject: teacherForm.subject || '',
+      designation: teacherForm.designation || '',
+      employment_type: teacherForm.employment_type || 'Full Time',
+      salary_type: teacherForm.salary_type || 'Monthly',
+      monthly_salary: teacherForm.monthly_salary ? Number(teacherForm.monthly_salary) : 0,
+      salary_effective_from: teacherForm.salary_effective_from || '',
+      bank_details: teacherForm.bank_details || '',
+      emergency_contact: teacherForm.emergency_contact || '',
+      documents: teacherForm.documents || ''
     }
 
     setTeachers(prev => {
@@ -1655,16 +1945,61 @@ export default function AdminDashboardPage() {
 
     try {
       const supabase = createClient()
-      if (editingTeacher) {
-        await supabase.from('teachers').update(newTeacher).eq('id', editingTeacher.id)
-      } else {
-        await supabase.from('teachers').insert([newTeacher])
+      const persist = async (payload: any) => (
+        editingTeacher
+          ? supabase.from('teachers').update(payload).eq('id', editingTeacher.id)
+          : supabase.from('teachers').insert([payload])
+      )
+      let { error } = await persist(newTeacher)
+      if (error && (error.message?.includes('column') || error.code === 'PGRST204')) {
+        // DB is missing the extended columns — persist just the core fields.
+        const core = {
+          id: newTeacher.id, name: newTeacher.name, email: newTeacher.email,
+          phone: newTeacher.phone, specialization: newTeacher.specialization,
+          assigned_batch: newTeacher.assigned_batch, status: newTeacher.status,
+          join_date: newTeacher.join_date
+        }
+        await persist(core)
       }
     } catch (e) {}
 
     setIsAddTeacherOpen(false)
     setEditingTeacher(null)
-    setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' })
+    setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active', photo_url: '', address: '', qualification: '', subject: '', designation: '', join_date: '', employment_type: 'Full Time', salary_type: 'Monthly', monthly_salary: '', salary_effective_from: '', bank_details: '', emergency_contact: '', documents: '' })
+  }
+
+  // --- Teacher payroll: record a salary / advance / bonus payment ---
+  const handleTeacherPaymentSubmit = (payment: any) => {
+    const record = { id: `tpay-${Date.now()}`, created_at: new Date().toISOString(), ...payment }
+    setTeacherPayments(prev => {
+      const updated = [record, ...prev]
+      try { localStorage.setItem('phulwari_teacher_payments', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
+    ;(async () => {
+      try { await createClient().from('teacher_payments').insert([record]) } catch (e) { /* localStorage fallback */ }
+    })()
+  }
+
+  const handleDeleteTeacherPayment = (id: string) => {
+    setTeacherPayments(prev => {
+      const updated = prev.filter(p => p.id !== id)
+      try { localStorage.setItem('phulwari_teacher_payments', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
+    ;(async () => { try { await createClient().from('teacher_payments').delete().eq('id', id) } catch (e) {} })()
+  }
+
+  // --- Teacher attendance: mark/replace a day's status ---
+  const handleMarkTeacherAttendance = (teacherId: string, date: string, status: string) => {
+    setTeacherAttendance(prev => {
+      const filtered = prev.filter(a => !(a.teacher_id === teacherId && a.date === date))
+      const record = { id: `tatt-${teacherId}-${date}`, teacher_id: teacherId, date, status }
+      const updated = [record, ...filtered]
+      try { localStorage.setItem('phulwari_teacher_attendance', JSON.stringify(updated)) } catch (e) {}
+      ;(async () => { try { await createClient().from('teacher_attendance').upsert([record], { onConflict: 'id' }) } catch (e) {} })()
+      return updated
+    })
   }
 
   // Delete Teacher
@@ -1918,6 +2253,16 @@ export default function AdminDashboardPage() {
   const handleSaveBatch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingBatch) return
+
+    // Every custom schedule row must have a start and end time — blanks are not
+    // allowed (especially for the Customized Batch).
+    const blankSchedule = (editingBatch.schedules || []).find(
+      (s: any) => !String(s.start_time || '').trim() || !String(s.end_time || '').trim()
+    )
+    if (blankSchedule) {
+      alert('⛔ Start Time and End Time cannot be blank in the class schedule. Please fill every row before saving.')
+      return
+    }
 
     // Create a version without schedules for batches table upsert
     const { schedules, ...dbBatchDetails } = editingBatch
@@ -2279,6 +2624,34 @@ export default function AdminDashboardPage() {
   return (
     <div className={`min-h-screen ${bgMain} font-sans flex flex-col md:flex-row transition-colors duration-200`}>
 
+      {/* NEW LEAD PUSH ALERT (in-app banner) */}
+      {leadAlert && (
+        <div className="fixed top-4 right-4 z-[90] max-w-sm w-[92vw] sm:w-96 animate-in slide-in-from-right">
+          <div className="bg-white dark:bg-slate-900 border-2 border-pink-400 rounded-2xl shadow-2xl p-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-pink-600 text-white flex items-center justify-center text-lg shrink-0">🔔</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-extrabold text-pink-700 dark:text-pink-300">New Lead Enquiry</p>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{leadAlert.name}{leadAlert.phone ? ` • ${leadAlert.phone}` : ''}</p>
+              <p className="text-[11px] text-slate-500">Interested in: <strong>{leadAlert.service}</strong></p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => { setActiveTab('enquiries'); setLeadAlert(null) }}
+                  className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                >
+                  View Lead
+                </button>
+                {leadAlert.phone && (
+                  <a href={`tel:${leadAlert.phone.replace(/[^0-9+]/g, '')}`} className="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[11px] font-bold cursor-pointer">📞 Call</a>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setLeadAlert(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE TOP HEADER BAR */}
       <header className={`md:hidden flex items-center justify-between p-4 border-b ${bgSidebar} sticky top-0 z-30`}>
         <div className="flex items-center space-x-2.5">
@@ -2553,8 +2926,8 @@ export default function AdminDashboardPage() {
               <button
                 onClick={() => {
                   setNewStudentForm({
-                    admission_id: `PH-2026-${String(students.length + 1).padStart(3, '0')}`,
-                    password: 'parent123',
+                    admission_id: generateNextAdmissionId(),
+                    password: '',
                     full_name: '',
                     dob: '2021-01-01',
                     gender: 'Boy',
@@ -2592,6 +2965,7 @@ export default function AdminDashboardPage() {
                     payment_for: '',
                     payment_mode: 'Cash',
                     amount_paid: '',
+                    total_fee: '',
                     plan_validity_date: '',
                     remarks: '',
                     custom_schedules: []
@@ -2785,6 +3159,7 @@ export default function AdminDashboardPage() {
             isLight={isLight}
             enquiries={enquiries}
             onUpdateStatus={handleUpdateEnquiryStatus}
+            onUpdateFollowUpDate={handleUpdateFollowUpDate}
             onAddEnquiry={handleAddEnquiry}
             onConvertToAdmission={handleConvertToAdmission}
             onDeleteEnquiry={handleDeleteEnquiry}
@@ -2916,6 +3291,7 @@ export default function AdminDashboardPage() {
             setIsAddTeacherOpen={setIsAddTeacherOpen}
             handleDeleteTeacher={handleDeleteTeacher}
             adminRole={adminRole}
+            onViewProfile={(t: any) => setSelectedTeacher(t)}
           />
         )}
 
@@ -3130,6 +3506,7 @@ export default function AdminDashboardPage() {
                       </select>
                       <input
                         type="text"
+                        required
                         placeholder="Start Time"
                         value={sch.start_time}
                         onChange={(e) => {
@@ -3137,10 +3514,11 @@ export default function AdminDashboardPage() {
                           updated[schIdx].start_time = e.target.value
                           setEditingBatch({ ...editingBatch, schedules: updated })
                         }}
-                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${!sch.start_time?.trim() ? 'border-rose-400 bg-rose-50' : ''} ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
                       />
                       <input
                         type="text"
+                        required
                         placeholder="End Time"
                         value={sch.end_time}
                         onChange={(e) => {
@@ -3148,7 +3526,7 @@ export default function AdminDashboardPage() {
                           updated[schIdx].end_time = e.target.value
                           setEditingBatch({ ...editingBatch, schedules: updated })
                         }}
-                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
+                        className={`border rounded-lg px-2 py-1 outline-none text-xs font-mono w-24 ${!sch.end_time?.trim() ? 'border-rose-400 bg-rose-50' : ''} ${isLight ? 'bg-white border-slate-300 text-slate-850' : 'bg-slate-950 border-slate-800 text-slate-150'}`}
                       />
                       <select
                         value={sch.class_name}
@@ -3378,8 +3756,11 @@ export default function AdminDashboardPage() {
           badgePassword={badgePassword}
           tipBannerBg={tipBannerBg}
           fees={fees}
-          handlePrintRegistrationForm={handlePrintRegistrationForm}
+          handlePrintRegistrationForm={printRegistrationFormEnriched}
           handleDeactivateStudent={handleDeactivateStudent}
+          handleUpdateStudent={handleUpdateStudent}
+          allAvailableBatches={allAvailableBatches}
+          handleUpdateStudentBatch={handleUpdateStudentBatch}
           handleDeleteStudent={handleDeleteStudent}
           handleFeeSubmit={handleFeeSubmit}
           handleERPPasswordSubmit={handleERPPasswordSubmit}
@@ -4070,6 +4451,24 @@ export default function AdminDashboardPage() {
         textPrimary={textPrimary}
         textSecondary={textSecondary}
       />
+
+      {selectedTeacher && (
+        <TeacherProfileModal
+          isOpen={!!selectedTeacher}
+          onClose={() => setSelectedTeacher(null)}
+          teacher={selectedTeacher}
+          isLight={isLight}
+          bgCard={bgCard}
+          bgSubCard={bgSubCard}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+          teacherPayments={teacherPayments}
+          teacherAttendance={teacherAttendance}
+          onAddPayment={handleTeacherPaymentSubmit}
+          onDeletePayment={handleDeleteTeacherPayment}
+          onMarkAttendance={handleMarkTeacherAttendance}
+        />
+      )}
 
       {/* MODAL: EXPORT OPTIONS (PDF vs CSV / EXCEL) */}
       <ExportModal

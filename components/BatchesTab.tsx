@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Plus, Edit3, Trash2, Eye, EyeOff, BookOpen } from 'lucide-react';
+import { Clock, Plus, Edit3, Trash2, Eye, EyeOff, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface BatchesTabProps {
   bgCard: string;
@@ -25,6 +25,10 @@ export default function BatchesTab({
 }: BatchesTabProps) {
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
   const [newClassName, setNewClassName] = React.useState('');
+  // Per-batch expand/collapse of the schedule list. Long timetables (e.g. the
+  // Customized Batch) start collapsed so the grid stays readable.
+  const [expandedBatches, setExpandedBatches] = React.useState<Record<string, boolean>>({});
+  const toggleExpanded = (id: string) => setExpandedBatches(prev => ({ ...prev, [id]: !prev[id] }));
 
   const submitNewClass = async () => {
     const ok = await handleAddClass(newClassName);
@@ -170,21 +174,49 @@ export default function BatchesTab({
                   <p>Capacity: <strong className="text-blue-500">{bt.capacity} Students</strong></p>
                 </div>
 
-                {/* Schedules list */}
-                {batchSchedules && batchSchedules.filter(s => s.batch_id === bt.id).length > 0 && (
-                  <div className="pt-2 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1">
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${textSecondary}`}>Schedules (Class Master):</p>
-                    <div className="grid grid-cols-1 gap-1.5 pl-1">
-                      {batchSchedules.filter(s => s.batch_id === bt.id).map(sch => (
-                        <div key={sch.id} className={`text-[11px] font-semibold flex items-center justify-between p-1 px-2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-700 dark:text-slate-300`}>
-                          <span>📅 {sch.day_of_week}</span>
-                          <span className="font-mono text-blue-500">{sch.start_time} - {sch.end_time}</span>
-                          <span className="bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{sch.class_name}</span>
-                        </div>
-                      ))}
+                {/* Schedules list — collapsible */}
+                {(() => {
+                  const schedulesForBatch = (batchSchedules || []).filter(s => s.batch_id === bt.id);
+                  if (schedulesForBatch.length === 0) return null;
+                  // Collapse long timetables by default; short ones stay open.
+                  const isLong = schedulesForBatch.length > 4;
+                  const isOpen = expandedBatches[bt.id] ?? !isLong;
+                  const previewCount = 3;
+                  const visible = isOpen ? schedulesForBatch : schedulesForBatch.slice(0, previewCount);
+                  return (
+                    <div className="pt-2 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(bt.id)}
+                        className={`w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${textSecondary} hover:text-blue-500 transition cursor-pointer`}
+                      >
+                        <span className="flex items-center gap-1">
+                          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          Schedules (Class Master) · {schedulesForBatch.length}
+                        </span>
+                        <span className="text-blue-500 normal-case">{isOpen ? 'Collapse' : 'Expand'}</span>
+                      </button>
+                      <div className="grid grid-cols-1 gap-1.5 pl-1">
+                        {visible.map(sch => (
+                          <div key={sch.id} className={`text-[11px] font-semibold flex items-center justify-between p-1 px-2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-700 dark:text-slate-300`}>
+                            <span>📅 {sch.day_of_week}</span>
+                            <span className="font-mono text-blue-500">{sch.start_time} - {sch.end_time}</span>
+                            <span className="bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{sch.class_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {!isOpen && schedulesForBatch.length > previewCount && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(bt.id)}
+                          className="text-[10px] font-bold text-blue-500 hover:text-blue-600 pl-1 cursor-pointer"
+                        >
+                          + {schedulesForBatch.length - previewCount} more…
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Visibility Toggle Row */}

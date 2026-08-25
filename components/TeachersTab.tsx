@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserPlus, Edit3, Trash2, Plus } from 'lucide-react';
+import { UserPlus, Edit3, Trash2, Plus, Wallet } from 'lucide-react';
 
 interface TeachersTabProps {
   bgCard: string;
@@ -12,6 +12,7 @@ interface TeachersTabProps {
   setIsAddTeacherOpen: (isOpen: boolean) => void;
   handleDeleteTeacher: (id: string) => void;
   adminRole?: string;
+  onViewProfile?: (teacher: any) => void;
 }
 
 export default function TeachersTab({
@@ -24,7 +25,8 @@ export default function TeachersTab({
   setTeacherForm,
   setIsAddTeacherOpen,
   handleDeleteTeacher,
-  adminRole
+  adminRole,
+  onViewProfile
 }: TeachersTabProps) {
   const [selectedBatchNameFilter, setSelectedBatchNameFilter] = React.useState<string>('All');
 
@@ -58,7 +60,7 @@ export default function TeachersTab({
             <button
               onClick={() => {
                 setEditingTeacher(null);
-                setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active' });
+                setTeacherForm({ name: '', email: '', phone: '', specialization: 'Early Learning', assigned_batch: 'Little Explorers (Morning)', status: 'Active', photo_url: '', address: '', qualification: '', subject: '', designation: '', join_date: '', employment_type: 'Full Time', salary_type: 'Monthly', monthly_salary: '', salary_effective_from: '', bank_details: '', emergency_contact: '', documents: '' });
                 setIsAddTeacherOpen(true);
               }}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
@@ -119,9 +121,15 @@ export default function TeachersTab({
             {adminRole !== 'Staff' && (
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
                 <button
+                  onClick={() => onViewProfile && onViewProfile(tch)}
+                  className="flex-1 py-2.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Wallet className="w-4 h-4" /> Profile & Salary
+                </button>
+                <button
                   onClick={() => {
                     setEditingTeacher(tch);
-                    setTeacherForm({ name: tch.name, email: tch.email, phone: tch.phone, specialization: tch.specialization, assigned_batch: tch.assigned_batch, status: tch.status });
+                    setTeacherForm({ name: tch.name, email: tch.email, phone: tch.phone, specialization: tch.specialization, assigned_batch: tch.assigned_batch, status: tch.status, photo_url: tch.photo_url || '', address: tch.address || '', qualification: tch.qualification || '', subject: tch.subject || '', designation: tch.designation || '', join_date: tch.join_date || '', employment_type: tch.employment_type || 'Full Time', salary_type: tch.salary_type || 'Monthly', monthly_salary: tch.monthly_salary || '', salary_effective_from: tch.salary_effective_from || '', bank_details: tch.bank_details || '', emergency_contact: tch.emergency_contact || '', documents: tch.documents || '' });
                     setIsAddTeacherOpen(true);
                   }}
                   className="flex-1 py-2.5 bg-slate-100 hover:bg-indigo-600 hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"

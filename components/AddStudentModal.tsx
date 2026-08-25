@@ -76,21 +76,23 @@ export default function AddStudentModal({
           {/* ADMISSION NUMBER SECTION */}
           <div className="flex items-center gap-3 bg-pink-50 p-3 rounded-2xl border border-pink-200 w-fit">
             <span className="font-extrabold text-pink-700 text-sm">Admission No.:</span>
-            <input 
-              type="text" 
-              required 
-              value={newStudentForm.admission_id} 
-              onChange={(e) => setNewStudentForm({ ...newStudentForm, admission_id: e.target.value })} 
-              className="bg-white border-2 border-pink-300 rounded-xl px-3 py-1.5 text-sm font-mono font-extrabold text-pink-700 focus:outline-none focus:border-pink-500 w-44" 
+            <input
+              type="text"
+              required
+              readOnly
+              title="Auto-generated — no need to enter manually"
+              value={newStudentForm.admission_id}
+              className="bg-pink-50 border-2 border-pink-300 rounded-xl px-3 py-1.5 text-sm font-mono font-extrabold text-pink-700 focus:outline-none focus:border-pink-500 w-44 cursor-not-allowed"
             />
-            
+            <span className="text-[10px] text-slate-400 font-semibold">(auto)</span>
+
             <span className="font-bold text-slate-500 text-xs ml-4">Password:</span>
-            <input 
-              type="text" 
-              required 
-              value={newStudentForm.password} 
-              onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })} 
-              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32" 
+            <input
+              type="text"
+              value={newStudentForm.password}
+              placeholder="Leave blank"
+              onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
+              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32"
             />
           </div>
 
@@ -550,14 +552,30 @@ export default function AddStudentModal({
                 </div>
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Amount Paid (₹)</label>
-                <input 
-                  type="number" 
-                  placeholder="e.g. 3500"
-                  value={(newStudentForm as any).amount_paid || ''} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, amount_paid: e.target.value } as any)} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono" 
+                <label className="block font-bold text-slate-700 mb-1">Total Fee (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 10000"
+                  value={(newStudentForm as any).total_fee || ''}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, total_fee: e.target.value } as any)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono"
                 />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Fee Collected / Amount Paid (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 6000"
+                  value={(newStudentForm as any).amount_paid || ''}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, amount_paid: e.target.value } as any)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-emerald-700 mb-1">Fee Due (₹) — auto</label>
+                <div className="w-full flex items-center bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-2 font-mono font-extrabold text-emerald-800">
+                  ₹{Math.max(0, (parseFloat((newStudentForm as any).total_fee) || 0) - (parseFloat((newStudentForm as any).amount_paid) || 0))}
+                </div>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Plan Validity Ending Date</label>
