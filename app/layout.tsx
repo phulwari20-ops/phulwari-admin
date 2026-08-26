@@ -32,7 +32,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <Script
           id="theme-initializer"
           strategy="beforeInteractive"
@@ -40,8 +40,6 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('phulwari_admin_theme');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}}catch(e){}})();`,
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ApiLogger />
         {children}
       </body>
