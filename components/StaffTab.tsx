@@ -59,6 +59,8 @@ const AVAILABLE_TABS = [
   { id: 'blogs', label: 'Blogs CMS Editor' },
   { id: 'reviews', label: 'Parent Reviews & Ratings' },
   { id: 'birthdays', label: 'Birthday Alerts' },
+  { id: 'renewals', label: 'Renewal Alerts' },
+  { id: 'fee_alerts', label: 'Fee Alerts' },
   { id: 'enquiries', label: 'Lead & Enquiry Manager' }
 ]
 

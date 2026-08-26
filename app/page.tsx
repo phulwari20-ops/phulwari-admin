@@ -91,6 +91,8 @@ import BookingsTab from '../components/BookingsTab'
 import BlogsTab from '../components/BlogsTab'
 import ReviewsTab from '../components/ReviewsTab'
 import BirthdayAlertsTab from '../components/BirthdayAlertsTab'
+import RenewalAlertsTab from '../components/RenewalAlertsTab'
+import FeeAlertsTab from '../components/FeeAlertsTab'
 import StaffTab from '../components/StaffTab'
 import AddStudentModal from '../components/AddStudentModal'
 import StudentErpModal from '../components/StudentErpModal'
@@ -138,7 +140,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts'>('dashboard')
   const [loading, setLoading] = useState(true)
 
   // PWA Support
@@ -382,9 +384,15 @@ export default function AdminDashboardPage() {
   const [feeSelectedMonth, setFeeSelectedMonth] = useState<string>('August 2026')
 
   // Attendance Date Picker
-  const [currentMonthIndex, setCurrentMonthIndex] = useState<number>(7) // August
-  const [currentYear, setCurrentYear] = useState<number>(2026)
-  const [attendanceDate, setAttendanceDate] = useState<string>('2026-08-03')
+  const [currentMonthIndex, setCurrentMonthIndex] = useState<number>(new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear())
+  const [attendanceDate, setAttendanceDate] = useState<string>(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  })
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -2333,6 +2341,19 @@ Management Phulwari Mother and Child Activity Centre`
   ) => {
     const targetStudent = students.find(s => s.id === studentId || s.admission_id === studentId)
 
+    // Find previous status of this student's attendance on this date/class/time slot
+    const prevAtt = attendance.find(
+      a => a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime
+    )
+    const prevStatus = prevAtt?.status || null
+
+    let consumedDiff = 0
+    if (status === 'present' && prevStatus !== 'present') {
+      consumedDiff = 1
+    } else if (status !== 'present' && prevStatus === 'present') {
+      consumedDiff = -1
+    }
+
     setAttendance(prev => {
       const filtered = prev.filter(
         a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
@@ -2354,8 +2375,32 @@ Management Phulwari Mother and Child Activity Centre`
       return [newEntry, ...filtered]
     })
 
+    const supabase = createClient()
+
+    if (consumedDiff !== 0 && targetStudent) {
+      const currentConsumed = Number(targetStudent.classes_consumed || 0)
+      const newConsumed = Math.max(0, currentConsumed + consumedDiff)
+
+      // Update student local state optimistically
+      setStudents(prev => prev.map(s => s.id === targetStudent.id ? { ...s, classes_consumed: newConsumed } : s))
+
+      // Persist to database students table
+      ;(async () => {
+        try {
+          const { error: studentErr } = await supabase
+            .from('students')
+            .update({ classes_consumed: newConsumed })
+            .eq('id', targetStudent.id)
+          if (studentErr) {
+            console.error('Failed to sync classes_consumed:', studentErr.message)
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      })()
+    }
+
     try {
-      const supabase = createClient()
       // `attendance` has a unique index on
       // (student_id, date, class_name, class_time) — one row per class, per the
       // batch/attendance blueprint. Without naming it via onConflict, PostgREST
@@ -2524,6 +2569,21 @@ Management Phulwari Mother and Child Activity Centre`
   const activeStudents = students.filter(s => s.status !== 'deactivated')
   const deactivatedStudents = students.filter(s => s.status === 'deactivated')
 
+  // DYNAMIC BATCHES LIST FOR FILTER DROPDOWN (COMBINES CONFIGURED BATCHES + ENROLLED STUDENT BATCHES)
+  const allAvailableBatches = useMemo(() => {
+    const list: any[] = [...batches]
+    activeStudents.forEach(st => {
+      if (st.batch_name && !list.some(b => b.id === st.batch_id || b.batch_name?.toLowerCase().trim() === st.batch_name?.toLowerCase().trim())) {
+        list.push({
+          id: st.batch_id || `bt-${Date.now()}`,
+          batch_name: st.batch_name,
+          age_group: '1 - 3 Years'
+        })
+      }
+    })
+    return list
+  }, [batches, students])
+
   const birthdayAlertsCount = useMemo(() => {
     const today = new Date();
     const currentYear = today.getFullYear();
@@ -2553,20 +2613,77 @@ Management Phulwari Mother and Child Activity Centre`
     return count;
   }, [students]);
 
-  // DYNAMIC BATCHES LIST FOR FILTER DROPDOWN (COMBINES CONFIGURED BATCHES + ENROLLED STUDENT BATCHES)
-  const allAvailableBatches = useMemo(() => {
-    const list: any[] = [...batches]
+  const renewalAlertsCount = useMemo(() => {
+    let count = 0;
     activeStudents.forEach(st => {
-      if (st.batch_name && !list.some(b => b.id === st.batch_id || b.batch_name?.toLowerCase().trim() === st.batch_name?.toLowerCase().trim())) {
-        list.push({
-          id: st.batch_id || `bt-${Date.now()}`,
-          batch_name: st.batch_name,
-          age_group: '1 - 3 Years'
-        })
+      const totalClasses = Number(st.total_classes || st.package_classes || 0);
+      const consumed = Number(st.classes_consumed || 0);
+      const remaining = Math.max(0, totalClasses - consumed);
+      if (remaining === 0) {
+        count++;
+        return;
       }
-    })
-    return list
-  }, [batches, students])
+      const renewalDate = st.renewal_date || st.next_due_date;
+      if (renewalDate) {
+        const due = new Date(renewalDate);
+        if (!isNaN(due.getTime())) {
+          const today = new Date();
+          const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const dueMid = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+          const diff = Math.round((dueMid.getTime() - todayMid.getTime()) / (1000 * 60 * 60 * 24));
+          if (diff <= 7) {
+            count++;
+          }
+        }
+      }
+    });
+    return count;
+  }, [students]);
+
+  const feeAlertsCount = useMemo(() => {
+    let count = 0;
+    activeStudents.forEach(st => {
+      const studentLedger = fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id);
+      let pendingAmount = 0;
+      let latestDueDate: string | null = null;
+
+      if (studentLedger.length > 0) {
+        studentLedger.forEach((f: any) => {
+          if (f.status === 'pending' || f.status === 'due') {
+            pendingAmount += Number(f.net_amount || f.amount || 0);
+            if (!latestDueDate || (f.due_date && f.due_date > latestDueDate)) {
+              latestDueDate = f.due_date;
+            }
+          }
+        });
+      } else {
+        const paid = Number(st.amount_paid || 0);
+        const batchObj = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name?.toLowerCase().trim()));
+        const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500);
+        pendingAmount = Math.max(0, total - paid);
+      }
+
+      if (pendingAmount > 0) {
+        if (!latestDueDate) {
+          count++; // no due date but pending fee - alert is active
+        } else {
+          const due = new Date(latestDueDate);
+          if (!isNaN(due.getTime())) {
+            const today = new Date();
+            const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const dueMid = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            const diff = Math.round((dueMid.getTime() - todayMid.getTime()) / (1000 * 60 * 60 * 24));
+            if (diff <= 7) {
+              count++;
+            }
+          }
+        }
+      }
+    });
+    return count;
+  }, [students, fees, allAvailableBatches]);
+
+
 
   // ACCURATE CASE-INSENSITIVE Filtered Students List
 
@@ -2917,6 +3034,8 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'blogs', label: 'Blogs CMS Editor', icon: FileText },
               { id: 'reviews', label: 'Parent Reviews & Ratings', icon: Star },
               { id: 'birthdays', label: 'Birthday Alerts', icon: Cake, count: birthdayAlertsCount },
+              { id: 'renewals', label: 'Renewal Alerts', icon: RefreshCw, count: renewalAlertsCount },
+              { id: 'fee_alerts', label: 'Fee Alerts', icon: IndianRupee, count: feeAlertsCount },
               { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
               ...(!isStaffAccount ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
             ].filter(item => {
@@ -3036,6 +3155,8 @@ Management Phulwari Mother and Child Activity Centre`
               {activeTab === 'blogs' && 'Blog Posts & Articles CMS Editor'}
               {activeTab === 'reviews' && 'Parent Reviews & Testimonials Manager'}
               {activeTab === 'birthdays' && 'Student Birthdays & Celebration Alerts'}
+              {activeTab === 'renewals' && 'Student Package Renewal Alerts'}
+              {activeTab === 'fee_alerts' && 'Student Fee Due Alerts'}
             </h2>
             <p className={`text-xs ${textSecondary}`}>Phulwari Mother & Child Activity Centre ERP System</p>
           </div>
@@ -3509,6 +3630,33 @@ Management Phulwari Mother and Child Activity Centre`
             textSecondary={textSecondary}
             isLight={isLight}
             students={activeStudents}
+          />
+        )}
+
+        {/* TAB: RENEWAL ALERTS */}
+        {activeTab === 'renewals' && (
+          <RenewalAlertsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            students={activeStudents}
+            batches={batches}
+          />
+        )}
+
+        {/* TAB: FEE ALERTS */}
+        {activeTab === 'fee_alerts' && (
+          <FeeAlertsTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            students={activeStudents}
+            fees={fees}
+            batches={batches}
           />
         )}
 
