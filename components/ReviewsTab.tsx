@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Trash2, Plus, RefreshCw, Save, ThumbsUp, ShieldAlert } from 'lucide-react';
+import { Star, Trash2, Plus, RefreshCw, Save, ThumbsUp, ShieldAlert, Edit } from 'lucide-react';
 import { createClient } from '../lib/supabase/client';
 
 interface ReviewsTabProps {
@@ -23,6 +23,7 @@ export default function ReviewsTab({
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<any | null>(null);
   const [form, setForm] = useState({
     author_name: '',
     review_date: '',
@@ -59,6 +60,19 @@ export default function ReviewsTab({
     }
   };
 
+  const startEdit = (review: any) => {
+    setEditingReview(review);
+    setForm({
+      author_name: review.author_name || '',
+      review_date: review.review_date || '',
+      rating: review.rating || 5,
+      content: review.content || '',
+      program_tag: review.program_tag || 'Phulwari Premium Circle',
+      is_verified: review.is_verified !== false
+    });
+    setIsAddOpen(true);
+  };
+
   const handleCreateReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.author_name.trim() || !form.content.trim()) return;
@@ -70,14 +84,24 @@ export default function ReviewsTab({
 
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from('reviews')
-        .insert([payload])
-        .select();
-      
-      if (error) throw error;
-      alert('Review saved successfully to database!');
+      if (editingReview) {
+        const { error } = await supabase
+          .from('reviews')
+          .update(payload)
+          .eq('id', editingReview.id);
+        
+        if (error) throw error;
+        alert('Review updated successfully in database!');
+      } else {
+        const { error } = await supabase
+          .from('reviews')
+          .insert([payload]);
+        
+        if (error) throw error;
+        alert('Review saved successfully to database!');
+      }
       setIsAddOpen(false);
+      setEditingReview(null);
       setForm({
         author_name: '',
         review_date: '',
@@ -88,13 +112,21 @@ export default function ReviewsTab({
       });
       fetchReviews();
     } catch (err: any) {
-      console.error('Failed to save review in database:', err);
-      const localObj = { id: `r-${Date.now()}`, ...payload, created_at: new Date().toISOString() };
-      const updated = [localObj, ...reviews];
-      setReviews(updated);
-      localStorage.setItem('phulwari_reviews_fallback', JSON.stringify(updated));
-      alert(`Saved in local memory. (DB Note: ${err.message})`);
+      console.error('Failed to save review:', err);
+      if (editingReview) {
+        const updated = reviews.map(r => r.id === editingReview.id ? { ...r, ...payload } : r);
+        setReviews(updated);
+        localStorage.setItem('phulwari_reviews_fallback', JSON.stringify(updated));
+        alert('Updated in local memory.');
+      } else {
+        const localObj = { id: `r-${Date.now()}`, ...payload, created_at: new Date().toISOString() };
+        const updated = [localObj, ...reviews];
+        setReviews(updated);
+        localStorage.setItem('phulwari_reviews_fallback', JSON.stringify(updated));
+        alert(`Saved in local memory. (DB Note: ${err.message})`);
+      }
       setIsAddOpen(false);
+      setEditingReview(null);
     }
   };
 
@@ -146,10 +178,10 @@ export default function ReviewsTab({
         </div>
       )}
 
-      {/* ADD REVIEW COLLAPSIBLE BOX */}
+      {/* ADD/EDIT REVIEW COLLAPSIBLE BOX */}
       {isAddOpen && (
         <form onSubmit={handleCreateReview} className={`p-5 rounded-2xl border ${bgSubCard} space-y-4 text-xs`}>
-          <h4 className={`font-bold ${textPrimary} text-sm`}>Add New Parent Testimonial</h4>
+          <h4 className={`font-bold ${textPrimary} text-sm`}>{editingReview ? 'Edit Parent Testimonial' : 'Add New Parent Testimonial'}</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className={`font-bold ${textSecondary}`}>Parent Name *</label>
@@ -231,7 +263,7 @@ export default function ReviewsTab({
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setIsAddOpen(false)}
+              onClick={() => { setIsAddOpen(false); setEditingReview(null); }}
               className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer"
             >
               Cancel
@@ -240,7 +272,7 @@ export default function ReviewsTab({
               type="submit"
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
             >
-              <Save className="w-4 h-4" /> Save Review
+              <Save className="w-4 h-4" /> {editingReview ? 'Update Review' : 'Save Review'}
             </button>
           </div>
         </form>
@@ -292,12 +324,22 @@ export default function ReviewsTab({
                   )}
                 </td>
                 <td className="py-3 px-2">
-                  <button
-                    onClick={() => handleDeleteReview(r.id)}
-                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-500 rounded transition cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => startEdit(r)}
+                      className="p-1.5 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-500 rounded transition cursor-pointer"
+                      title="Edit Review"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteReview(r.id)}
+                      className="p-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-500 rounded transition cursor-pointer"
+                      title="Delete Review"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

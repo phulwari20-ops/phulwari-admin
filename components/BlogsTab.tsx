@@ -348,7 +348,11 @@ export default function BlogsTab({
                       <Edit className="w-3.5 h-3.5" />
                     </button>
                     <a
-                      href={`http://localhost:3000/blogs/${b.slug}`}
+                      href={
+                        typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
+                          ? `http://localhost:${window.location.port === '3000' ? '3001' : '3000'}/blogs/${b.slug}`
+                          : `https://phulwari.co.in/blogs/${b.slug}`
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-500 rounded transition cursor-pointer flex items-center justify-center"

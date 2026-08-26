@@ -457,9 +457,15 @@ export default function AdminDashboardPage() {
     amount_paid: '',
     total_fee: '',
     plan_validity_date: '',
-    remarks: ''
+    remarks: '',
+    admission_date: new Date().toISOString().split('T')[0]
   })
 
+
+  const [categories, setCategories] = useState<Array<{ id?: string; name: string; emoji: string }>>([
+    { name: 'Child Activity', emoji: '🧸' },
+    { name: 'Zumba & Yoga', emoji: '🧘' }
+  ])
 
   // Export Choice Modal State (PDF vs CSV)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
@@ -867,13 +873,18 @@ export default function AdminDashboardPage() {
       ]
       try {
         const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
-        if (dbAnnouncements && dbAnnouncements.length > 0) {
+        if (dbAnnouncements) {
           setAnnouncements(dbAnnouncements)
+          try { localStorage.setItem('phulwari_announcements', JSON.stringify(dbAnnouncements)) } catch (e) {}
         } else {
-          setAnnouncements(defaultAnnouncementsList)
+          const l = localStorage.getItem('phulwari_announcements')
+          if (l) setAnnouncements(JSON.parse(l))
+          else setAnnouncements(defaultAnnouncementsList)
         }
       } catch (_) {
-        setAnnouncements(defaultAnnouncementsList)
+        const l = localStorage.getItem('phulwari_announcements')
+        if (l) setAnnouncements(JSON.parse(l))
+        else setAnnouncements(defaultAnnouncementsList)
       }
 
       // 6. Fetch Party Packages from Supabase DB (instead of only localStorage)
@@ -947,6 +958,21 @@ export default function AdminDashboardPage() {
 
         const { data: dbAttendance } = await supabase.from('attendance').select('*')
         if (dbAttendance) setAttendance(dbAttendance)
+
+        // Fetch categories
+        try {
+          const { data: dbCategories, error: catError } = await supabase.from('categories').select('*')
+          if (!catError && dbCategories && dbCategories.length > 0) {
+            setCategories(dbCategories)
+            try { localStorage.setItem('phulwari_admin_categories', JSON.stringify(dbCategories)) } catch (e) {}
+          } else {
+            const localCats = localStorage.getItem('phulwari_admin_categories')
+            if (localCats) setCategories(JSON.parse(localCats))
+          }
+        } catch (catErr) {
+          const localCats = localStorage.getItem('phulwari_admin_categories')
+          if (localCats) setCategories(JSON.parse(localCats))
+        }
       } catch (e) {
         console.error('❌ [SCHEDULES/HOLIDAYS/ATTENDANCE FETCH EXCEPTION]:', e)
       }
@@ -1257,7 +1283,8 @@ export default function AdminDashboardPage() {
       custom_days: newStudentForm.custom_days,
       classes_total: newStudentForm.classes_total,
       classes_consumed: newStudentForm.classes_consumed || 0,
-      category: newStudentForm.category || 'Child Activity'
+      category: newStudentForm.category || 'Child Activity',
+      admission_date: newStudentForm.admission_date || new Date().toISOString().split('T')[0]
     }
 
     const dbPayload = {
@@ -1305,7 +1332,8 @@ export default function AdminDashboardPage() {
       payment_for: (newStudentForm as any).payment_for || null,
       remarks: (newStudentForm as any).remarks || null,
       plan_validity_date: (newStudentForm as any).plan_validity_date || null,
-      validity_end_date: newStudentObj.validity_end_date || null
+      validity_end_date: newStudentObj.validity_end_date || null,
+      admission_date: newStudentObj.admission_date || null
     }
 
     const supabaseUrl = getSupabaseUrl()
@@ -2214,6 +2242,7 @@ Management Phulwari Mother and Child Activity Centre`
 
   // Delete Notice
   const handleDeleteNotice = async (noticeId: string) => {
+    if (!confirm('Are you sure you want to delete this notice?')) return
     setAnnouncements(prev => {
       const updated = prev.filter(a => a.id !== noticeId)
       try { localStorage.setItem('phulwari_announcements', JSON.stringify(updated)) } catch (e) {}
@@ -2569,26 +2598,30 @@ Management Phulwari Mother and Child Activity Centre`
   const totalStudentsCount = activeStudents.length
   const totalBatchesCount = allAvailableBatches.length
   
-  // Fees KPI: all-time totals so they always show real data
+  // Fees KPI: calculate dynamically per active student
   let totalPaidFees = 0
   let totalPendingFees = 0
-  
-  fees.forEach(f => {
-    if (f.status === 'paid') {
-      totalPaidFees += Number(f.net_amount || f.amount || 0)
-    } else if (f.status === 'pending' || f.status === 'due') {
-      totalPendingFees += Number(f.net_amount || f.amount || 0)
+
+  activeStudents.forEach(st => {
+    const studentLedger = fees.filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+    if (studentLedger.length > 0) {
+      // Sum from ledger
+      studentLedger.forEach(f => {
+        if (f.status === 'paid') {
+          totalPaidFees += Number(f.net_amount || f.amount || 0)
+        } else if (f.status === 'pending' || f.status === 'due') {
+          totalPendingFees += Number(f.net_amount || f.amount || 0)
+        }
+      })
+    } else {
+      // Sum from student registration defaults
+      const paid = Number(st.amount_paid || 0)
+      const batchObj = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.trim().toLowerCase() === st.batch_name.trim().toLowerCase()))
+      const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
+      totalPaidFees += paid
+      totalPendingFees += Math.max(0, total - paid)
     }
   })
-
-  // If no fee records exist yet, estimate pending from active students
-  if (fees.length === 0 && activeStudents.length > 0) {
-    activeStudents.forEach(st => {
-      const batch = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.trim().toLowerCase() === st.batch_name.trim().toLowerCase()))
-      const feeAmount = classFees[batch?.batch_name || 'Mother & Toddler Program'] || 3500
-      totalPendingFees += Number(feeAmount)
-    })
-  }
   
   // For month-specific fee tab display
   const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
@@ -3108,7 +3141,8 @@ Management Phulwari Mother and Child Activity Centre`
                     total_fee: '',
                     plan_validity_date: '',
                     remarks: '',
-                    custom_schedules: []
+                    custom_schedules: [],
+                    admission_date: new Date().toISOString().split('T')[0]
                   })
                   setIsAddStudentOpen(true)
                 }}
@@ -3881,6 +3915,8 @@ Management Phulwari Mother and Child Activity Centre`
         allAvailableBatches={allAvailableBatches}
         handleAddStudentSubmit={handleAddStudentSubmit}
         batchSchedules={batchSchedules}
+        categories={categories}
+        setCategories={setCategories}
       />
       {selectedERPStudent && (
         <StudentErpModal
@@ -3889,6 +3925,8 @@ Management Phulwari Mother and Child Activity Centre`
           student={selectedERPStudent}
           adminRole={adminRole}
           isLight={isLight}
+          categories={categories}
+          setCategories={setCategories}
           bgCard={bgCard}
           bgSubCard={bgSubCard}
           textPrimary={textPrimary}

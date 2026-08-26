@@ -130,10 +130,14 @@ export default function EnquiriesTab({
                         </a>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 max-w-[220px]">
-                      <div className="font-semibold text-pink-600">{enq.program_interested || 'General Inquiry'}</div>
+                    <td 
+                      onClick={() => setLogModalEnq(enq)}
+                      className="py-3.5 px-4 max-w-[220px] cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition group"
+                      title="Click to view full message & follow-up logs in overlay"
+                    >
+                      <div className="font-semibold text-pink-600 group-hover:text-pink-700 transition">{enq.program_interested || 'General Inquiry'}</div>
                       {enq.message && (
-                        <div className="mt-1 text-[10px] text-slate-500 line-clamp-1 italic" title={enq.message}>
+                        <div className="mt-1 text-[10px] text-slate-650 dark:text-slate-350 bg-slate-50/50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-850 p-1.5 rounded-lg whitespace-pre-wrap leading-relaxed max-w-[200px]" title={enq.message}>
                           💬 {enq.message}
                         </div>
                       )}
@@ -386,6 +390,16 @@ export default function EnquiriesTab({
                   ✕
                 </button>
               </div>
+
+              {/* ORIGINAL INQUIRY MESSAGE DETAIL (Properly visible in large overlay) */}
+              {logModalEnq.message && (
+                <div className="p-3 bg-pink-50/50 dark:bg-pink-950/20 border border-pink-100 dark:border-pink-900/40 rounded-2xl space-y-1">
+                  <span className="block font-bold text-[10px] uppercase text-pink-600 tracking-wider">Original Message / Inquiry Details</span>
+                  <p className={`font-semibold leading-relaxed text-xs ${textPrimary} whitespace-pre-wrap`}>
+                    💬 {logModalEnq.message}
+                  </p>
+                </div>
+              )}
 
               {/* LOGS LIST */}
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
