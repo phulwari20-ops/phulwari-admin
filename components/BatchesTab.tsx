@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Plus, Edit3, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Clock, Plus, Edit3, Trash2, Eye, EyeOff, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface BatchesTabProps {
   bgCard: string;
@@ -8,6 +8,9 @@ interface BatchesTabProps {
   badgeClass: string;
   batches: any[];
   batchSchedules: any[];
+  classes: any[];
+  handleAddClass: (name: string) => Promise<boolean>;
+  handleDeleteClass: (id: string, name: string) => void;
   setIsAddBatchOpen: (v: boolean) => void;
   setEditingBatch: (batch: any) => void;
   handleDeleteBatch: (id: string, name: string) => void;
@@ -16,10 +19,21 @@ interface BatchesTabProps {
 
 export default function BatchesTab({
   bgCard, textPrimary, textSecondary, badgeClass,
-  batches, batchSchedules, setIsAddBatchOpen, setEditingBatch,
+  batches, batchSchedules, classes, handleAddClass, handleDeleteClass,
+  setIsAddBatchOpen, setEditingBatch,
   handleDeleteBatch, handleToggleBatchVisibility
 }: BatchesTabProps) {
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
+  const [newClassName, setNewClassName] = React.useState('');
+  // Per-batch expand/collapse of the schedule list. Long timetables (e.g. the
+  // Customized Batch) start collapsed so the grid stays readable.
+  const [expandedBatches, setExpandedBatches] = React.useState<Record<string, boolean>>({});
+  const toggleExpanded = (id: string) => setExpandedBatches(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const submitNewClass = async () => {
+    const ok = await handleAddClass(newClassName);
+    if (ok) setNewClassName('');
+  };
 
   return (
     <div className="space-y-4">
@@ -52,6 +66,82 @@ export default function BatchesTab({
           </button>
         </div>
       </div>
+      {/* CLASS MASTER — the catalogue that feeds every Day -> Time -> Class dropdown */}
+      <section className={`${bgCard} p-6 rounded-2xl space-y-4`} aria-labelledby="class-master-heading">
+        <div>
+          <h3 id="class-master-heading" className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
+            <BookOpen className="w-5 h-5 text-purple-500" /> Class Master
+          </h3>
+          <p className={`text-xs ${textSecondary}`}>
+            The list of activities the centre runs. These names fill the class dropdowns
+            when you build batch schedules and customised student timetables.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {classes.length === 0 ? (
+            <p className={`text-xs italic ${textSecondary}`}>
+              No classes yet. Add your first activity below.
+            </p>
+          ) : (
+            classes.map((cls) => {
+              const usageCount = batchSchedules.filter(s => s.class_name === cls.class_name).length;
+              return (
+                <span
+                  key={cls.id}
+                  className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20"
+                >
+                  {cls.class_name}
+                  <span className={`text-[10px] font-mono font-normal ${textSecondary}`}>
+                    {usageCount} slot{usageCount === 1 ? '' : 's'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteClass(cls.id, cls.class_name)}
+                    aria-label={`Remove ${cls.class_name} from the Class Master`}
+                    title={`Remove ${cls.class_name}`}
+                    className="p-1 rounded-lg text-rose-500 hover:bg-rose-600 hover:text-white transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </span>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <label htmlFor="new-class-name" className="sr-only">New class name</label>
+          <input
+            id="new-class-name"
+            type="text"
+            value={newClassName}
+            onChange={(e) => setNewClassName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitNewClass();
+              }
+            }}
+            placeholder="e.g. Skating"
+            className={`text-xs px-3.5 py-2.5 rounded-xl border outline-none font-semibold ${
+              textPrimary === 'text-white'
+                ? 'bg-slate-950 border-slate-800 text-slate-100'
+                : 'bg-white border-slate-300 text-slate-900'
+            }`}
+          />
+          <button
+            type="button"
+            onClick={submitNewClass}
+            disabled={newClassName.trim() === ''}
+            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-600/20 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Class</span>
+          </button>
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {batches.filter(b => selectedBatchIdFilter === 'All' || b.id === selectedBatchIdFilter).map((bt) => {
           const isVisible = bt.is_visible !== false; // Default to true if undefined
@@ -84,21 +174,49 @@ export default function BatchesTab({
                   <p>Capacity: <strong className="text-blue-500">{bt.capacity} Students</strong></p>
                 </div>
 
-                {/* Schedules list */}
-                {batchSchedules && batchSchedules.filter(s => s.batch_id === bt.id).length > 0 && (
-                  <div className="pt-2 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1">
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${textSecondary}`}>Schedules (Class Master):</p>
-                    <div className="grid grid-cols-1 gap-1.5 pl-1">
-                      {batchSchedules.filter(s => s.batch_id === bt.id).map(sch => (
-                        <div key={sch.id} className={`text-[11px] font-semibold flex items-center justify-between p-1 px-2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-700 dark:text-slate-300`}>
-                          <span>📅 {sch.day_of_week}</span>
-                          <span className="font-mono text-blue-500">{sch.start_time} - {sch.end_time}</span>
-                          <span className="bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{sch.class_name}</span>
-                        </div>
-                      ))}
+                {/* Schedules list — collapsible */}
+                {(() => {
+                  const schedulesForBatch = (batchSchedules || []).filter(s => s.batch_id === bt.id);
+                  if (schedulesForBatch.length === 0) return null;
+                  // Collapse long timetables by default; short ones stay open.
+                  const isLong = schedulesForBatch.length > 4;
+                  const isOpen = expandedBatches[bt.id] ?? !isLong;
+                  const previewCount = 3;
+                  const visible = isOpen ? schedulesForBatch : schedulesForBatch.slice(0, previewCount);
+                  return (
+                    <div className="pt-2 mt-2 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(bt.id)}
+                        className={`w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${textSecondary} hover:text-blue-500 transition cursor-pointer`}
+                      >
+                        <span className="flex items-center gap-1">
+                          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          Schedules (Class Master) · {schedulesForBatch.length}
+                        </span>
+                        <span className="text-blue-500 normal-case">{isOpen ? 'Collapse' : 'Expand'}</span>
+                      </button>
+                      <div className="grid grid-cols-1 gap-1.5 pl-1">
+                        {visible.map(sch => (
+                          <div key={sch.id} className={`text-[11px] font-semibold flex items-center justify-between p-1 px-2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-700 dark:text-slate-300`}>
+                            <span>📅 {sch.day_of_week}</span>
+                            <span className="font-mono text-blue-500">{sch.start_time} - {sch.end_time}</span>
+                            <span className="bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{sch.class_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {!isOpen && schedulesForBatch.length > previewCount && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(bt.id)}
+                          className="text-[10px] font-bold text-blue-500 hover:text-blue-600 pl-1 cursor-pointer"
+                        >
+                          + {schedulesForBatch.length - previewCount} more…
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Visibility Toggle Row */}

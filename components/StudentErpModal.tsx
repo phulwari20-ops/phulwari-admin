@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX } from 'lucide-react'
+import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus } from 'lucide-react'
 
 interface StudentErpModalProps {
   isOpen: boolean
@@ -29,7 +29,33 @@ interface StudentErpModalProps {
   erpPasswordMsg: string
   batchSchedules: any[]
   studentCustomSchedules: any[]
+  handleUpdateStudent: (studentId: string, updates: Record<string, any>) => Promise<boolean>
+  allAvailableBatches: any[]
+  handleUpdateStudentBatch: (studentId: string, mode: 'change' | 'add' | 'remove', batchId: string) => Promise<boolean>
 }
+
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
+
+const parseDateToDb = (displayStr: string): string => {
+  if (!displayStr) return '';
+  const parts = displayStr.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && y.length === 4) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+  return displayStr;
+};
 
 export default function StudentErpModal({
   isOpen,
@@ -56,11 +82,68 @@ export default function StudentErpModal({
   setErpPassword,
   erpPasswordMsg,
   batchSchedules,
-  studentCustomSchedules
+  studentCustomSchedules,
+  handleUpdateStudent,
+  allAvailableBatches,
+  handleUpdateStudentBatch
 }: StudentErpModalProps) {
-  const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'password'>('collect_fee')
+  const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'edit_details' | 'manage_batch' | 'password'>('collect_fee')
+
+  // Local editable copy for the "Edit Details" tab.
+  const [editForm, setEditForm] = useState<any>({})
+  const [dobInput, setDobInput] = useState('')
+  const [batchSelect, setBatchSelect] = useState<string>('')
+
+  React.useEffect(() => {
+    if (student && isOpen) {
+      const studentCustSchedules = (studentCustomSchedules || []).filter(sch => sch.student_id === student.id);
+      setEditForm({
+        full_name: student.full_name || '',
+        parent_phone: student.parent_phone || '',
+        parent_alt_phone: student.parent_alt_phone || '',
+        parent_email: student.parent_email || '',
+        address: student.address || '',
+        city: student.city || '',
+        state: student.state || '',
+        pin_code: student.pin_code || '',
+        parent_name: student.parent_name || '',
+        parent_relationship: student.parent_relationship || '',
+        parent_occupation: student.parent_occupation || '',
+        dob: student.dob || '',
+        blood_group: student.blood_group || '',
+        emergency_contact_name: student.emergency_contact_name || '',
+        emergency_relationship: student.emergency_relationship || '',
+        emergency_phone: student.emergency_phone || '',
+        emergency_alt_phone: student.emergency_alt_phone || '',
+        gender: student.gender || 'Boy',
+        has_medical_condition: student.has_medical_condition || false,
+        medical_condition_details: student.medical_condition_details || '',
+        regular_medication: student.regular_medication || '',
+        doctor_name: student.doctor_name || '',
+        doctor_phone: student.doctor_phone || '',
+        hospital_preference: student.hospital_preference || '',
+        consent_accepted: student.consent_accepted || false,
+        status: student.status || 'active',
+        category: student.category || 'Child Activity',
+        batch_id: student.batch_id || '',
+        classes_total: student.classes_total || 12,
+        validity_end_date: student.validity_end_date || '',
+        custom_days: student.custom_days || '',
+        custom_schedules: studentCustSchedules
+      })
+      setDobInput(formatDateToDisplay(student.dob || ''));
+    }
+  }, [student?.id, isOpen])
+
+  const additionalBatches: any[] = Array.isArray(student?.additional_batches)
+    ? student.additional_batches
+    : (() => { try { return JSON.parse(student?.additional_batches || '[]') } catch { return [] } })()
 
   if (!isOpen || !student) return null
+
+  const inputCls = `w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+  }`
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -123,6 +206,8 @@ export default function StudentErpModal({
             { id: 'collect_fee', label: 'Submit Fee & Discount', icon: IndianRupee },
             { id: 'fee_history', label: 'Monthly Fee Ledger', icon: FileText },
             { id: 'profile', label: 'Student Profile', icon: Users },
+            { id: 'edit_details', label: 'Edit Details', icon: Pencil },
+            { id: 'manage_batch', label: 'Manage Batch', icon: Layers },
             { id: 'password', label: 'Reset Password', icon: Key },
           ].map(tab => {
             const Icon = tab.icon
@@ -375,6 +460,30 @@ export default function StudentErpModal({
 
         {erpModalTab === 'profile' && (
           <div className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            {/* FEE SUMMARY — Total / Collected / Due (auto: Due = Total - Collected) */}
+            {(() => {
+              const studentFees = fees.filter((f: any) => f.student_id === student.id || f.students?.admission_id === student.admission_id)
+              const collectedFromLedger = studentFees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (parseFloat(f.net_amount ?? f.amount) || 0), 0)
+              const collected = collectedFromLedger > 0 ? collectedFromLedger : (parseFloat(student.amount_paid) || 0)
+              const totalFee = parseFloat(student.total_fee) || collected || 0
+              const due = Math.max(0, totalFee - collected)
+              return (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 rounded-2xl border bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-center">
+                    <div className="text-[9px] font-bold uppercase text-blue-500">Total Fee</div>
+                    <div className="text-base font-extrabold font-mono text-blue-700 dark:text-blue-300">₹{totalFee.toLocaleString('en-IN')}</div>
+                  </div>
+                  <div className="p-3 rounded-2xl border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-center">
+                    <div className="text-[9px] font-bold uppercase text-emerald-500">Fee Collected</div>
+                    <div className="text-base font-extrabold font-mono text-emerald-700 dark:text-emerald-300">₹{collected.toLocaleString('en-IN')}</div>
+                  </div>
+                  <div className="p-3 rounded-2xl border bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-center">
+                    <div className="text-[9px] font-bold uppercase text-rose-500">Fee Due</div>
+                    <div className="text-base font-extrabold font-mono text-rose-700 dark:text-rose-300">₹{due.toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+              )
+            })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Child Details */}
               <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
@@ -465,6 +574,490 @@ export default function StudentErpModal({
                 <Trash2 className="w-4 h-4" />
                 <span>Delete Student Record</span>
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: EDIT STUDENT DETAILS */}
+        {erpModalTab === 'edit_details' && (() => {
+          const isZumbaYogaBatch = (name: string) => {
+            const n = (name || '').toLowerCase();
+            return n.includes('zumba') || n.includes('yoga') || n.includes('mother');
+          };
+
+          const filteredBatches = (allAvailableBatches || []).filter(b => {
+            if (b.id === '00000000-0000-0000-0000-000000000000') return false;
+            const isZY = isZumbaYogaBatch(b.batch_name || '');
+            return editForm.category === 'Zumba & Yoga' ? isZY : !isZY;
+          });
+
+          return (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const dbVal = parseDateToDb(dobInput);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dbVal)) {
+                  alert('❌ Error: Please enter Date of Birth in a valid DD/MM/YYYY format.');
+                  return;
+                }
+                const finalForm = {
+                  ...editForm,
+                  dob: dbVal
+                };
+                await handleUpdateStudent(student.id, finalForm)
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className={`p-3.5 rounded-2xl text-xs font-semibold border ${tipBannerBg}`}>
+                ✏️ Update <strong className="underline">{student.full_name}</strong>'s complete registration profile, program batches, medical profile, emergency contacts or status.
+              </div>
+
+              {/* 1. STUDENT REGISTRATION DETAILS */}
+              <div>
+                <h4 className="font-bold text-pink-600 uppercase tracking-wider text-[10px] border-b pb-1 mb-2">1. Child's Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Student Name</label>
+                    <input type="text" required value={editForm.full_name || ''} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Date of Birth (DD/MM/YYYY)</label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="e.g. 01/01/2021" 
+                      value={dobInput} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDobInput(val);
+                        const dbVal = parseDateToDb(val);
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(dbVal)) {
+                          setEditForm({ ...editForm, dob: dbVal });
+                        } else {
+                          setEditForm({ ...editForm, dob: val });
+                        }
+                      }} 
+                      className={inputCls} 
+                    />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Gender</label>
+                    <div className="flex gap-4 mt-2">
+                      {['Boy', 'Girl', 'Other'].map(g => (
+                        <label key={g} className="flex items-center gap-1.5 font-semibold cursor-pointer text-slate-700 dark:text-slate-300">
+                          <input 
+                            type="radio" 
+                            name="edit_gender" 
+                            value={g} 
+                            checked={editForm.gender === g || (g === 'Other' && !['Boy', 'Girl'].includes(editForm.gender))} 
+                            onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} 
+                            className="w-4 h-4 accent-pink-600" 
+                          />
+                          <span>{g}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Blood Group</label>
+                    <select 
+                      value={editForm.blood_group || 'O+'} 
+                      onChange={(e) => setEditForm({ ...editForm, blood_group: e.target.value })} 
+                      className={inputCls}
+                    >
+                      {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                        <option key={bg} value={bg}>{bg}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className={`font-bold ${textSecondary}`}>Address</label>
+                    <input type="text" value={editForm.address || ''} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>City</label>
+                    <input type="text" value={editForm.city || ''} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className={inputCls} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>State</label>
+                      <input type="text" value={editForm.state || ''} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>PIN</label>
+                      <input type="text" value={editForm.pin_code || ''} onChange={(e) => setEditForm({ ...editForm, pin_code: e.target.value })} className={inputCls} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. PARENT/GUARDIAN DETAILS */}
+              <div>
+                <h4 className="font-bold text-purple-600 uppercase tracking-wider text-[10px] border-b pb-1 mb-2">2. Parent / Guardian Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Parent / Guardian Name</label>
+                    <input type="text" value={editForm.parent_name || ''} onChange={(e) => setEditForm({ ...editForm, parent_name: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Relationship</label>
+                    <select 
+                      value={editForm.parent_relationship || 'Father'} 
+                      onChange={(e) => setEditForm({ ...editForm, parent_relationship: e.target.value })} 
+                      className={inputCls}
+                    >
+                      <option value="Father">Father</option>
+                      <option value="Mother">Mother</option>
+                      <option value="Guardian">Guardian</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Phone Number</label>
+                    <input type="tel" required value={editForm.parent_phone || ''} onChange={(e) => setEditForm({ ...editForm, parent_phone: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Alternate Phone</label>
+                    <input type="tel" value={editForm.parent_alt_phone || ''} onChange={(e) => setEditForm({ ...editForm, parent_alt_phone: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Email</label>
+                    <input type="email" value={editForm.parent_email || ''} onChange={(e) => setEditForm({ ...editForm, parent_email: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Occupation</label>
+                    <input type="text" value={editForm.parent_occupation || ''} onChange={(e) => setEditForm({ ...editForm, parent_occupation: e.target.value })} className={inputCls} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. EMERGENCY CONTACT DETAILS */}
+              <div>
+                <h4 className="font-bold text-green-700 uppercase tracking-wider text-[10px] border-b pb-1 mb-2">3. Emergency Contact Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Emergency Contact Name</label>
+                    <input type="text" value={editForm.emergency_contact_name || ''} onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Relationship</label>
+                    <input type="text" value={editForm.emergency_relationship || ''} onChange={(e) => setEditForm({ ...editForm, emergency_relationship: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Emergency Phone</label>
+                    <input type="tel" value={editForm.emergency_phone || ''} onChange={(e) => setEditForm({ ...editForm, emergency_phone: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Alternate Phone</label>
+                    <input type="tel" value={editForm.emergency_alt_phone || ''} onChange={(e) => setEditForm({ ...editForm, emergency_alt_phone: e.target.value })} className={inputCls} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. MEDICAL INFORMATION */}
+              <div>
+                <h4 className="font-bold text-teal-600 uppercase tracking-wider text-[10px] border-b pb-1 mb-2">4. Medical Profile</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                    <input 
+                      type="checkbox" 
+                      checked={editForm.has_medical_condition || false} 
+                      onChange={(e) => setEditForm({ ...editForm, has_medical_condition: e.target.checked })} 
+                      className="w-4 h-4 accent-teal-600"
+                    />
+                    <span>Has Medical Conditions / Allergies / Health Concerns?</span>
+                  </label>
+                  
+                  {editForm.has_medical_condition && (
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Medical Condition Details</label>
+                      <textarea 
+                        rows={2}
+                        value={editForm.medical_condition_details || ''} 
+                        onChange={(e) => setEditForm({ ...editForm, medical_condition_details: e.target.value })} 
+                        className={inputCls}
+                        placeholder="Please describe allergy details, asthma, history, etc."
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Regular Medication (if any)</label>
+                      <input type="text" value={editForm.regular_medication || ''} onChange={(e) => setEditForm({ ...editForm, regular_medication: e.target.value })} className={inputCls} placeholder="e.g. Inhaler" />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Pediatrician / Family Doctor Name</label>
+                      <input type="text" value={editForm.doctor_name || ''} onChange={(e) => setEditForm({ ...editForm, doctor_name: e.target.value })} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Doctor Contact Phone No.</label>
+                      <input type="tel" value={editForm.doctor_phone || ''} onChange={(e) => setEditForm({ ...editForm, doctor_phone: e.target.value })} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Preferred Emergency Hospital</label>
+                      <input type="text" value={editForm.hospital_preference || ''} onChange={(e) => setEditForm({ ...editForm, hospital_preference: e.target.value })} className={inputCls} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. PROGRAM, BATCH AND ENROLLMENT CONTROLS */}
+              <div>
+                <h4 className="font-bold text-orange-600 uppercase tracking-wider text-[10px] border-b pb-1 mb-2">5. Program, Batch & Validity Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Registration Category</label>
+                    <select 
+                      value={editForm.category || 'Child Activity'} 
+                      onChange={(e) => {
+                        const newCat = e.target.value;
+                        const firstValid = (allAvailableBatches || []).find(b => {
+                          if (b.id === '00000000-0000-0000-0000-000000000000') return false;
+                          const isZY = isZumbaYogaBatch(b.batch_name || '');
+                          return newCat === 'Zumba & Yoga' ? isZY : !isZY;
+                        });
+                        const schedules = batchSchedules.filter(sch => sch.batch_id === firstValid?.id);
+                        const weeklyCount = schedules.length;
+                        const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
+                        const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        setEditForm({
+                          ...editForm,
+                          category: newCat,
+                          batch_id: firstValid?.id || '',
+                          classes_total: totalCls,
+                          custom_days: daysString || firstValid?.days || ''
+                        });
+                      }}
+                      className={inputCls}
+                    >
+                      <option value="Child Activity">Child Activity 🧸</option>
+                      <option value="Zumba & Yoga">Zumba & Yoga (Mother) 🧘</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Select Student Batch</label>
+                    <select 
+                      value={editForm.batch_id || ''} 
+                      onChange={(e) => {
+                        const bId = e.target.value;
+                        if (bId === '00000000-0000-0000-0000-000000000000') {
+                          setEditForm({
+                            ...editForm,
+                            batch_id: bId,
+                            classes_total: 0,
+                            custom_days: '',
+                            custom_schedules: []
+                          });
+                          return;
+                        }
+                        const matchedBatch = allAvailableBatches.find(b => b.id === bId);
+                        const schedules = batchSchedules.filter(sch => sch.batch_id === bId);
+                        const weeklyCount = schedules.length;
+                        const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
+                        const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        setEditForm({
+                          ...editForm,
+                          batch_id: bId,
+                          classes_total: totalCls,
+                          custom_days: daysString || matchedBatch?.days || ''
+                        });
+                      }}
+                      className={inputCls}
+                    >
+                      {filteredBatches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500}
+                        </option>
+                      ))}
+                      {editForm.category === 'Child Activity' && (
+                        <option value="00000000-0000-0000-0000-000000000000" className="font-bold text-orange-600">
+                          ⚙️ Customized Batch (Build Custom Schedule)
+                        </option>
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Customized Batch builder rendering */}
+                  {editForm.batch_id === '00000000-0000-0000-0000-000000000000' && (
+                    <div className="space-y-3 pt-3 border-t border-dashed border-orange-200 col-span-2">
+                      <label className="block font-bold text-slate-700 dark:text-slate-300">Customized Batch Schedule Builder</label>
+                      <p className="text-[10px] text-slate-500 font-semibold italic -mt-2">Select classes/times available in Batch Master for each day:</p>
+                      
+                      <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar p-1">
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                          const dayClasses = Array.from(
+                            new Map(
+                              batchSchedules
+                                .filter(sch => sch.day_of_week === day)
+                                .map(sch => [`${sch.start_time}-${sch.end_time}-${sch.class_name}`, sch])
+                            ).values()
+                          );
+
+                          if (dayClasses.length === 0) return null;
+
+                          return (
+                            <div key={day} className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+                              <span className="font-bold text-pink-600 block text-xs border-b pb-0.5">{day}</span>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {dayClasses.map((sch: any) => {
+                                  const isChecked = (editForm.custom_schedules || []).some(
+                                    (s: any) => s.day_of_week === day && s.start_time === sch.start_time && s.end_time === sch.end_time
+                                  );
+
+                                  return (
+                                    <label key={`${sch.start_time}-${sch.end_time}`} className="flex items-center gap-2 p-1.5 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          let current = [...(editForm.custom_schedules || [])];
+                                          if (e.target.checked) {
+                                            current.push({
+                                              day_of_week: day,
+                                              start_time: sch.start_time,
+                                              end_time: sch.end_time,
+                                              class_name: sch.class_name
+                                            });
+                                          } else {
+                                            current = current.filter(
+                                              (s: any) => !(s.day_of_week === day && s.start_time === sch.start_time && s.end_time === sch.end_time)
+                                            );
+                                          }
+                                          const classesCount = current.length * 4;
+                                          const daysString = Array.from(new Set(current.map((s: any) => s.day_of_week))).join(', ');
+                                          setEditForm({
+                                            ...editForm,
+                                            custom_schedules: current,
+                                            classes_total: classesCount,
+                                            custom_days: daysString
+                                          });
+                                        }}
+                                        className="w-4 h-4 accent-pink-600 shrink-0" 
+                                      />
+                                      <div className="text-[10px]">
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">{sch.class_name}</span>
+                                        <span className="font-mono text-slate-500 ml-1.5">{sch.start_time} - {sch.end_time}</span>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Total Allowed Monthly Classes</label>
+                    <input type="number" value={editForm.classes_total || 12} onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value, 10) })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
+                    <input type="date" value={editForm.validity_end_date || ''} onChange={(e) => setEditForm({ ...editForm, validity_end_date: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Status</label>
+                    <select value={editForm.status || 'active'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className={inputCls}>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-5">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                      <input 
+                        type="checkbox" 
+                        checked={editForm.consent_accepted || false} 
+                        onChange={(e) => setEditForm({ ...editForm, consent_accepted: e.target.checked })} 
+                        className="w-4 h-4 accent-orange-600"
+                      />
+                      <span>Consent Legal Terms Accepted?</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-3 border-t border-slate-200 dark:border-slate-800">
+                <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
+                  Close
+                </button>
+                <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 cursor-pointer flex items-center gap-2">
+                  <Save className="w-4 h-4" /> Save Updated Details
+                </button>
+              </div>
+            </form>
+          )
+        })()}
+
+        {/* TAB: MANAGE BATCH (change / add / remove batches) */}
+        {erpModalTab === 'manage_batch' && (
+          <div className="space-y-4 text-xs">
+            <div className={`p-3.5 rounded-2xl text-xs font-semibold border ${tipBannerBg}`}>
+              🎯 Manage batches for <strong className="underline">{student.full_name}</strong>. Change the primary batch, or add extra batches (e.g. add Chess while keeping Skating). Fee & plan validity update accordingly.
+            </div>
+
+            {/* Primary batch */}
+            <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+              <h4 className="font-bold text-orange-600 uppercase tracking-wider text-[10px] border-b pb-1">Primary Batch</h4>
+              <p className={textPrimary}><strong>{student.batch_name || 'Unassigned'}</strong></p>
+            </div>
+
+            {/* Additional active batches */}
+            <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+              <h4 className="font-bold text-indigo-600 uppercase tracking-wider text-[10px] border-b pb-1">Additional Active Batches</h4>
+              {additionalBatches.length === 0 ? (
+                <p className="text-[11px] text-slate-400 italic">No additional batches. Use "Add Batch" below to enroll in more.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {additionalBatches.map((ab: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60">
+                      <span className={`font-bold ${textPrimary}`}>{ab.batch_name}</span>
+                      <button
+                        onClick={() => handleUpdateStudentBatch(student.id, 'remove', ab.batch_id)}
+                        className="p-1 text-rose-500 hover:bg-rose-600 hover:text-white rounded-lg transition"
+                        title="Remove this batch"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Change / Add controls */}
+            <div className={`p-4 rounded-2xl border space-y-3 ${bgSubCard}`}>
+              <label className={`font-bold ${textSecondary}`}>Select a batch</label>
+              <select
+                value={batchSelect}
+                onChange={(e) => setBatchSelect(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— Choose a batch —</option>
+                {(allAvailableBatches || []).map((b: any) => (
+                  <option key={b.id} value={b.id}>{b.batch_name}{b.fee_amount ? ` — ₹${b.fee_amount}` : ''}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={!batchSelect}
+                  onClick={async () => { const ok = await handleUpdateStudentBatch(student.id, 'change', batchSelect); if (ok) setBatchSelect('') }}
+                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Layers className="w-4 h-4" /> Change Primary Batch
+                </button>
+                <button
+                  type="button"
+                  disabled={!batchSelect}
+                  onClick={async () => { const ok = await handleUpdateStudentBatch(student.id, 'add', batchSelect); if (ok) setBatchSelect('') }}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Add as Extra Batch
+                </button>
+              </div>
             </div>
           </div>
         )}

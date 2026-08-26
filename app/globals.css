@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * Drive `dark:` utilities from a `.dark` class on <html> instead of the
+ * operating system's colour scheme.
+ *
+ * Tailwind v4 defaults `dark:` to `prefers-color-scheme`, so all 177 `dark:`
+ * utilities in this admin were following the phone's OS theme while the panel's
+ * own light/dark toggle only swapped conditional class strings. On a phone set
+ * to dark mode with the panel set to light, blocks like the booking detail card
+ * rendered dark-on-light and became unreadable. Now the toggle is the single
+ * source of truth.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,11 +25,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {

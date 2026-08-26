@@ -22,6 +22,15 @@ interface StaffTabProps {
   isLight: boolean
 }
 
+// Predefined staff designations. Anything not in this list is a custom "Other" role.
+const PRESET_ROLES = [
+  'Front Desk Executive',
+  'ERP Manager',
+  'Coaching Instructor',
+  'Receptionist',
+  'Administrator Support'
+]
+
 // Available tabs list for custom permissions
 const AVAILABLE_TABS = [
   { id: 'dashboard', label: 'Dashboard & Home Analytics' },
@@ -58,6 +67,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [roleName, setRoleName] = useState('Front Desk Executive')
+  const [isOtherRole, setIsOtherRole] = useState(false)
   const [password, setPassword] = useState('')
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(['dashboard', 'enquiries'])
   const [showPassword, setShowPassword] = useState(false)
@@ -134,6 +144,11 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
       return
     }
 
+    if (!roleName.trim()) {
+      setErrorMsg('Please specify the staff designation / role.')
+      return
+    }
+
     if (selectedPermissions.length === 0) {
       setErrorMsg('Please select at least one permission/tab for this staff account.')
       return
@@ -160,7 +175,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             parent_name: name.trim(),
             phone: phone.trim(),
             email: email.trim().toLowerCase(),
-            child_name: roleName, // Designation
+            child_name: roleName.trim(), // Designation
             notes: JSON.stringify(notesJson)
           })
           .eq('id', editingStaff.id)
@@ -182,7 +197,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             parent_name: name.trim(),
             phone: phone.trim(),
             email: email.trim().toLowerCase(),
-            child_name: roleName, // designation
+            child_name: roleName.trim(), // designation
             child_age: null,
             event_date: null,
             status: 'active',
@@ -199,9 +214,11 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
       setName('')
       setEmail('')
       setPhone('')
+      setRoleName('Front Desk Executive')
+      setIsOtherRole(false)
       setPassword('')
       setSelectedPermissions(['dashboard', 'enquiries'])
-      
+
       // Reload staff
       fetchStaff()
     } catch (err: any) {
@@ -229,6 +246,8 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
         setName('')
         setEmail('')
         setPhone('')
+        setRoleName('Front Desk Executive')
+        setIsOtherRole(false)
         setPassword('')
         setSelectedPermissions(['dashboard', 'enquiries'])
       }
@@ -319,17 +338,35 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
 
             <div>
               <label className={`block font-bold mb-1 ${textSecondary}`}>Designation / Role *</label>
-              <select 
-                value={roleName}
-                onChange={e => setRoleName(e.target.value)}
+              <select
+                value={isOtherRole ? '__other__' : roleName}
+                onChange={e => {
+                  if (e.target.value === '__other__') {
+                    setIsOtherRole(true)
+                    setRoleName('')
+                  } else {
+                    setIsOtherRole(false)
+                    setRoleName(e.target.value)
+                  }
+                }}
                 className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-blue-500 font-semibold text-slate-800"
               >
-                <option value="Front Desk Executive">Front Desk Executive</option>
-                <option value="ERP Manager">ERP Manager</option>
-                <option value="Coaching Instructor">Coaching Instructor</option>
-                <option value="Receptionist">Receptionist</option>
-                <option value="Administrator Support">Administrator Support</option>
+                {PRESET_ROLES.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+                <option value="__other__">Other (Specify / Mention)</option>
               </select>
+
+              {isOtherRole && (
+                <input
+                  type="text"
+                  value={roleName}
+                  onChange={e => setRoleName(e.target.value)}
+                  placeholder="Please specify designation / role"
+                  className="w-full mt-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-blue-500 font-semibold text-slate-800"
+                  autoFocus
+                />
+              )}
             </div>
 
             <button
@@ -349,6 +386,8 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
                   setName('')
                   setEmail('')
                   setPhone('')
+                  setRoleName('Front Desk Executive')
+                  setIsOtherRole(false)
                   setPassword('')
                   setSelectedPermissions(['dashboard', 'enquiries'])
                 }}
@@ -427,6 +466,7 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
                         setEmail(staff.email)
                         setPhone(staff.phone)
                         setRoleName(staff.roleName)
+                        setIsOtherRole(!PRESET_ROLES.includes(staff.roleName))
                         setPassword(staff.password || '')
                         setSelectedPermissions(staff.permissions)
                         window.scrollTo({ top: 0, behavior: 'smooth' })

@@ -54,11 +54,12 @@ export default function BirthdayLandingTab() {
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       if (isLocalhost) {
         const port = window.location.port
-        const frontend = window.location.origin.replace(`:${port}`, ':3000') + '/birthdays'
+        // Point at the canonical birthday route directly (avoids the /birthdays redirect).
+        const frontend = window.location.origin.replace(`:${port}`, ':3000') + '/kids-and-child-birthday-party'
         setPreviewUrl(frontend)
       } else {
-        // In production, always point to the live site
-        setPreviewUrl('https://phulwari.co.in/birthdays')
+        // In production, always point to the live canonical birthday page.
+        setPreviewUrl('https://phulwari.co.in/kids-and-child-birthday-party')
       }
     }
   }, [])

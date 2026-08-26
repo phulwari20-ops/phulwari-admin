@@ -29,8 +29,12 @@ export default function AttendanceTab({
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
 
-  // Calculate selected date's day of the week
-  const dateObj = new Date(attendanceDate);
+  // Derive the day of the week from the selected date.
+  // `new Date('2026-08-21')` is parsed as UTC midnight while getDay() reads the
+  // local clock, so in any timezone behind UTC the weekday comes out one day
+  // early. Build the date from its parts to keep it purely local.
+  const [attYear, attMonth, attDay] = attendanceDate.split('-').map(Number);
+  const dateObj = new Date(attYear, (attMonth || 1) - 1, attDay || 1);
   const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateObj.getDay()];
 
   // Check if current date is a holiday

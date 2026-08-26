@@ -2,6 +2,309 @@
  * Print & Export Utilities for Student Data
  */
 
+// ---------------------------------------------------------------------------
+// Shared helpers for the printable Registration / Consent form.
+// The single-student print and the bulk print used to carry two identical
+// copies of the whole template. They now share buildRegistrationFormHtml so a
+// fix (payment values, plan validity, customized schedule) lands in both.
+// ---------------------------------------------------------------------------
+
+const esc = (v: any) => (v === null || v === undefined ? '' : String(v))
+
+// The parent passes an enriched student (see enrichStudentForPrint in
+// app/page.tsx): payment_mode, amount_paid, plan dates, classes consumed and,
+// for a customised batch, the resolved list of Day → Time → Class rows.
+const isMode = (paymentMode: string, target: 'Cash' | 'UPI' | 'Bank') => {
+  const m = (paymentMode || '').toLowerCase()
+  if (target === 'Cash') return m.includes('cash')
+  if (target === 'UPI') return m.includes('upi') || m.includes('online')
+  return m.includes('bank') || m.includes('net') || m.includes('card')
+}
+
+const buildRegistrationFormHtml = (st: any): string => {
+  const paymentMode = esc(st.payment_mode)
+  const amountPaid = st.amount_paid !== '' && st.amount_paid != null ? `₹ ${esc(st.amount_paid)}` : ''
+  const printDate = esc(st.print_date)                    // DD/MM/YYYY registration date
+  const planStart = esc(st.plan_start_date)
+  const planEnd = esc(st.plan_end_date)
+  const classesTotal = esc(st.classes_total)
+  const classesConsumed = st.classes_consumed != null ? esc(st.classes_consumed) : '0'
+  const consumedLine = classesTotal !== '' ? `${classesConsumed} / ${classesTotal} classes` : `${classesConsumed} classes`
+  const paymentFor = esc(st.payment_for)
+  const isPayFor = (label: string) => (paymentFor || '').toLowerCase().includes(label.toLowerCase())
+  const remarks = esc(st.remarks)
+  const inr = (v: any) => (Number(v) || 0).toLocaleString('en-IN')
+  const feeTotal = inr(st.total_fee_display)
+  const feeCollected = inr(st.fee_collected_display)
+  const feeDue = inr(st.fee_due_display)
+  const customList: any[] = Array.isArray(st.custom_schedules_list) ? st.custom_schedules_list : []
+  const isCustomized = customList.length > 0
+
+  // Split a printed date "DD/MM/YYYY" into its three boxes.
+  const dateParts = printDate.split('/')
+  const dd = dateParts[0] || ''
+  const mm = dateParts[1] || ''
+  const yyyy = dateParts[2] || ''
+  const endParts = planEnd.split('/')
+  const edd = endParts[0] || ''
+  const emm = endParts[1] || ''
+  const eyyy = endParts[2] || ''
+
+  // When customised: show only the resolved schedule (Day → Time → Class) and
+  // hide the generic "Program / Activity Interested In" checkboxes entirely.
+  const programBlock = isCustomized
+    ? `
+            <div style="margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #166534;">Customized Schedule (Day → Time → Class):</div>
+            <div style="margin-bottom: 15px;">
+              ${customList.map(row => `
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 8px; margin-bottom: 4px; border: 1px solid #16653433; border-radius: 6px; background: #16653408;">
+                  <span style="font-weight: bold; width: 90px;">📅 ${esc(row.day_of_week)}</span>
+                  <span style="font-family: monospace; color: #1D4ED8;">${esc(row.start_time)} - ${esc(row.end_time)}</span>
+                  <span style="font-weight: bold; color: #BE185D;">${esc(row.class_name)}</span>
+                </div>
+              `).join('')}
+            </div>`
+    : `
+            <div style="margin-bottom: 10px; font-size: 13px;">Program / Activity Interested In:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 15px;">
+              <div><input type="checkbox"> Playzone</div>
+              <div><input type="checkbox"> Weekend Prog.</div>
+              <div><input type="checkbox"> 3 Days Prog.</div>
+              <div><input type="checkbox"> 5 Days Prog.</div>
+              <div><input type="checkbox"> 6 Days Prog.</div>
+              <div><input type="checkbox"> 7 Days Prog.</div>
+              <div><input type="checkbox"> Mother Zumba</div>
+              <div><input type="checkbox"> Other: <span style="border-bottom: 1px solid #000; display:inline-block; width:40px;"></span></div>
+            </div>`
+
+  return `
+        <div style="box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0;">
+
+          <!-- Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 1;">
+              <img src="/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
+              <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
+            </div>
+
+            <div style="flex: 2; text-align: center;">
+              <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
+              <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
+            </div>
+
+            <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
+              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
+              </div>
+              <div style="margin-top: 4px;">📞 +91 6207368839</div>
+              <div>✉️ phulwari02@gmail.com</div>
+              <div>🌐 www.phulwari.co.in</div>
+              <div>📸 @phulwari.activitycentre</div>
+            </div>
+          </div>
+
+          <!-- Top Boxes -->
+          <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Admission No.:</strong>
+              <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${esc(st.admission_id)}</span>
+            </div>
+            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
+              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Date:</strong>
+              <div style="flex: 1; display: flex; justify-content: space-between; text-align: center;">
+                <div style="border-bottom: 1px solid #000; width: 34px; font-weight:bold;">${dd}</div><span style="color: #666; font-size:10px;">DD</span>
+                <span>/</span>
+                <div style="border-bottom: 1px solid #000; width: 34px; font-weight:bold;">${mm}</div><span style="color: #666; font-size:10px;">MM</span>
+                <span>/</span>
+                <div style="border-bottom: 1px solid #000; width: 46px; font-weight:bold;">${yyyy}</div><span style="color: #666; font-size:10px;">YYYY</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1. CHILD'S DETAILS -->
+          <div style="border: 2px solid #E11D48; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">1. CHILD'S DETAILS</div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Child's Full Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.full_name)}</span>
+              <span style="white-space: nowrap;">Date of Birth:</span>
+              <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${esc(st.dob)}</span>
+            </div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Gender:</span>
+              <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
+              <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
+              <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
+              <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">City:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.city) || 'Patna'}</span>
+              <span style="white-space: nowrap;">State:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.state) || 'Bihar'}</span>
+              <span style="white-space: nowrap;">PIN Code:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.pin_code) || '800001'}</span>
+            </div>
+          </div>
+
+          <!-- 2. PARENT / GUARDIAN DETAILS -->
+          <div style="border: 2px solid #3B0764; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #3B0764; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">2. PARENT / GUARDIAN DETAILS</div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 2;">${esc(st.parent_name)}</span>
+              <span style="white-space: nowrap;">Relationship:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_relationship)}</span>
+            </div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Email ID:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_email)}</span>
+              <span style="white-space: nowrap;">Occupation:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_occupation)}</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_phone)}</span>
+              <span style="white-space: nowrap;">Alternate Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_alt_phone)}</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
+            <!-- 3. PROGRAM / BATCH DETAILS -->
+            <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
+                <span style="white-space: nowrap;">Plan / Batch:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${esc(st.batch_name)}</span>
+              </div>
+
+              ${programBlock}
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
+                <span style="white-space: nowrap;">No. of Classes Assigned:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center; font-weight: bold;">${classesTotal}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
+                <span style="white-space: nowrap;">Already Consumed:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center; font-weight: bold; color: #B45309;">${consumedLine}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
+                <span style="white-space: nowrap;">📅 Plan Validity:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center; font-weight: bold; color: #166534;">${planStart || '—'} &nbsp;→&nbsp; ${planEnd || '—'}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                <span style="white-space: nowrap;">📅 Validity Ending:</span>
+                <div style="flex: 1; display: flex; justify-content: space-between; text-align: center; margin-left: 10px;">
+                  <div style="border-bottom: 1px solid #000; width: 34px; font-weight:bold;">${edd}</div><span style="color: #666; font-size:10px;">DD</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 34px; font-weight:bold;">${emm}</div><span style="color: #666; font-size:10px;">MM</span>
+                  <span>/</span>
+                  <div style="border-bottom: 1px solid #000; width: 46px; font-weight:bold;">${eyyy}</div><span style="color: #666; font-size:10px;">YYYY</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. PAYMENT DETAILS -->
+            <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
+              <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
+
+              <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
+                <div><input type="checkbox" ${isMode(paymentMode, 'Cash') ? 'checked' : ''}> Cash</div>
+                <div><input type="checkbox" ${isMode(paymentMode, 'UPI') ? 'checked' : ''}> UPI</div>
+                <div><input type="checkbox" ${isMode(paymentMode, 'Bank') ? 'checked' : ''}> Bank Transfer</div>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Amount Paid:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold; color: #047857;">${amountPaid}</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Payment Date:</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${printDate}</span>
+              </div>
+
+              <!-- Fee breakdown: Total / Collected / Due -->
+              <div style="display: flex; gap: 6px; margin-bottom: 15px; font-size: 12px;">
+                <div style="flex:1; text-align:center; border:1px solid #1D4ED833; border-radius:6px; padding:4px;">
+                  <div style="font-size:9px; color:#64748B; font-weight:bold;">TOTAL FEE</div>
+                  <div style="font-weight:bold; color:#1D4ED8;">₹${feeTotal}</div>
+                </div>
+                <div style="flex:1; text-align:center; border:1px solid #04785733; border-radius:6px; padding:4px;">
+                  <div style="font-size:9px; color:#64748B; font-weight:bold;">COLLECTED</div>
+                  <div style="font-weight:bold; color:#047857;">₹${feeCollected}</div>
+                </div>
+                <div style="flex:1; text-align:center; border:1px solid #E11D4833; border-radius:6px; padding:4px;">
+                  <div style="font-size:9px; color:#64748B; font-weight:bold;">DUE</div>
+                  <div style="font-weight:bold; color:#E11D48;">₹${feeDue}</div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
+                <span style="white-space: nowrap;">Payment For:</span>
+                <span><input type="checkbox" ${isPayFor('Monthly') ? 'checked' : ''}> Monthly Fee</span>
+                <span><input type="checkbox" ${isPayFor('Registration') ? 'checked' : ''}> Registration Fee</span>
+                <span><input type="checkbox" ${isPayFor('Other') ? 'checked' : ''}> Other</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
+                <span style="white-space: nowrap;">Remarks (if any):</span>
+                <span style="border-bottom: 1px solid #000; flex: 1;">${remarks}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. TERMS & CONDITIONS -->
+          <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
+
+            <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
+              <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>
+              <li>I agree to pay the fees as per the program selected.</li>
+              <li>Registration fee is non-refundable.</li>
+              <li>Fees once paid are non-refundable and non-transferable.</li>
+              <li>I understand that physical activities, play and learning sessions may involve movement and participation.</li>
+              <li>I authorize Phulwari - Mother & Child Activity Centre to seek necessary medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.</li>
+              <li>I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).</li>
+              <li>I understand that the management reserves the right to make changes in schedules, timings, or activities when required.</li>
+              <li>I agree to abide by all the rules, policies and guidelines of Phulwari - Mother & Child Activity Centre.</li>
+              <li>I understand that in case of any damage caused by my child to centre property, I will be responsible for the same.</li>
+            </ul>
+
+            <!-- Signatures -->
+            <div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px 10px; align-items: flex-end;">
+              <div style="display: flex; gap: 10px; align-items: flex-end; flex: 1;">
+                <strong style="font-size: 14px;">Parent / Guardian Signature:</strong>
+                <div style="border-bottom: 1px solid #000; flex: 1; margin-right: 40px;"></div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <strong style="font-size: 14px;">Date:</strong>
+                <div style="border-bottom: 1px solid #000; width: 120px; text-align: center; font-weight: bold;">${printDate}</div>
+              </div>
+            </div>
+
+            <!-- Bottom Tagline -->
+            <div style="text-align: center; color: #16A34A; font-weight: bold; font-size: 12px; margin-top: 10px;">
+              🌸 Nurturing Bonds. Building Confidence. Creating Happy Childhoods. 🌸
+            </div>
+          </div>
+
+        </div>`
+}
+
 export const handleExportStudentsCSV = (students: any[]) => {
   const headers = ['Admission ID', 'Student Name', 'DOB', 'Gender', 'Blood Group', 'Batch Name', 'Batch ID', 'Parent Name', 'Parent Phone', 'Parent Email', 'Address', 'Status']
   const rows = students.map(s => [
@@ -98,221 +401,8 @@ export const handleExportBulkRegistrationForms = (students: any[]) => {
   let allFormsHtml = ''
   students.forEach((st, index) => {
     allFormsHtml += `
-      <div style="page-break-after: ${index === students.length - 1 ? 'auto' : 'always'}; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0;">
-        
-        <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <div style="flex: 1;">
-            <img src="/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
-            <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
-          </div>
-          
-          <div style="flex: 2; text-align: center;">
-            <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
-            <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
-          </div>
-          
-          <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
-              <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
-            </div>
-            <div style="margin-top: 4px;">📞 +91 6207368839</div>
-            <div>✉️ phulwari02@gmail.com</div>
-            <div>🌐 www.phulwari.co.in</div>
-            <div>📸 @phulwari.activitycentre</div>
-          </div>
-        </div>
-
-        <!-- Top Boxes -->
-        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-          <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
-            <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Admission No.:</strong>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.admission_id}</span>
-          </div>
-          <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
-            <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Date:</strong>
-            <div style="flex: 1; display: flex; justify-content: space-between; text-align: center;">
-              <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
-              <span>/</span>
-              <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
-              <span>/</span>
-              <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 1. CHILD'S DETAILS -->
-        <div style="border: 2px solid #E11D48; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
-          <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">1. CHILD'S DETAILS</div>
-          
-          <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-            <span style="white-space: nowrap;">Child's Full Name:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.full_name}</span>
-            <span style="white-space: nowrap;">Date of Birth:</span>
-            <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${st.dob || ''}</span>
-          </div>
-          
-          <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
-            <span style="white-space: nowrap;">Gender:</span>
-            <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
-            <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
-            <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
-            <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-          </div>
-
-          <div style="display: flex; gap: 10px; align-items: flex-end;">
-            <span style="white-space: nowrap;">City:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.city || 'Patna'}</span>
-            <span style="white-space: nowrap;">State:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.state || 'Bihar'}</span>
-            <span style="white-space: nowrap;">PIN Code:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.pin_code || '800001'}</span>
-          </div>
-        </div>
-
-        <!-- 2. PARENT / GUARDIAN DETAILS -->
-        <div style="border: 2px solid #3B0764; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
-          <div style="position: absolute; top: -14px; left: -2px; background: #3B0764; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">2. PARENT / GUARDIAN DETAILS</div>
-          
-          <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-            <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
-            <span style="border-bottom: 1px solid #000; flex: 2;">${st.parent_name}</span>
-            <span style="white-space: nowrap;">Relationship:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_relationship || ''}</span>
-          </div>
-          
-          <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-            <span style="white-space: nowrap;">Email ID:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_email || ''}</span>
-            <span style="white-space: nowrap;">Occupation:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_occupation || ''}</span>
-          </div>
-
-          <div style="display: flex; gap: 10px; align-items: flex-end;">
-            <span style="white-space: nowrap;">Phone No.:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_phone}</span>
-            <span style="white-space: nowrap;">Alternate Phone No.:</span>
-            <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_alt_phone || ''}</span>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
-          <!-- 3. PROGRAM / BATCH DETAILS -->
-          <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
-            
-            <div style="margin-bottom: 10px; font-size: 13px;">Program / Activity Interested In:</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 15px;">
-              <div><input type="checkbox"> Playzone</div>
-              <div><input type="checkbox"> Weekend Prog.</div>
-              <div><input type="checkbox"> 3 Days Prog.</div>
-              <div><input type="checkbox"> 5 Days Prog.</div>
-              <div><input type="checkbox"> 6 Days Prog.</div>
-              <div><input type="checkbox"> 7 Days Prog.</div>
-              <div><input type="checkbox"> Mother Zumba</div>
-              <div><input type="checkbox"> Other: <span style="border-bottom: 1px solid #000; display:inline-block; width:40px;"></span></div>
-            </div>
-
-            <div style="margin-bottom: 10px; font-size: 13px;">Preferred Time Slot:</div>
-            <div style="display: flex; gap: 20px; font-size: 13px; margin-bottom: 15px;">
-              <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Morning' ? 'checked' : ''}> Morning <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
-              <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Evening' ? 'checked' : ''}> Evening <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-              <span style="white-space: nowrap;">No. of Classes Assigned:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1; text-align: center;">${st.classes_total || ''}</span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
-              <span style="white-space: nowrap;">📅 Plan Validity Ending Date:</span>
-              <div style="flex: 1; display: flex; justify-content: space-between; text-align: center; margin-left: 10px;">
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. PAYMENT DETAILS -->
-          <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
-            
-            <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
-            <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
-              <div><input type="checkbox"> Cash</div>
-              <div><input type="checkbox"> UPI</div>
-              <div><input type="checkbox"> Bank Transfer</div>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-              <span style="white-space: nowrap;">Amount Paid (₹):</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-              <span style="white-space: nowrap;">Plan / Program:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.batch_name || ''}</span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-              <span style="white-space: nowrap;">Payment For:</span>
-              <span><input type="checkbox"> Monthly Fee</span>
-              <span><input type="checkbox"> Registration Fee</span>
-              <span><input type="checkbox"> Other</span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
-              <span style="white-space: nowrap;">Remarks (if any):</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 5. TERMS & CONDITIONS -->
-        <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
-          <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
-          
-          <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
-            <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>
-            <li>I agree to pay the fees as per the program selected.</li>
-            <li>Registration fee is non-refundable.</li>
-            <li>Fees once paid are non-refundable and non-transferable.</li>
-            <li>I understand that physical activities, play and learning sessions may involve movement and participation.</li>
-            <li>I authorize Phulwari - Mother & Child Activity Centre to seek necessary medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.</li>
-            <li>I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).</li>
-            <li>I understand that the management reserves the right to make changes in schedules, timings, or activities when required.</li>
-            <li>I agree to abide by all the rules, policies and guidelines of Phulwari - Mother & Child Activity Centre.</li>
-            <li>I understand that in case of any damage caused by my child to centre property, I will be responsible for the same.</li>
-          </ul>
-
-          <!-- Signatures -->
-          <div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px 10px; align-items: flex-end;">
-            <div style="display: flex; gap: 10px; align-items: flex-end; flex: 1;">
-              <strong style="font-size: 14px;">Parent / Guardian Signature:</strong>
-              <div style="border-bottom: 1px solid #000; flex: 1; margin-right: 40px;"></div>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: flex-end;">
-              <strong style="font-size: 14px;">Date:</strong>
-              <div style="display: flex; justify-content: space-between; text-align: center; width: 120px;">
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 40px;"></div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Bottom Tagline -->
-          <div style="text-align: center; color: #16A34A; font-weight: bold; font-size: 12px; margin-top: 10px;">
-            🌸 Nurturing Bonds. Building Confidence. Creating Happy Childhoods. 🌸
-          </div>
-        </div>
-
+      <div style="page-break-after: ${index === students.length - 1 ? 'auto' : 'always'};">
+        ${buildRegistrationFormHtml(st)}
       </div>
     `
   })
@@ -358,222 +448,7 @@ export const handlePrintRegistrationForm = (st: any) => {
         </style>
       </head>
       <body>
-        <div style="box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0;">
-          
-          <!-- Header -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <div style="flex: 1;">
-              <img src="/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
-              <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
-            </div>
-            
-            <div style="flex: 2; text-align: center;">
-              <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
-              <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
-            </div>
-            
-            <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
-              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
-                <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
-              </div>
-              <div style="margin-top: 4px;">📞 +91 6207368839</div>
-              <div>✉️ phulwari02@gmail.com</div>
-              <div>🌐 www.phulwari.co.in</div>
-              <div>📸 @phulwari.activitycentre</div>
-            </div>
-          </div>
-
-          <!-- Top Boxes -->
-          <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
-              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Admission No.:</strong>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.admission_id}</span>
-            </div>
-            <div style="flex: 1; border: 2px solid #E11D48; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center;">
-              <strong style="color: #E11D48; font-size: 16px; margin-right: 10px;">Date:</strong>
-              <div style="flex: 1; display: flex; justify-content: space-between; text-align: center;">
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
-                <span>/</span>
-                <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 1. CHILD'S DETAILS -->
-          <div style="border: 2px solid #E11D48; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">1. CHILD'S DETAILS</div>
-            
-            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-              <span style="white-space: nowrap;">Child's Full Name:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.full_name}</span>
-              <span style="white-space: nowrap;">Date of Birth:</span>
-              <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${st.dob || ''}</span>
-            </div>
-            
-            <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
-              <span style="white-space: nowrap;">Gender:</span>
-              <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
-              <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
-              <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
-              <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end;">
-              <span style="white-space: nowrap;">City:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.city || 'Patna'}</span>
-              <span style="white-space: nowrap;">State:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.state || 'Bihar'}</span>
-              <span style="white-space: nowrap;">PIN Code:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.pin_code || '800001'}</span>
-            </div>
-          </div>
-
-          <!-- 2. PARENT / GUARDIAN DETAILS -->
-          <div style="border: 2px solid #3B0764; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #3B0764; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">2. PARENT / GUARDIAN DETAILS</div>
-            
-            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-              <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
-              <span style="border-bottom: 1px solid #000; flex: 2;">${st.parent_name}</span>
-              <span style="white-space: nowrap;">Relationship:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_relationship || ''}</span>
-            </div>
-            
-            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
-              <span style="white-space: nowrap;">Email ID:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_email || ''}</span>
-              <span style="white-space: nowrap;">Occupation:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_occupation || ''}</span>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: flex-end;">
-              <span style="white-space: nowrap;">Phone No.:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_phone}</span>
-              <span style="white-space: nowrap;">Alternate Phone No.:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${st.parent_alt_phone || ''}</span>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
-            <!-- 3. PROGRAM / BATCH DETAILS -->
-            <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-              <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
-              
-              <div style="margin-bottom: 10px; font-size: 13px;">Program / Activity Interested In:</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 15px;">
-                <div><input type="checkbox"> Playzone</div>
-                <div><input type="checkbox"> Weekend Prog.</div>
-                <div><input type="checkbox"> 3 Days Prog.</div>
-                <div><input type="checkbox"> 5 Days Prog.</div>
-                <div><input type="checkbox"> 6 Days Prog.</div>
-                <div><input type="checkbox"> 7 Days Prog.</div>
-                <div><input type="checkbox"> Mother Zumba</div>
-                <div><input type="checkbox"> Other: <span style="border-bottom: 1px solid #000; display:inline-block; width:40px;"></span></div>
-              </div>
-
-              <div style="margin-bottom: 10px; font-size: 13px;">Preferred Time Slot:</div>
-              <div style="display: flex; gap: 20px; font-size: 13px; margin-bottom: 15px;">
-                <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Morning' ? 'checked' : ''}> Morning <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
-                <div style="flex: 1;"><input type="checkbox" ${st.preferred_time_slot === 'Evening' ? 'checked' : ''}> Evening <span style="border-bottom: 1px solid #000; display:inline-block; width:60%;"></span></div>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-                <span style="white-space: nowrap;">No. of Classes Assigned:</span>
-                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center;">${st.classes_total || ''}</span>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
-                <span style="white-space: nowrap;">📅 Plan Validity Ending Date:</span>
-                <div style="flex: 1; display: flex; justify-content: space-between; text-align: center; margin-left: 10px;">
-                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">DD</span>
-                  <span>/</span>
-                  <div style="border-bottom: 1px solid #000; width: 30px;"></div><span style="color: #666; font-size:10px;">MM</span>
-                  <span>/</span>
-                  <div style="border-bottom: 1px solid #000; width: 40px;"></div><span style="color: #666; font-size:10px;">YYYY</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 4. PAYMENT DETAILS -->
-            <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-              <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
-              
-              <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
-              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
-                <div><input type="checkbox"> Cash</div>
-                <div><input type="checkbox"> UPI</div>
-                <div><input type="checkbox"> Bank Transfer</div>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-                <span style="white-space: nowrap;">Amount Paid (₹):</span>
-                <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-                <span style="white-space: nowrap;">Plan / Program:</span>
-                <span style="border-bottom: 1px solid #000; flex: 1;">${st.batch_name || ''}</span>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
-                <span style="white-space: nowrap;">Payment For:</span>
-                <span><input type="checkbox"> Monthly Fee</span>
-                <span><input type="checkbox"> Registration Fee</span>
-                <span><input type="checkbox"> Other</span>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
-                <span style="white-space: nowrap;">Remarks (if any):</span>
-                <span style="border-bottom: 1px solid #000; flex: 1;"></span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 5. TERMS & CONDITIONS -->
-          <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
-            
-            <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
-              <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>
-              <li>I agree to pay the fees as per the program selected.</li>
-              <li>Registration fee is non-refundable.</li>
-              <li>Fees once paid are non-refundable and non-transferable.</li>
-              <li>I understand that physical activities, play and learning sessions may involve movement and participation.</li>
-              <li>I authorize Phulwari - Mother & Child Activity Centre to seek necessary medical treatment for my child in case of any injury or illness during the activities, and I will bear all related expenses.</li>
-              <li>I give permission for Phulwari to use my child's photographs / videos taken during activities for training, documentation, promotional purposes (such as social media, website, brochures, etc.).</li>
-              <li>I understand that the management reserves the right to make changes in schedules, timings, or activities when required.</li>
-              <li>I agree to abide by all the rules, policies and guidelines of Phulwari - Mother & Child Activity Centre.</li>
-              <li>I understand that in case of any damage caused by my child to centre property, I will be responsible for the same.</li>
-            </ul>
-
-            <!-- Signatures -->
-            <div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px 10px; align-items: flex-end;">
-              <div style="display: flex; gap: 10px; align-items: flex-end; flex: 1;">
-                <strong style="font-size: 14px;">Parent / Guardian Signature:</strong>
-                <div style="border-bottom: 1px solid #000; flex: 1; margin-right: 40px;"></div>
-              </div>
-              <div style="display: flex; gap: 10px; align-items: flex-end;">
-                <strong style="font-size: 14px;">Date:</strong>
-                <div style="display: flex; justify-content: space-between; text-align: center; width: 120px;">
-                  <div style="border-bottom: 1px solid #000; width: 30px;"></div>
-                  <span>/</span>
-                  <div style="border-bottom: 1px solid #000; width: 30px;"></div>
-                  <span>/</span>
-                  <div style="border-bottom: 1px solid #000; width: 40px;"></div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Bottom Tagline -->
-            <div style="text-align: center; color: #16A34A; font-weight: bold; font-size: 12px; margin-top: 10px;">
-              🌸 Nurturing Bonds. Building Confidence. Creating Happy Childhoods. 🌸
-            </div>
-          </div>
-
-        </div>
+        ${buildRegistrationFormHtml(st)}
         <script>
           window.onload = function() { window.print(); setTimeout(() => { window.close(); }, 2000); };
         </script>

@@ -1,7 +1,30 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { X } from 'lucide-react'
+
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
+
+const parseDateToDb = (displayStr: string): string => {
+  if (!displayStr) return '';
+  const parts = displayStr.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && y.length === 4) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+  return displayStr;
+};
 
 interface AddStudentModalProps {
   isOpen: boolean
@@ -32,7 +55,27 @@ export default function AddStudentModal({
   handleAddStudentSubmit,
   batchSchedules
 }: AddStudentModalProps) {
+  const [dobInput, setDobInput] = useState('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setDobInput(formatDateToDisplay(newStudentForm.dob || '2021-01-01'));
+    }
+  }, [isOpen, newStudentForm.dob]);
+
+  const isZumbaYogaBatch = (name: string) => {
+    const n = (name || '').toLowerCase();
+    return n.includes('zumba') || n.includes('yoga') || n.includes('mother');
+  };
+
+  const filteredBatches = (allAvailableBatches || []).filter(b => {
+    if (b.id === '00000000-0000-0000-0000-000000000000') return false;
+    const isZY = isZumbaYogaBatch(b.batch_name || '');
+    return newStudentForm.category === 'Zumba & Yoga' ? isZY : !isZY;
+  });
+
   if (!isOpen) return null
+
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -76,21 +119,23 @@ export default function AddStudentModal({
           {/* ADMISSION NUMBER SECTION */}
           <div className="flex items-center gap-3 bg-pink-50 p-3 rounded-2xl border border-pink-200 w-fit">
             <span className="font-extrabold text-pink-700 text-sm">Admission No.:</span>
-            <input 
-              type="text" 
-              required 
-              value={newStudentForm.admission_id} 
-              onChange={(e) => setNewStudentForm({ ...newStudentForm, admission_id: e.target.value })} 
-              className="bg-white border-2 border-pink-300 rounded-xl px-3 py-1.5 text-sm font-mono font-extrabold text-pink-700 focus:outline-none focus:border-pink-500 w-44" 
+            <input
+              type="text"
+              required
+              readOnly
+              title="Auto-generated — no need to enter manually"
+              value={newStudentForm.admission_id}
+              className="bg-pink-50 border-2 border-pink-300 rounded-xl px-3 py-1.5 text-sm font-mono font-extrabold text-pink-700 focus:outline-none focus:border-pink-500 w-44 cursor-not-allowed"
             />
-            
+            <span className="text-[10px] text-slate-400 font-semibold">(auto)</span>
+
             <span className="font-bold text-slate-500 text-xs ml-4">Password:</span>
-            <input 
-              type="text" 
-              required 
-              value={newStudentForm.password} 
-              onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })} 
-              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32" 
+            <input
+              type="text"
+              value={newStudentForm.password}
+              placeholder="Leave blank"
+              onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
+              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32"
             />
           </div>
 
@@ -112,12 +157,22 @@ export default function AddStudentModal({
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Date of Birth</label>
+                <label className="block font-bold text-slate-700 mb-1">Date of Birth (DD/MM/YYYY)</label>
                 <input 
-                  type="date" 
+                  type="text" 
                   required 
-                  value={newStudentForm.dob} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, dob: e.target.value })} 
+                  placeholder="e.g. 01/01/2021" 
+                  value={dobInput} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDobInput(val);
+                    const dbVal = parseDateToDb(val);
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dbVal)) {
+                      setNewStudentForm({ ...newStudentForm, dob: dbVal });
+                    } else {
+                      setNewStudentForm({ ...newStudentForm, dob: val });
+                    }
+                  }} 
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-mono font-bold" 
                 />
               </div>
@@ -181,85 +236,93 @@ export default function AddStudentModal({
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Blood Group</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. B+"
+                <select 
                   value={newStudentForm.blood_group} 
                   onChange={(e) => setNewStudentForm({ ...newStudentForm, blood_group: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold" 
-                />
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-pink-500 font-semibold cursor-pointer"
+                >
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                    <option key={bg} value={bg}>{bg}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
 
           {/* 2. PARENT / GUARDIAN DETAILS */}
           <div className="border border-purple-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-[#4a148c] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+            <div className="bg-purple-900 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
               2. Parent / Guardian Details
             </div>
-            <div className="p-4 bg-slate-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Parent / Guardian Full Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="Full name" 
-                  value={newStudentForm.parent_name} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_name: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Relationship</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Father / Mother" 
-                  value={newStudentForm.parent_relationship} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_relationship: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Occupation</label>
-                <input 
-                  type="text" 
-                  placeholder="Occupation" 
-                  value={newStudentForm.parent_occupation} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_occupation: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
-                />
+            <div className="p-4 bg-slate-50/50 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Parent / Guardian Full Name</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Full name" 
+                    value={newStudentForm.parent_name} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_name: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Relationship</label>
+                  <select 
+                    value={newStudentForm.parent_relationship} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_relationship: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold cursor-pointer"
+                  >
+                    <option value="Father">Father</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Guardian">Guardian</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Occupation</label>
+                  <input 
+                    type="text" 
+                    placeholder="Occupation" 
+                    value={newStudentForm.parent_occupation} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_occupation: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                  />
+                </div>
               </div>
               
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Email ID</label>
-                <input 
-                  type="email" 
-                  placeholder="parent@example.com" 
-                  value={newStudentForm.parent_email} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_email: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Phone No.</label>
-                <input 
-                  type="tel" 
-                  required 
-                  placeholder="Primary phone number" 
-                  value={newStudentForm.parent_phone} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_phone: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Alternate Phone No.</label>
-                <input 
-                  type="tel" 
-                  placeholder="Alternate phone number" 
-                  value={newStudentForm.parent_alt_phone} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_alt_phone: e.target.value })} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Email ID</label>
+                  <input 
+                    type="email" 
+                    placeholder="parent@example.com" 
+                    value={newStudentForm.parent_email} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_email: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-semibold" 
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Phone No.</label>
+                  <input 
+                    type="tel" 
+                    required 
+                    placeholder="Primary phone number" 
+                    value={newStudentForm.parent_phone} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_phone: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Alternate Phone No.</label>
+                  <input 
+                    type="tel" 
+                    placeholder="Alternate phone number" 
+                    value={newStudentForm.parent_alt_phone} 
+                    onChange={(e) => setNewStudentForm({ ...newStudentForm, parent_alt_phone: e.target.value })} 
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-mono font-semibold" 
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -269,7 +332,7 @@ export default function AddStudentModal({
             
             {/* 3. EMERGENCY CONTACT DETAILS */}
             <div className="border border-green-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full">
-              <div className="bg-[#43a047] text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
+              <div className="bg-green-700 text-white font-extrabold px-4 py-2 text-sm uppercase tracking-wider">
                 3. Emergency Contact Details
               </div>
               <div className="p-4 bg-slate-50/50 space-y-3 flex-1">
@@ -328,7 +391,25 @@ export default function AddStudentModal({
                     <label className="block font-bold text-slate-700 mb-1">Registration Category</label>
                     <select 
                       value={newStudentForm.category} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, category: e.target.value })} 
+                      onChange={(e) => {
+                        const newCat = e.target.value;
+                        const firstValid = (allAvailableBatches || []).find(b => {
+                          if (b.id === '00000000-0000-0000-0000-000000000000') return false;
+                          const isZY = isZumbaYogaBatch(b.batch_name || '');
+                          return newCat === 'Zumba & Yoga' ? isZY : !isZY;
+                        });
+                        const schedules = batchSchedules.filter(sch => sch.batch_id === firstValid?.id);
+                        const weeklyCount = schedules.length;
+                        const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
+                        const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        setNewStudentForm({
+                          ...newStudentForm,
+                          category: newCat,
+                          batch_id: firstValid?.id || '',
+                          classes_total: totalCls,
+                          custom_days: daysString || firstValid?.days || ''
+                        });
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"
                     >
                       <option value="Child Activity">Child Activity 🧸</option>
@@ -339,14 +420,42 @@ export default function AddStudentModal({
                     <label className="block font-bold text-slate-700 mb-1">Select Student Batch</label>
                     <select 
                       value={newStudentForm.batch_id} 
-                      onChange={(e) => setNewStudentForm({ ...newStudentForm, batch_id: e.target.value })} 
+                      onChange={(e) => {
+                        const bId = e.target.value;
+                        if (bId === '00000000-0000-0000-0000-000000000000') {
+                          setNewStudentForm({
+                            ...newStudentForm,
+                            batch_id: bId,
+                            classes_total: 0,
+                            custom_days: '',
+                            custom_schedules: []
+                          });
+                          return;
+                        }
+                        const matchedBatch = allAvailableBatches.find(b => b.id === bId);
+                        const schedules = batchSchedules.filter(sch => sch.batch_id === bId);
+                        const weeklyCount = schedules.length;
+                        const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
+                        const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        setNewStudentForm({
+                          ...newStudentForm,
+                          batch_id: bId,
+                          classes_total: totalCls,
+                          custom_days: daysString || matchedBatch?.days || ''
+                        });
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"
                     >
-                      {allAvailableBatches.map(b => (
+                      {filteredBatches.map(b => (
                         <option key={b.id} value={b.id} className="bg-white text-slate-900">
                           {b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / {b.validity_days || 30} Days
                         </option>
                       ))}
+                      {newStudentForm.category === 'Child Activity' && (
+                        <option value="00000000-0000-0000-0000-000000000000" className="bg-white font-bold text-orange-600">
+                          ⚙️ Customized Batch (Build Custom Schedule)
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -358,7 +467,19 @@ export default function AddStudentModal({
                     
                     <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar p-1">
                       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
-                        const dayClasses = batchSchedules.filter(sch => sch.day_of_week === day);
+                        // Class Master view for this day: the same slot can be
+                        // scheduled by several batches, so collapse duplicates
+                        // to one selectable entry and order them by start time.
+                        const dayClasses = Array.from(
+                          new Map(
+                            batchSchedules
+                              .filter(sch => sch.day_of_week === day)
+                              .map(sch => [
+                                `${sch.class_name}|${sch.start_time}|${sch.end_time}`,
+                                sch
+                              ])
+                          ).values()
+                        );
                         const currentCustomSch = newStudentForm.custom_schedules || [];
                         
                         return (
@@ -373,7 +494,7 @@ export default function AddStudentModal({
                                     (s: any) => s.day_of_week === day && s.class_name === cls.class_name && s.start_time === cls.start_time && s.end_time === cls.end_time
                                   );
                                   return (
-                                    <label key={cls.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:border-orange-300 transition cursor-pointer text-[11px] font-semibold text-slate-700 bg-slate-50/50">
+                                    <label key={`${cls.class_name}|${cls.start_time}|${cls.end_time}`} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:border-orange-300 transition cursor-pointer text-[11px] font-semibold text-slate-700 bg-slate-50/50">
                                       <input
                                         type="checkbox"
                                         checked={isChecked}
@@ -538,14 +659,30 @@ export default function AddStudentModal({
                 </div>
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Amount Paid (₹)</label>
-                <input 
-                  type="number" 
-                  placeholder="e.g. 3500"
-                  value={(newStudentForm as any).amount_paid || ''} 
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, amount_paid: e.target.value } as any)} 
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono" 
+                <label className="block font-bold text-slate-700 mb-1">Total Fee (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 10000"
+                  value={(newStudentForm as any).total_fee || ''}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, total_fee: e.target.value } as any)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono"
                 />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Fee Collected / Amount Paid (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 6000"
+                  value={(newStudentForm as any).amount_paid || ''}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, amount_paid: e.target.value } as any)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 font-semibold font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-emerald-700 mb-1">Fee Due (₹) — auto</label>
+                <div className="w-full flex items-center bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-2 font-mono font-extrabold text-emerald-800">
+                  ₹{Math.max(0, (parseFloat((newStudentForm as any).total_fee) || 0) - (parseFloat((newStudentForm as any).amount_paid) || 0))}
+                </div>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Plan Validity Ending Date</label>
