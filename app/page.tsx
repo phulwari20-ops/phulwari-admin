@@ -480,6 +480,7 @@ export default function AdminDashboardPage() {
   const [adminPwInput, setAdminPwInput] = useState<string>('')
   const [showAdminPw, setShowAdminPw] = useState<boolean>(false)
   const [adminLoginError, setAdminLoginError] = useState<string>('')
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false)
   const [adminUsersList, setAdminUsersList] = useState<any[]>([
     { id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator' }
   ])
@@ -516,32 +517,7 @@ export default function AdminDashboardPage() {
     const cleanPw = adminPwInput.trim()
     const supabase = createClient()
 
-    // 1. Try to match master admin first
-    if (cleanEmail === 'phulwari20@gmail.com' && cleanPw === 'Phulwari@1295') {
-      const match = { id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator', role: 'Admin' }
-      setAdminUser(match)
-      setAdminRole('Admin')
-      try {
-        localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
-      } catch (err) {}
-      return
-    }
-
-    // 2. Try to match local state (saved admins)
-    const localMatch = adminUsersList.find((adm: any) => 
-      adm.email?.trim().toLowerCase() === cleanEmail && adm.password === cleanPw
-    )
-    if (localMatch) {
-      const match = { ...localMatch, role: localMatch.role || 'Admin' }
-      setAdminUser(match)
-      setAdminRole(match.role || 'Admin')
-      try {
-        localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
-      } catch (err) {}
-      return
-    }
-
-    // 3. Query Supabase bookings table for Staff Account
+    // 1. Query Supabase bookings table first for Staff Account matching this email
     try {
       const { data: staffRec, error } = await supabase
         .from('bookings')
@@ -555,26 +531,58 @@ export default function AdminDashboardPage() {
         try { notesData = JSON.parse(staff.notes || '{}') } catch (ex) {}
         
         if (notesData.password === cleanPw) {
+          const matchedRole = notesData.role || 'Staff'
           const match = {
             id: staff.id,
             email: staff.email,
-            name: staff.parent_name,
-            role: 'Staff',
-            permissions: notesData.permissions || []
+            name: staff.parent_name || 'Administrator',
+            role: matchedRole,
+            permissions: matchedRole === 'Admin' 
+              ? ['dashboard', 'students', 'attendance', 'fees', 'schedule', 'teachers', 'expenses', 'enquiries', 'bookings', 'gallery', 'announcements', 'website', 'staff'] 
+              : (notesData.permissions || [])
           }
           setAdminUser(match)
-          setAdminRole('Staff')
-          if (notesData.permissions && notesData.permissions.length > 0) {
-            setActiveTab(notesData.permissions[0])
+          setAdminRole(matchedRole)
+          if (match.permissions && match.permissions.length > 0) {
+            setActiveTab(match.permissions[0])
           }
           try {
             localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
           } catch (err) {}
           return
+        } else {
+          // Record exists, but password mismatch
+          setAdminLoginError('Incorrect password. Please try again.')
+          return
         }
       }
     } catch (err) {
-      console.error('Database auth error:', err)
+      console.error('Database auth check error:', err)
+    }
+
+    // 2. Try to match master admin hardcoded fallback
+    if (cleanEmail === 'phulwari20@gmail.com' && cleanPw === 'Phulwari@1295') {
+      const match = { id: 'master-adm', email: 'phulwari20@gmail.com', password: 'Phulwari@1295', name: 'Master Administrator', role: 'Admin' }
+      setAdminUser(match)
+      setAdminRole('Admin')
+      try {
+        localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
+      } catch (err) {}
+      return
+    }
+
+    // 3. Try to match local state (saved admins in local storage)
+    const localMatch = adminUsersList.find((adm: any) => 
+      adm.email?.trim().toLowerCase() === cleanEmail && adm.password === cleanPw
+    )
+    if (localMatch) {
+      const match = { ...localMatch, role: localMatch.role || 'Admin' }
+      setAdminUser(match)
+      setAdminRole(match.role || 'Admin')
+      try {
+        localStorage.setItem('phulwari_admin_session', JSON.stringify(match))
+      } catch (err) {}
+      return
     }
 
     setAdminLoginError('Invalid Admin Email or Password. Please check your credentials.')
@@ -586,6 +594,89 @@ export default function AdminDashboardPage() {
       localStorage.removeItem('phulwari_admin_session')
     } catch (e) {}
   }
+
+  const handleAdminPasswordChangeSubmit = async (currentPw: string, newPw: string): Promise<boolean> => {
+    if (!adminUser) return false;
+    const cleanEmail = adminUser.email.trim().toLowerCase();
+    const supabase = createClient();
+
+    try {
+      // Query database first
+      const { data: staffRec, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('booking_type', 'Staff Account')
+        .eq('email', cleanEmail);
+
+      if (error) {
+        alert(`❌ Database error: ${error.message}`);
+        return false;
+      }
+
+      if (staffRec && staffRec.length > 0) {
+        const staff = staffRec[0];
+        let notesData: any = {};
+        try { notesData = JSON.parse(staff.notes || '{}'); } catch (e) {}
+
+        if (notesData.password !== currentPw) {
+          alert('❌ Incorrect current password! Please try again.');
+          return false;
+        }
+
+        // Update password in notes
+        const updatedNotes = JSON.stringify({
+          ...notesData,
+          password: newPw
+        });
+
+        const { error: updateErr } = await supabase
+          .from('bookings')
+          .update({ notes: updatedNotes })
+          .eq('id', staff.id);
+
+        if (updateErr) {
+          alert(`❌ Could not update password: ${updateErr.message}`);
+          return false;
+        }
+
+        alert('🎉 Password changed successfully!');
+        return true;
+      } else {
+        // Fallback for master admin
+        if (cleanEmail === 'phulwari20@gmail.com' && currentPw === 'Phulwari@1295') {
+          const payload = {
+            booking_type: 'Staff Account',
+            parent_name: 'Master Administrator',
+            email: 'phulwari20@gmail.com',
+            phone: '6207368839',
+            notes: JSON.stringify({
+              password: newPw,
+              role: 'Admin',
+              permissions: ['dashboard', 'students', 'attendance', 'fees', 'schedule', 'teachers', 'expenses', 'enquiries', 'bookings', 'gallery', 'announcements', 'website', 'staff']
+            })
+          };
+
+          const { error: insertErr } = await supabase
+            .from('bookings')
+            .insert([payload]);
+
+          if (insertErr) {
+            alert(`❌ Could not insert password record: ${insertErr.message}`);
+            return false;
+          }
+
+          alert('🎉 Password changed successfully!');
+          return true;
+        } else {
+          alert('❌ Incorrect current password! Please try again.');
+          return false;
+        }
+      }
+    } catch (e: any) {
+      alert(`❌ An error occurred: ${e.message || e}`);
+      return false;
+    }
+  };
 
   const handleAddAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -906,6 +997,15 @@ export default function AdminDashboardPage() {
     } catch (err) { /* keep optimistic local state */ }
   }
 
+  const handleUpdateEnquiryNotes = async (id: string, notes: string) => {
+    setEnquiries(prev => prev.map(e => e.id === id ? { ...e, notes } : e))
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('enquiries').update({ notes }).eq('id', id)
+      if (error) console.error('❌ [UPDATE ENQUIRY NOTES ERROR]:', error.message)
+    } catch (err) {}
+  }
+
   // Auto-generate the next Admission No. so the admin never types it. Numbering
   // is sequential from 1: the next number is one past the highest trailing
   // number already used (deleting a student never reuses their number).
@@ -1115,7 +1215,9 @@ export default function AdminDashboardPage() {
 
     const studentUuid = generateUuid()
 
-    const selectedBatchObj = batches.find(b => b.id === newStudentForm.batch_id) || batches[0]
+    const selectedBatchObj = newStudentForm.batch_id === '00000000-0000-0000-0000-000000000000'
+      ? { id: '00000000-0000-0000-0000-000000000000', batch_name: 'Customized Batch', validity_days: 30 }
+      : batches.find(b => b.id === newStudentForm.batch_id) || batches[0]
     const newStudentObj = {
       id: studentUuid,
       admission_id: newStudentForm.admission_id.trim() || `PH-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -1401,22 +1503,54 @@ export default function AdminDashboardPage() {
   // wrong phone number entered at admission can be corrected later and reflects
   // everywhere the student is read.
   const handleUpdateStudent = async (studentId: string, updates: Record<string, any>) => {
+    // 1. Separate custom_schedules from main students table updates
+    const { custom_schedules, ...studentTableUpdates } = updates
+
     // Optimistic local update + persist
     setStudents(prev => {
-      const next = prev.map(s => (s.id === studentId ? { ...s, ...updates } : s))
+      const next = prev.map(s => (s.id === studentId ? { ...s, ...studentTableUpdates } : s))
       try { localStorage.setItem('phulwari_admin_students', JSON.stringify(next)) } catch (e) {}
       return next
     })
-    setSelectedERPStudent((prev: any) => (prev && prev.id === studentId ? { ...prev, ...updates } : prev))
+    setSelectedERPStudent((prev: any) => (prev && prev.id === studentId ? { ...prev, ...studentTableUpdates } : prev))
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.from('students').update(updates).eq('id', studentId)
+      const { error } = await supabase.from('students').update(studentTableUpdates).eq('id', studentId)
       if (error) {
         console.error('❌ [STUDENT UPDATE ERROR]:', error)
         alert(`Could not save to database: ${error.message}`)
         return false
       }
+
+      // Handle customized batch schedule updates
+      if (updates.batch_id === '00000000-0000-0000-0000-000000000000') {
+        // Delete existing schedules
+        await supabase.from('student_custom_schedules').delete().eq('student_id', studentId)
+        
+        // Insert new ones if available
+        if (custom_schedules && custom_schedules.length > 0) {
+          const customSchedulesPayload = custom_schedules.map((sch: any) => ({
+            student_id: studentId,
+            day_of_week: sch.day_of_week,
+            start_time: sch.start_time,
+            end_time: sch.end_time,
+            class_name: sch.class_name
+          }))
+          const { data: custSchData, error: custSchErr } = await supabase.from('student_custom_schedules').insert(customSchedulesPayload).select()
+          if (!custSchErr && custSchData) {
+            setStudentCustomSchedules(prev => [
+              ...prev.filter(sch => sch.student_id !== studentId),
+              ...custSchData
+            ])
+          }
+        }
+      } else if (updates.batch_id && updates.batch_id !== '00000000-0000-0000-0000-000000000000') {
+        // Switched from customized to regular batch: delete any custom schedules
+        await supabase.from('student_custom_schedules').delete().eq('student_id', studentId)
+        setStudentCustomSchedules(prev => prev.filter(sch => sch.student_id !== studentId))
+      }
+
     } catch (err: any) {
       alert(`Network error while saving: ${err.message || err}`)
       return false
@@ -1487,7 +1621,13 @@ export default function AdminDashboardPage() {
     const cleanPhone = (parentPhone || '').replace(/[^0-9]/g, '')
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone || '919876543210'
 
-    const message = `Dear Parent, ${stName} ki ₹${dueAmount} fee ${dueDate || '15th'} ko due hai. Kindly payment complete karein.\n\nRegards,\nPhulwari Mother & Child Activity Centre`
+    const message = `Dear Parent,
+We are pleased to inform you that ${stName} is completed month of classes at Phulwari Mother and Child Activity Centre. It has been a pleasure watching him learn and grow with us during this period.
+To ensure a smooth transition into the next month and to continue their progress, we kindly request you to complete the fee payment for the upcoming session by tomorrow.
+Thank you for your continued trust in us.
+
+Best Regards,
+Management Phulwari Mother and Child Activity Centre`
     setWaReminderModal({ isOpen: true, phone: targetPhone, message })
 
     // Open WhatsApp directly (chat with the parent, message pre-filled).
@@ -2894,33 +3034,33 @@ export default function AdminDashboardPage() {
 
             {/* Active Logged-in Admin Identity Profile Card */}
             {adminUser && (
-              <div className={`px-3 py-1.5 rounded-2xl border flex items-center gap-2 text-xs font-semibold shadow-sm shrink-0 ${
-                isLight ? 'bg-blue-50/80 border-blue-200 text-blue-900' : 'bg-slate-900 border-slate-800 text-blue-300'
-              }`}>
-                <div className="w-7 h-7 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
-                  {adminUser.name?.charAt(0) || 'A'}
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1.5 rounded-2xl border flex items-center gap-2 text-xs font-semibold shadow-sm shrink-0 ${
+                  isLight ? 'bg-blue-50/80 border-blue-200 text-blue-900' : 'bg-slate-900 border-slate-800 text-blue-300'
+                }`}>
+                  <div className="w-7 h-7 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+                    {adminUser.name?.charAt(0) || 'A'}
+                  </div>
+                  <div className="text-left leading-tight hidden sm:block">
+                    <p className="font-bold truncate max-w-[130px]">{adminUser.name || 'Admin'}</p>
+                    <p className="text-[10px] text-blue-500 font-mono truncate max-w-[130px]">{adminUser.email}</p>
+                  </div>
                 </div>
-                <div className="text-left leading-tight hidden sm:block">
-                  <p className="font-bold truncate max-w-[130px]">{adminUser.name || 'Admin'}</p>
-                  <p className="text-[10px] text-blue-500 font-mono truncate max-w-[130px]">{adminUser.email}</p>
-                </div>
+                <button
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  className={`p-2 rounded-xl border flex items-center justify-center transition cursor-pointer ${
+                    isLight 
+                      ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-600' 
+                      : 'bg-slate-900 hover:bg-slate-850 border-slate-850 text-amber-400'
+                  }`}
+                  title="Change Admin Password"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 
-            {(activeTab === 'students' || activeTab === 'student_list') && (
-          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-            <span className={`font-semibold px-2 ${textSecondary}`}>Category Filter:</span>
-            {(['Child Activity', 'Zumba & Yoga'] as const).map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategoryFilter(cat)}
-                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                  selectedCategoryFilter === cat ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
-                }`}
-              >{cat}</button>
-            ))}
-          </div>
-        )}
+
 
         {activeTab === 'students' && (
               <button
@@ -3160,6 +3300,7 @@ export default function AdminDashboardPage() {
             enquiries={enquiries}
             onUpdateStatus={handleUpdateEnquiryStatus}
             onUpdateFollowUpDate={handleUpdateFollowUpDate}
+            onUpdateNotes={handleUpdateEnquiryNotes}
             onAddEnquiry={handleAddEnquiry}
             onConvertToAdmission={handleConvertToAdmission}
             onDeleteEnquiry={handleDeleteEnquiry}
@@ -4482,6 +4623,95 @@ export default function AdminDashboardPage() {
         textPrimary={textPrimary}
         textSecondary={textSecondary}
       />
+
+      {/* MODAL: CHANGE ADMIN PASSWORD */}
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] text-xs">
+          <div className={`p-6 max-w-md w-full rounded-3xl space-y-4 shadow-2xl ${isLight ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100 border border-slate-800'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-sm font-bold flex items-center gap-2 text-pink-600">
+                <Key className="w-5 h-5" /> Change Admin Password
+              </h3>
+              <button onClick={() => setIsChangePasswordOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const currentPw = e.currentTarget.currentPassword.value.trim();
+                const newPw = e.currentTarget.newPassword.value.trim();
+                const confirmPw = e.currentTarget.confirmPassword.value.trim();
+
+                if (!currentPw || !newPw || !confirmPw) {
+                  alert('❌ Please fill in all fields.');
+                  return;
+                }
+                if (newPw !== confirmPw) {
+                  alert('❌ New passwords do not match.');
+                  return;
+                }
+
+                const success = await handleAdminPasswordChangeSubmit(currentPw, newPw);
+                if (success) {
+                  setIsChangePasswordOpen(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block font-bold text-slate-500 mb-1">Current Password</label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  required
+                  placeholder="Enter current password"
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-500 mb-1">New Password</label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  required
+                  placeholder="Enter new password"
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-500 mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  required
+                  placeholder="Confirm new password"
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(false)}
+                  className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
+                >
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

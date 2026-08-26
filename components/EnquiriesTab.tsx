@@ -11,6 +11,7 @@ interface EnquiriesTabProps {
   enquiries: any[];
   onUpdateStatus: (id: string, status: string) => void;
   onUpdateFollowUpDate?: (id: string, date: string) => void;
+  onUpdateNotes?: (id: string, notes: string) => void;
   onAddEnquiry: (enquiry: any) => void;
   onConvertToAdmission: (enquiry: any) => void;
   onDeleteEnquiry?: (id: string) => void;
@@ -18,9 +19,12 @@ interface EnquiriesTabProps {
 
 export default function EnquiriesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, badgePassword, isLight,
-  enquiries, onUpdateStatus, onUpdateFollowUpDate, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
+  enquiries, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
 }: EnquiriesTabProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [logModalEnq, setLogModalEnq] = useState<any | null>(null);
+  const [newLogText, setNewLogText] = useState('');
+  const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState({
     child_name: '',
     age: '',
@@ -126,13 +130,40 @@ export default function EnquiriesTab({
                         </a>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 max-w-[220px]">
                       <div className="font-semibold text-pink-600">{enq.program_interested || 'General Inquiry'}</div>
                       {enq.message && (
-                        <div className="mt-1 text-[10px] text-slate-500 line-clamp-2 max-w-[200px]" title={enq.message}>
+                        <div className="mt-1 text-[10px] text-slate-500 line-clamp-1 italic" title={enq.message}>
                           💬 {enq.message}
                         </div>
                       )}
+                      {/* Log replies timeline list preview (spreadsheet-like timeline matching Image 4) */}
+                      {(() => {
+                        let logsList: any[] = [];
+                        try {
+                          const parsed = JSON.parse(enq.notes || '[]');
+                          if (Array.isArray(parsed)) logsList = parsed;
+                        } catch (_) {}
+
+                        if (logsList.length > 0) {
+                          return (
+                            <div className="mt-1.5 space-y-1">
+                              {logsList.map((lg, idx) => (
+                                <div key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-650 dark:text-slate-350 font-medium">
+                                  📎 {lg.text} <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500 ml-1">({lg.date})</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        } else if (enq.notes) {
+                          return (
+                            <div className="mt-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-medium truncate max-w-[200px]" title={enq.notes}>
+                              📌 {enq.notes}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </td>
                     <td className="py-3.5 px-4">
                       <select
@@ -157,23 +188,34 @@ export default function EnquiriesTab({
                         />
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
-                      {enq.status !== 'Admission Done' && (
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => onConvertToAdmission(enq)}
-                          className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-lg hover:from-emerald-700 hover:to-green-700 transition shadow-sm text-[10px] cursor-pointer"
+                          onClick={() => setLogModalEnq(enq)}
+                          className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                            isLight ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-600' : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-amber-400'
+                          }`}
+                          title="View & Add Follow-up Logs / Replies"
                         >
-                          Convert to Admission
+                          📝
                         </button>
-                      )}
-                      {onDeleteEnquiry && (
-                        <button
-                          onClick={() => onDeleteEnquiry(enq.id)}
-                          className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4 inline" />
-                        </button>
-                      )}
+                        {enq.status !== 'Admission Done' && (
+                          <button
+                            onClick={() => onConvertToAdmission(enq)}
+                            className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-green-700 transition shadow-sm text-[10px] cursor-pointer shrink-0"
+                          >
+                            Convert to Admission
+                          </button>
+                        )}
+                        {onDeleteEnquiry && (
+                          <button
+                            onClick={() => onDeleteEnquiry(enq.id)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -304,6 +346,136 @@ export default function EnquiriesTab({
           </div>
         </div>
       )}
+
+      {/* MODAL: LEAD FOLLOW-UP LOGS & REPLIES HISTORY */}
+      {logModalEnq && (() => {
+        let logs: { text: string, date: string }[] = [];
+        if (logModalEnq.notes) {
+          try {
+            const parsed = JSON.parse(logModalEnq.notes);
+            if (Array.isArray(parsed)) {
+              logs = parsed;
+            } else {
+              logs = [{ text: logModalEnq.notes, date: logModalEnq.created_at ? new Date(logModalEnq.created_at).toLocaleDateString('en-GB') : '' }];
+            }
+          } catch (_) {
+            logs = [{ text: logModalEnq.notes, date: logModalEnq.created_at ? new Date(logModalEnq.created_at).toLocaleDateString('en-GB') : '' }];
+          }
+        }
+
+        const quickReplies = [
+          "No pick call",
+          "Cut the call",
+          "Interested sure aayege",
+          "Visit on Sunday",
+          "Visit krege aaj evening",
+          "Aaj nhi aayege",
+          "Out of Patna hai",
+          "Not interested",
+          "Share details"
+        ];
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 text-xs">
+            <div className={`${bgCard} rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto`}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <h3 className={`text-sm font-bold ${textPrimary} flex items-center gap-2`}>
+                  📝 Follow-up Logs & replies: <span className="text-pink-600 font-extrabold">{logModalEnq.child_name}</span>
+                </h3>
+                <button onClick={() => setLogModalEnq(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer text-sm">
+                  ✕
+                </button>
+              </div>
+
+              {/* LOGS LIST */}
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <span className={`block font-bold text-[10px] uppercase tracking-wider ${textSecondary}`}>Replies Timeline ({logs.length})</span>
+                {logs.length === 0 ? (
+                  <p className="text-slate-400 italic py-2 text-center">No replies logged yet. Use quick reply buttons below to add one!</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {logs.map((lg, idx) => (
+                      <div key={idx} className="flex justify-between gap-3 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-250/50 dark:border-slate-800 rounded-xl">
+                        <span className="font-semibold text-slate-850 dark:text-slate-200">{lg.text}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0">{lg.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ADD LOG SUBFORM */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newLogText.trim()) return;
+                  const updatedLogs = [...logs, { text: newLogText.trim(), date: new Date(newLogDate).toLocaleDateString('en-GB') }];
+                  onUpdateNotes && onUpdateNotes(logModalEnq.id, JSON.stringify(updatedLogs));
+                  setLogModalEnq({ ...logModalEnq, notes: JSON.stringify(updatedLogs) });
+                  setNewLogText('');
+                }}
+                className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800"
+              >
+                <div className="space-y-1.5">
+                  <span className={`block font-bold text-[10px] uppercase tracking-wider ${textSecondary}`}>Quick Reply Helpers:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickReplies.map(reply => (
+                      <button
+                        key={reply}
+                        type="button"
+                        onClick={() => setNewLogText(reply)}
+                        className="px-2 py-1 bg-pink-500/10 text-pink-600 hover:bg-pink-600 hover:text-white rounded-lg text-[10px] font-bold transition cursor-pointer border border-pink-200 dark:border-pink-900"
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className={`font-bold ${textSecondary}`}>Follow-up Reason / Response</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Will visit on Wednesday"
+                      value={newLogText}
+                      onChange={(e) => setNewLogText(e.target.value)}
+                      className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-slate-950 border-slate-800 text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Contact Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={newLogDate}
+                      onChange={(e) => setNewLogDate(e.target.value)}
+                      className={`w-full border rounded-xl px-3 py-1.5 outline-none font-mono font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setLogModalEnq(null)}
+                    className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
+                  >
+                    + Add Reply Log
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

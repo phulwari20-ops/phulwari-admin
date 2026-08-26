@@ -54,6 +54,44 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-6">
+      {/* Expiry & Remaining Class Alerts */}
+      {(lowClassStudents.length > 0 || expiryStudents.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+          {lowClassStudents.length > 0 && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
+              <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                ⚠️ Low Classes Remaining Alert ({lowClassStudents.length} Students)
+              </h4>
+              <ul className="text-[11px] font-semibold text-amber-900 dark:text-amber-300 list-disc pl-4 space-y-1">
+                {lowClassStudents.slice(0, 4).map(st => {
+                  const left = (st.classes_total || 12) - (st.classes_consumed || 0);
+                  return (
+                    <li key={st.id}>
+                      {st.full_name} ({st.admission_id}) — Only <strong>{left}</strong> classes left!
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {expiryStudents.length > 0 && (
+            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
+              <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                ⏳ Validity Expiry Alert ({expiryStudents.length} Students)
+              </h4>
+              <ul className="text-[11px] font-semibold text-rose-900 dark:text-rose-300 list-disc pl-4 space-y-1">
+                {expiryStudents.slice(0, 4).map(st => (
+                  <li key={st.id}>
+                    {st.full_name} ({st.admission_id}) — Plan expires on <strong>{st.validity_end_date}</strong>!
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 6 Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
@@ -100,43 +138,6 @@ export default function DashboardTab({
         </div>
       </div>
 
-      {/* Expiry & Remaining Class Alerts */}
-      {(lowClassStudents.length > 0 || expiryStudents.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
-          {lowClassStudents.length > 0 && (
-            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
-              <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                ⚠️ Low Classes Remaining Alert ({lowClassStudents.length} Students)
-              </h4>
-              <ul className="text-[11px] font-semibold text-amber-900 dark:text-amber-300 list-disc pl-4 space-y-1">
-                {lowClassStudents.slice(0, 4).map(st => {
-                  const left = (st.classes_total || 12) - (st.classes_consumed || 0);
-                  return (
-                    <li key={st.id}>
-                      {st.full_name} ({st.admission_id}) — Only <strong>{left}</strong> classes left!
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {expiryStudents.length > 0 && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
-              <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
-                ⏳ Validity Expiry Alert ({expiryStudents.length} Students)
-              </h4>
-              <ul className="text-[11px] font-semibold text-rose-900 dark:text-rose-300 list-disc pl-4 space-y-1">
-                {expiryStudents.slice(0, 4).map(st => (
-                  <li key={st.id}>
-                    {st.full_name} ({st.admission_id}) — Plan expires on <strong>{st.validity_end_date}</strong>!
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Row 2: Fee Chart + Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
