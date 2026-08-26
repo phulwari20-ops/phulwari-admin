@@ -24,3 +24,23 @@ create policy "announcements_all" on public.announcements
 
 -- 4. add admission_date column to students
 alter table public.students add column if not exists admission_date date default current_date;
+
+-- 5. categories table
+create table if not exists public.categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  emoji text,
+  created_at timestamp with time zone default now()
+);
+
+-- Enable RLS and add a permissive policy
+alter table public.categories enable row level security;
+drop policy if exists "categories_all" on public.categories;
+create policy "categories_all" on public.categories for all using (true) with check (true);
+
+-- Insert default categories
+insert into public.categories (name, emoji)
+values 
+  ('Child Activity', '🧸'),
+  ('Zumba & Yoga', '🧘')
+on conflict (name) do nothing;

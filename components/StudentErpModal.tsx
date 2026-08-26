@@ -32,6 +32,8 @@ interface StudentErpModalProps {
   handleUpdateStudent: (studentId: string, updates: Record<string, any>) => Promise<boolean>
   allAvailableBatches: any[]
   handleUpdateStudentBatch: (studentId: string, mode: 'change' | 'add' | 'remove', batchId: string) => Promise<boolean>
+  categories: any[]
+  setCategories: (val: any) => void
 }
 
 const formatDateToDisplay = (dateStr: string): string => {
@@ -85,7 +87,9 @@ export default function StudentErpModal({
   studentCustomSchedules,
   handleUpdateStudent,
   allAvailableBatches,
-  handleUpdateStudentBatch
+  handleUpdateStudentBatch,
+  categories,
+  setCategories
 }: StudentErpModalProps) {
   const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'edit_details' | 'manage_batch' | 'password'>('collect_fee')
 
@@ -895,8 +899,11 @@ export default function StudentErpModal({
                       }}
                       className={inputCls}
                     >
-                      <option value="Child Activity">Child Activity 🧸</option>
-                      <option value="Zumba & Yoga">Zumba & Yoga (Mother) 🧘</option>
+                      {categories.map((cat: any) => (
+                        <option key={cat.name} value={cat.name}>
+                          {cat.name} {cat.emoji || ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

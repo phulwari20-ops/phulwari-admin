@@ -28,6 +28,7 @@ export default function AttendanceTab({
 }: AttendanceTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
+  const [localSearch, setLocalSearch] = React.useState<string>('');
 
   // Derive the day of the week from the selected date.
   // `new Date('2026-08-21')` is parsed as UTC midnight while getDay() reads the
@@ -83,8 +84,9 @@ export default function AttendanceTab({
     if (selectedBatchIdFilter !== 'All' && item.student.batch_id !== selectedBatchIdFilter) return false;
 
     // Search query filter
-    if (!searchQuery || searchQuery.trim() === '') return true;
-    const query = searchQuery.toLowerCase();
+    const activeSearch = localSearch.trim() !== '' ? localSearch : searchQuery;
+    if (!activeSearch || activeSearch.trim() === '') return true;
+    const query = activeSearch.toLowerCase();
     return item.student.full_name.toLowerCase().includes(query) || 
            item.student.admission_id.toLowerCase().includes(query) ||
            item.class_name.toLowerCase().includes(query);
@@ -104,6 +106,18 @@ export default function AttendanceTab({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center space-x-2 text-xs">
+            <span className={`font-semibold ${textSecondary}`}>Search Student:</span>
+            <input
+              type="text"
+              placeholder="Name or Admission ID..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold shrink-0 w-44 ${
+                isLight ? 'bg-slate-100 border-slate-300 text-slate-800 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+              }`}
+            />
+          </div>
           <div className="flex items-center space-x-2 text-xs">
             <span className={`font-semibold ${textSecondary}`}>Batch Filter:</span>
             <select

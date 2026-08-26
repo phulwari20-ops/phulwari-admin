@@ -462,6 +462,11 @@ export default function AdminDashboardPage() {
   })
 
 
+  const [categories, setCategories] = useState<Array<{ id?: string; name: string; emoji: string }>>([
+    { name: 'Child Activity', emoji: '🧸' },
+    { name: 'Zumba & Yoga', emoji: '🧘' }
+  ])
+
   // Export Choice Modal State (PDF vs CSV)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
@@ -953,6 +958,21 @@ export default function AdminDashboardPage() {
 
         const { data: dbAttendance } = await supabase.from('attendance').select('*')
         if (dbAttendance) setAttendance(dbAttendance)
+
+        // Fetch categories
+        try {
+          const { data: dbCategories, error: catError } = await supabase.from('categories').select('*')
+          if (!catError && dbCategories && dbCategories.length > 0) {
+            setCategories(dbCategories)
+            try { localStorage.setItem('phulwari_admin_categories', JSON.stringify(dbCategories)) } catch (e) {}
+          } else {
+            const localCats = localStorage.getItem('phulwari_admin_categories')
+            if (localCats) setCategories(JSON.parse(localCats))
+          }
+        } catch (catErr) {
+          const localCats = localStorage.getItem('phulwari_admin_categories')
+          if (localCats) setCategories(JSON.parse(localCats))
+        }
       } catch (e) {
         console.error('❌ [SCHEDULES/HOLIDAYS/ATTENDANCE FETCH EXCEPTION]:', e)
       }
@@ -3895,6 +3915,8 @@ Management Phulwari Mother and Child Activity Centre`
         allAvailableBatches={allAvailableBatches}
         handleAddStudentSubmit={handleAddStudentSubmit}
         batchSchedules={batchSchedules}
+        categories={categories}
+        setCategories={setCategories}
       />
       {selectedERPStudent && (
         <StudentErpModal
@@ -3903,6 +3925,8 @@ Management Phulwari Mother and Child Activity Centre`
           student={selectedERPStudent}
           adminRole={adminRole}
           isLight={isLight}
+          categories={categories}
+          setCategories={setCategories}
           bgCard={bgCard}
           bgSubCard={bgSubCard}
           textPrimary={textPrimary}
