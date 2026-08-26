@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShieldCheck, UserPlus, Trash2, Key, CheckSquare, Square, Eye, EyeOff, Edit } from 'lucide-react'
+import { ShieldCheck, UserPlus, Trash2, CheckSquare, Square, Eye, EyeOff, Edit, UserX, UserCheck, X as XIcon, AlertTriangle } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface StaffMember {
@@ -12,6 +12,16 @@ interface StaffMember {
   roleName: string
   permissions: string[]
   password?: string
+  status: 'active' | 'deactivated'
+}
+
+interface ConfirmDialogState {
+  open: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  confirmClass: string
+  onConfirm: () => void
 }
 
 interface StaffTabProps {
@@ -60,6 +70,11 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [savingPermStaffId, setSavingPermStaffId] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmDialogState>({
+    open: false, title: '', message: '', confirmLabel: 'Confirm',
+    confirmClass: 'bg-rose-600 hover:bg-rose-700', onConfirm: () => {}
+  })
 
   // Form states
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null)
@@ -99,7 +114,8 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             phone: rec.phone,
             roleName: rec.child_name || 'Staff Member',
             permissions: notesObj.permissions || [],
-            password: notesObj.password || ''
+            password: notesObj.password || '',
+            status: rec.status === 'deactivated' ? 'deactivated' : 'active'
           }
         })
         setStaffList(formatted)
@@ -228,49 +244,152 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
     }
   }
 
-  // Delete staff account
-  const handleDeleteStaff = async (id: string, staffName: string) => {
-    if (!confirm(`Are you sure you want to delete staff account: "${staffName}"?`)) return
-    
-    setErrorMsg('')
-    setSuccessMsg('')
-    setLoading(true)
+  // ── INLINE: Remove a permission from a staff card and save to DB ──
+  const handleRemovePermissionInline = async (staff: StaffMember, permId: string) => {
+    const updatedPerms = staff.permissions.filter(p => p !== permId)
+    setSavingPermStaffId(staff.id)
+    setStaffList(prev => prev.map(s => s.id === staff.id ? { ...s, permissions: updatedPerms } : s))
     try {
-      const { error } = await supabase.from('bookings').delete().eq('id', id)
+      const { data: rec } = await supabase.from('bookings').select('notes').eq('id', staff.id).single()
+      let notesObj: any = {}
+      try { notesObj = JSON.parse(rec?.notes || '{}') } catch (e) {}
+      notesObj.permissions = updatedPerms
+      const { error } = await supabase.from('bookings').update({ notes: JSON.stringify(notesObj) }).eq('id', staff.id)
       if (error) throw error
-      setSuccessMsg(`Staff account "${staffName}" deleted successfully!`)
-      
-      // If we are currently editing the deleted staff, reset form
-      if (editingStaff?.id === id) {
-        setEditingStaff(null)
-        setName('')
-        setEmail('')
-        setPhone('')
-        setRoleName('Front Desk Executive')
-        setIsOtherRole(false)
-        setPassword('')
-        setSelectedPermissions(['dashboard', 'enquiries'])
-      }
-
-      fetchStaff()
+      setSuccessMsg(`Permission removed for ${staff.name}`)
     } catch (err: any) {
-      setErrorMsg('Failed to delete staff: ' + err.message)
-    } finally {
-      setLoading(false)
-    }
+      setStaffList(prev => prev.map(s => s.id === staff.id ? { ...s, permissions: staff.permissions } : s))
+      setErrorMsg('Failed to update permissions: ' + err.message)
+    } finally { setSavingPermStaffId(null) }
   }
+
+  // ── INLINE: Restore a revoked permission on a staff card ──
+  const handleAddPermissionInline = async (staff: StaffMember, permId: string) => {
+    if (staff.permissions.includes(permId)) return
+    const updatedPerms = [...staff.permissions, permId]
+    setSavingPermStaffId(staff.id)
+    setStaffList(prev => prev.map(s => s.id === staff.id ? { ...s, permissions: updatedPerms } : s))
+    try {
+      const { data: rec } = await supabase.from('bookings').select('notes').eq('id', staff.id).single()
+      let notesObj: any = {}
+      try { notesObj = JSON.parse(rec?.notes || '{}') } catch (e) {}
+      notesObj.permissions = updatedPerms
+      const { error } = await supabase.from('bookings').update({ notes: JSON.stringify(notesObj) }).eq('id', staff.id)
+      if (error) throw error
+      setSuccessMsg(`Permission granted for ${staff.name}`)
+    } catch (err: any) {
+      setStaffList(prev => prev.map(s => s.id === staff.id ? { ...s, permissions: staff.permissions } : s))
+      setErrorMsg('Failed to update permissions: ' + err.message)
+    } finally { setSavingPermStaffId(null) }
+  }
+
+  // ── DEACTIVATE / REACTIVATE staff ──
+  const handleToggleDeactivateStaff = (staff: StaffMember) => {
+    const isActive = staff.status === 'active'
+    setConfirmState({
+      open: true,
+      title: isActive ? '⚠️ Deactivate Staff Account?' : '✅ Reactivate Staff Account?',
+      message: isActive
+        ? `This will block "${staff.name}" from logging in. Their data and permissions are preserved.`
+        : `This will restore login access for "${staff.name}" with all their permissions.`,
+      confirmLabel: isActive ? 'Yes, Deactivate' : 'Yes, Reactivate',
+      confirmClass: isActive ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, open: false }))
+        setLoading(true)
+        try {
+          const newStatus = isActive ? 'deactivated' : 'active'
+          const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', staff.id)
+          if (error) throw error
+          setSuccessMsg(`Staff account "${staff.name}" ${isActive ? 'deactivated' : 'reactivated'} successfully!`)
+          setStaffList(prev => prev.map(s => s.id === staff.id ? { ...s, status: newStatus as 'active' | 'deactivated' } : s))
+        } catch (err: any) {
+          setErrorMsg('Failed to update status: ' + err.message)
+        } finally { setLoading(false) }
+      }
+    })
+  }
+
+  // ── DELETE staff account ──
+  const handleDeleteStaff = (staff: StaffMember) => {
+    setConfirmState({
+      open: true,
+      title: '🗑️ Delete Staff Account?',
+      message: `This will permanently delete "${staff.name}" (${staff.email}). This cannot be undone.`,
+      confirmLabel: 'Yes, Delete Permanently',
+      confirmClass: 'bg-rose-600 hover:bg-rose-700',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, open: false }))
+        setErrorMsg('')
+        setSuccessMsg('')
+        setLoading(true)
+        try {
+          const { error } = await supabase.from('bookings').delete().eq('id', staff.id)
+          if (error) throw error
+          setSuccessMsg(`Staff account "${staff.name}" deleted permanently!`)
+          if (editingStaff?.id === staff.id) {
+            setEditingStaff(null)
+            setName('')
+            setEmail('')
+            setPhone('')
+            setRoleName('Front Desk Executive')
+            setIsOtherRole(false)
+        setPassword('')
+            setPassword('')
+            setSelectedPermissions(['dashboard', 'enquiries'])
+          }
+          fetchStaff()
+        } catch (err: any) {
+          setErrorMsg('Failed to delete staff: ' + err.message)
+        } finally { setLoading(false) }
+      }
+    })
+  }
+
+  const handleDeleteStaffLegacy = async (_id: string, _staffName: string) => { /* kept for reference */ }
 
   return (
     <div className="space-y-6">
+      {/* ── Confirm Dialog ── */}
+      {confirmState.open && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-7 max-w-sm w-full shadow-2xl space-y-4 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-amber-500 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-black text-sm text-slate-800 dark:text-slate-100">{confirmState.title}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{confirmState.message}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setConfirmState(prev => ({ ...prev, open: false }))}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmState.onConfirm}
+                className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs cursor-pointer transition ${confirmState.confirmClass}`}
+              >
+                {confirmState.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alert Notices */}
       {errorMsg && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs font-bold font-mono">
-          ⚠️ {errorMsg}
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs font-bold font-mono flex items-center justify-between">
+          <span>⚠️ {errorMsg}</span>
+          <button onClick={() => setErrorMsg('')} className="ml-3 cursor-pointer shrink-0"><XIcon className="w-4 h-4" /></button>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 rounded-2xl text-xs font-bold font-mono">
-          ✅ {successMsg}
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 rounded-2xl text-xs font-bold font-mono flex items-center justify-between">
+          <span>✅ {successMsg}</span>
+          <button onClick={() => setSuccessMsg('')} className="ml-3 cursor-pointer shrink-0"><XIcon className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -451,61 +570,142 @@ export default function StaffTab({ bgCard, bgSubCard, textPrimary, textSecondary
             ) : staffList.length === 0 ? (
               <p className="text-xs text-slate-400 font-mono">No staff accounts registered yet.</p>
             ) : (
-              staffList.map(staff => (
-                <div 
-                  key={staff.id} 
-                  className={`p-4 rounded-2xl border text-xs space-y-2 relative group ${
-                    isLight ? 'bg-slate-50 border-slate-200/60' : 'bg-slate-900 border-slate-800'
-                  }`}
-                >
-                  <div className="absolute top-4 right-4 flex items-center space-x-1 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition">
-                    <button 
-                      onClick={() => {
-                        setEditingStaff(staff)
-                        setName(staff.name)
-                        setEmail(staff.email)
-                        setPhone(staff.phone)
-                        setRoleName(staff.roleName)
-                        setIsOtherRole(!PRESET_ROLES.includes(staff.roleName))
-                        setPassword(staff.password || '')
-                        setSelectedPermissions(staff.permissions)
-                        window.scrollTo({ top: 0, behavior: 'smooth' })
-                      }}
-                      className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                      title="Edit Staff Permissions & Info"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteStaff(staff.id, staff.name)}
-                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                      title="Delete Staff Account"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              staffList.map(staff => {
+                const isDeactivated = staff.status === 'deactivated'
+                const isSavingPerm = savingPermStaffId === staff.id
 
-                  <div className="space-y-0.5">
-                    <p className={`font-extrabold ${textPrimary}`}>{staff.name}</p>
-                    <p className="text-[10px] text-blue-500 font-mono truncate max-w-[85%]">{staff.email}</p>
-                  </div>
+                return (
+                  <div
+                    key={staff.id}
+                    className={`p-4 rounded-2xl border text-xs space-y-3 ${
+                      isDeactivated
+                        ? 'border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900/40 opacity-80'
+                        : isLight ? 'bg-slate-50 border-slate-200/60' : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
+                    {/* Name + Status + Action Buttons */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className={`shrink-0 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
+                          isDeactivated
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                        }`}>
+                          {isDeactivated ? '⛔ Suspended' : '✅ Active'}
+                        </span>
+                        <p className={`font-extrabold truncate ${textPrimary}`}>{staff.name}</p>
+                      </div>
 
-                  <div className="flex gap-2">
-                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold">{staff.roleName}</span>
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] rounded font-mono font-bold">📲 {staff.phone}</span>
-                  </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Edit */}
+                        <button
+                          onClick={() => {
+                            setEditingStaff(staff)
+                            setName(staff.name)
+                            setEmail(staff.email)
+                            setPhone(staff.phone)
+                            setRoleName(staff.roleName)
+                            setIsOtherRole(!PRESET_ROLES.includes(staff.roleName))
+                            setPassword(staff.password || '')
+                            setSelectedPermissions(staff.permissions)
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
+                          }}
+                          className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition cursor-pointer"
+                          title="Edit Staff"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
 
-                  <div className="space-y-1">
-                    <p className="font-extrabold text-[10px] text-slate-400">Permissions ({staff.permissions.length}):</p>
-                    <p className="text-[10px] text-slate-500 font-medium leading-tight">
-                      {staff.permissions.length === AVAILABLE_TABS.length 
-                        ? 'Full System Access' 
-                        : staff.permissions.map(p => AVAILABLE_TABS.find(t => t.id === p)?.label.split(' ')[0] || p).join(', ') || 'No permissions'
-                      }
-                    </p>
+                        {/* Deactivate / Reactivate */}
+                        <button
+                          onClick={() => handleToggleDeactivateStaff(staff)}
+                          className={`p-1.5 rounded-lg transition cursor-pointer ${
+                            isDeactivated
+                              ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-800'
+                              : 'text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-slate-800'
+                          }`}
+                          title={isDeactivated ? 'Reactivate Staff' : 'Deactivate Staff'}
+                        >
+                          {isDeactivated ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                        </button>
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => handleDeleteStaff(staff)}
+                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition cursor-pointer"
+                          title="Delete Staff Permanently"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Email + Role + Phone */}
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-blue-500 font-mono truncate">{staff.email}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold">{staff.roleName}</span>
+                        <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] rounded font-mono font-bold">📲 {staff.phone}</span>
+                      </div>
+                    </div>
+
+                    {/* ─── Permission chips with inline remove/add ─── */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1">
+                        <p className="font-extrabold text-[10px] text-slate-400">
+                          Permissions ({staff.permissions.length}/{AVAILABLE_TABS.length}):
+                        </p>
+                        {isSavingPerm && <span className="text-[9px] text-blue-400 font-semibold animate-pulse">saving…</span>}
+                      </div>
+
+                      {/* Active permissions */}
+                      <div className="flex flex-wrap gap-1">
+                        {staff.permissions.length === 0 && (
+                          <span className="text-[10px] text-rose-500 font-semibold italic">No permissions granted</span>
+                        )}
+                        {AVAILABLE_TABS.filter(t => staff.permissions.includes(t.id)).map(tab => (
+                          <span
+                            key={tab.id}
+                            className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] rounded-full font-bold"
+                          >
+                            <span>{tab.label.split(' ')[0]}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePermissionInline(staff, tab.id)}
+                              disabled={isSavingPerm}
+                              title={`Remove "${tab.label}"`}
+                              className="w-3.5 h-3.5 flex items-center justify-center text-indigo-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-full cursor-pointer transition disabled:opacity-40"
+                            >
+                              <XIcon className="w-2.5 h-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Revoked permissions */}
+                      {AVAILABLE_TABS.filter(t => !staff.permissions.includes(t.id)).length > 0 && (
+                        <div>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Revoked — click to restore:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {AVAILABLE_TABS.filter(t => !staff.permissions.includes(t.id)).map(tab => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => handleAddPermissionInline(staff, tab.id)}
+                                disabled={isSavingPerm}
+                                title={`Grant "${tab.label}"`}
+                                className="flex items-center gap-0.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] rounded-full font-bold hover:bg-emerald-100 hover:text-emerald-700 cursor-pointer transition disabled:opacity-40"
+                              >
+                                + {tab.label.split(' ')[0]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
