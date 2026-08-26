@@ -137,6 +137,15 @@ export default function AddStudentModal({
               onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
               className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500 w-32"
             />
+
+            <span className="font-bold text-slate-700 text-xs ml-4">Date of Admission:</span>
+            <input
+              type="date"
+              required
+              value={newStudentForm.admission_date || ''}
+              onChange={(e) => setNewStudentForm({ ...newStudentForm, admission_date: e.target.value })}
+              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-pink-500 w-36 cursor-pointer"
+            />
           </div>
 
           {/* 1. CHILD'S DETAILS */}

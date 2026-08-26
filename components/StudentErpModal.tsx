@@ -127,11 +127,26 @@ export default function StudentErpModal({
         category: student.category || 'Child Activity',
         batch_id: student.batch_id || '',
         classes_total: student.classes_total || 12,
+        classes_consumed: student.classes_consumed || 0,
+        admission_date: student.admission_date || '',
         validity_end_date: student.validity_end_date || '',
         custom_days: student.custom_days || '',
         custom_schedules: studentCustSchedules
       })
       setDobInput(formatDateToDisplay(student.dob || ''));
+      
+      const batchObj = allAvailableBatches.find(b => b.id === student.batch_id);
+      const defaultAmount = student.total_fee ? String(student.total_fee) : (batchObj ? String(batchObj.fee_amount) : '3500');
+      setFeeForm({
+        title: `Monthly Activity Fee (August 2026)`,
+        amount: defaultAmount,
+        discount_type: 'flat',
+        discount: '0',
+        due_date: new Date().toISOString().split('T')[0],
+        status: 'paid',
+        payment_method: student.payment_mode || 'UPI / Online',
+        receipt_no: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`
+      });
     }
   }, [student?.id, isOpen])
 
@@ -362,6 +377,44 @@ export default function StudentErpModal({
               </div>
             </div>
 
+            {/* Calculation summary preview card matching Part D requirement */}
+            {(() => {
+              const amountVal = parseFloat(feeForm.amount) || 0;
+              const discVal = parseFloat(feeForm.discount) || 0;
+              const netVal = Math.max(0, 
+                feeForm.discount_type === 'percentage' 
+                  ? amountVal - (amountVal * discVal / 100)
+                  : amountVal - discVal
+              );
+              const isPaid = feeForm.status === 'paid';
+              const paidAmount = isPaid ? netVal : 0;
+              const pendingAmount = isPaid ? 0 : netVal;
+
+              return (
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+                  <span className="block font-bold text-[10px] uppercase text-blue-500 tracking-wider">🧮 Live Calculation Breakdown</span>
+                  <div className="grid grid-cols-4 gap-3 text-center">
+                    <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
+                      <div className="text-[9px] font-bold text-slate-500">TOTAL FEE</div>
+                      <div className="text-xs font-black font-mono text-slate-800 dark:text-slate-200">₹{amountVal.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div className="p-2 rounded-xl bg-amber-500/10">
+                      <div className="text-[9px] font-bold text-amber-600">DISCOUNT</div>
+                      <div className="text-xs font-black font-mono text-amber-700 dark:text-amber-400">- ₹{discVal.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-500/10">
+                      <div className="text-[9px] font-bold text-emerald-600">PAID AMOUNT</div>
+                      <div className="text-xs font-black font-mono text-emerald-700 dark:text-emerald-400">₹{paidAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div className="p-2 rounded-xl bg-rose-500/10">
+                      <div className="text-[9px] font-bold text-rose-600">PENDING AMOUNT</div>
+                      <div className="text-xs font-black font-mono text-rose-700 dark:text-rose-400">₹{pendingAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="pt-3 flex items-center justify-end space-x-3">
               <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
                 Close
@@ -432,14 +485,16 @@ export default function StudentErpModal({
                       ) : (
                         <button
                           onClick={() => {
+                            const batchObj = allAvailableBatches.find(b => b.id === student.batch_id);
+                            const defaultAmount = student.total_fee ? String(student.total_fee) : (batchObj ? String(batchObj.fee_amount) : '3500');
                             setFeeForm({
                               title: `Monthly Activity Fee (${mName})`,
-                              amount: '3500',
-                              discount_type: 'amount',
-                              discount: '500',
-                              due_date: '2026-08-10',
+                              amount: defaultAmount,
+                              discount_type: 'flat',
+                              discount: '0',
+                              due_date: new Date().toISOString().split('T')[0],
                               status: 'paid',
-                              payment_method: 'UPI / Online',
+                              payment_method: student.payment_mode || 'UPI / Online',
                               receipt_no: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`
                             })
                             setErpModalTab('collect_fee')
@@ -669,6 +724,16 @@ export default function StudentErpModal({
                         <option key={bg} value={bg}>{bg}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Date of Admission</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={editForm.admission_date || ''} 
+                      onChange={(e) => setEditForm({ ...editForm, admission_date: e.target.value })} 
+                      className={inputCls} 
+                    />
                   </div>
                   <div className="md:col-span-2">
                     <label className={`font-bold ${textSecondary}`}>Address</label>
@@ -953,6 +1018,10 @@ export default function StudentErpModal({
                   <div>
                     <label className={`font-bold ${textSecondary}`}>Total Allowed Monthly Classes</label>
                     <input type="number" value={editForm.classes_total || 12} onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value, 10) })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={`font-bold ${textSecondary}`}>Consumed Classes</label>
+                    <input type="number" value={editForm.classes_consumed !== undefined ? editForm.classes_consumed : 0} onChange={(e) => setEditForm({ ...editForm, classes_consumed: parseInt(e.target.value, 10) || 0 })} className={inputCls} />
                   </div>
                   <div>
                     <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
