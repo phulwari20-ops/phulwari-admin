@@ -301,6 +301,16 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(merged))
   }, [classes])
   const [fees, setFees] = useState<any[]>([])
+  const [feeHeads, setFeeHeads] = useState<any[]>(() => {
+    return [
+      { id: 'fh-1', name: 'Registration Fee', default_amount: 1000, is_system: true },
+      { id: 'fh-2', name: 'Monthly Fee', default_amount: 3500, is_system: true },
+      { id: 'fh-3', name: 'Exam Fee', default_amount: 500, is_system: false },
+      { id: 'fh-4', name: 'Sports Fee', default_amount: 300, is_system: false },
+      { id: 'fh-5', name: 'Library Fee', default_amount: 200, is_system: false },
+      { id: 'fh-6', name: 'Development Fee', default_amount: 500, is_system: false }
+    ]
+  })
   const [attendance, setAttendance] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
   const [announcements, setAnnouncements] = useState<any[]>([])
@@ -838,6 +848,21 @@ export default function AdminDashboardPage() {
         console.error('❌ [FEES EXCEPTION]:', feesEx)
         const savedFe = localStorage.getItem('phulwari_admin_fees')
         if (savedFe) try { setFees(JSON.parse(savedFe)) } catch (e) {}
+      }
+
+      // 3b. Fetch Fee Heads — prefer Supabase, fall back to localStorage
+      try {
+        const { data: dbHeads } = await supabase.from('fee_heads').select('*')
+        if (dbHeads && dbHeads.length > 0) {
+          setFeeHeads(dbHeads)
+          localStorage.setItem('phulwari_fee_heads', JSON.stringify(dbHeads))
+        } else {
+          const savedHeads = localStorage.getItem('phulwari_fee_heads')
+          if (savedHeads) setFeeHeads(JSON.parse(savedHeads))
+        }
+      } catch (err) {
+        const savedHeads = localStorage.getItem('phulwari_fee_heads')
+        if (savedHeads) setFeeHeads(JSON.parse(savedHeads))
       }
 
       // 4. Teachers — prefer Supabase, fall back to localStorage
@@ -1395,6 +1420,66 @@ export default function AdminDashboardPage() {
         const enriched = {
           ...inserted,
           batch_name: selectedBatchObj?.batch_name || inserted.batch_name
+        }
+
+        // Insert initial fee items into fees table if payment items are present
+        if ((newStudentForm as any).payment_items && (newStudentForm as any).payment_items.length > 0) {
+          const rNo = `REC-2027-${Math.floor(10000 + Math.random() * 90000)}`
+          const collectedAmt = parseFloat((newStudentForm as any).amount_paid) || 0
+          let remainingPaidPool = collectedAmt
+
+          const feePromises = (newStudentForm as any).payment_items.map(async (item: any, idx: number) => {
+            const origAmt = Number(item.amount || 0)
+            const discAmt = Number(item.discount || 0)
+            const netAmt = Math.max(0, origAmt - discAmt)
+
+            let itemPaid = 0
+            let itemStatus: 'paid' | 'partial' | 'pending' = 'pending'
+
+            if (remainingPaidPool >= netAmt) {
+              itemPaid = netAmt
+              remainingPaidPool -= netAmt
+              itemStatus = 'paid'
+            } else if (remainingPaidPool > 0) {
+              itemPaid = remainingPaidPool
+              remainingPaidPool = 0
+              itemStatus = 'partial'
+            } else {
+              itemPaid = 0
+              itemStatus = 'pending'
+            }
+
+            const itemPending = Math.max(0, netAmt - itemPaid)
+            const titleText = item.fee_head === 'Other' && item.custom_head_name
+              ? item.custom_head_name
+              : item.fee_head === 'Monthly Fee'
+                ? `Monthly Fee (${item.month})`
+                : item.fee_head
+
+            const dbRow = {
+              id: `fee-${Date.now()}-${idx}-${Math.floor(Math.random() * 100)}`,
+              student_id: inserted.id,
+              title: titleText,
+              amount: origAmt,
+              discount_type: 'flat',
+              discount: discAmt,
+              net_amount: netAmt,
+              due_date: new Date().toISOString().split('T')[0],
+              status: itemStatus,
+              payment_method: itemPaid > 0 ? ((newStudentForm as any).payment_mode || 'Cash') : null,
+              paid_date: itemPaid > 0 ? new Date().toISOString().split('T')[0] : null,
+              receipt_no: rNo,
+              month: item.fee_head === 'Monthly Fee' ? item.month : null,
+              amount_paid: itemPaid,
+              pending_amount: itemPending
+            }
+
+            const supabaseClient = createClient()
+            await supabaseClient.from('fees').insert([dbRow])
+          })
+
+          await Promise.all(feePromises)
+          await loadAllAdminData() // refresh local fees state
         }
 
         // If Customized Batch is selected, insert schedules to student_custom_schedules table
@@ -3533,6 +3618,9 @@ Management Phulwari Mother and Child Activity Centre`
             setErpModalTab={setErpModalTab}
             handleSendWhatsAppFeeReminder={handleSendWhatsAppFeeReminder}
             batches={batches}
+            feeHeads={feeHeads}
+            setFeeHeads={setFeeHeads}
+            loadAllAdminData={loadAllAdminData}
           />
         )}
 
@@ -4065,6 +4153,7 @@ Management Phulwari Mother and Child Activity Centre`
         batchSchedules={batchSchedules}
         categories={categories}
         setCategories={setCategories}
+        feeHeads={feeHeads}
       />
       {selectedERPStudent && (
         <StudentErpModal
@@ -4098,6 +4187,8 @@ Management Phulwari Mother and Child Activity Centre`
           erpPasswordMsg={erpPasswordMsg}
           batchSchedules={batchSchedules}
           studentCustomSchedules={studentCustomSchedules}
+          feeHeads={feeHeads}
+          loadAllAdminData={loadAllAdminData}
         />
       )}
 
