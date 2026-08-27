@@ -145,7 +145,7 @@ export default function DashboardTab({
           <div className="flex items-center justify-between">
             <div>
               <h3 className={`text-base font-bold ${textPrimary}`}>Fee Collection Overview</h3>
-              <p className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 352400).toLocaleString()}</p>
+              <p suppressHydrationWarning className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 352400).toLocaleString()}</p>
               <span className="text-xs text-emerald-500 font-bold">↑ 20.1% from last month</span>
             </div>
             <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}>

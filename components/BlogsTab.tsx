@@ -43,6 +43,8 @@ export default function BlogsTab({
     meta_description: '',
     focus_keyword: ''
   });
+  const [thumbnailAspect, setThumbnailAspect] = useState('16:9');
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchBlogs();
@@ -441,29 +443,6 @@ export default function BlogsTab({
                   className={`w-full border rounded-xl px-3 py-2 outline-none mt-1 min-h-[60px] ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Featured Image URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://example.com/img.jpg"
-                    value={editingBlog ? editingBlog.featured_image : blogForm.featured_image}
-                    onChange={(e) => editingBlog ? setEditingBlog({ ...editingBlog, featured_image: e.target.value }) : setBlogForm({ ...blogForm, featured_image: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 outline-none mt-1 ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
-                  />
-                </div>
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Banner Image URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://example.com/banner.jpg"
-                    value={editingBlog ? editingBlog.banner_image : blogForm.banner_image}
-                    onChange={(e) => editingBlog ? setEditingBlog({ ...editingBlog, banner_image: e.target.value }) : setBlogForm({ ...blogForm, banner_image: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 outline-none mt-1 ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="space-y-3">
@@ -530,6 +509,125 @@ export default function BlogsTab({
                 />
                 <label htmlFor="featured-blog-check" className={`font-bold ${textPrimary} cursor-pointer`}>Mark as Featured Blog (Shows at top)</label>
               </div>
+            </div>
+          </div>
+
+          {/* ── BLOG COVER / THUMBNAIL IMAGE & ASPECT RATIO ── */}
+          <div className={`border rounded-2xl p-4 space-y-4 ${isLight ? 'border-orange-200 bg-orange-50/30' : 'border-orange-900/50 bg-orange-950/20'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">📷 BLOG COVER / THUMBNAIL IMAGE &amp; ASPECT RATIO</span>
+              <span className={`text-[10px] font-semibold ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>Choose thumbnail ratio &amp; preview live</span>
+            </div>
+
+            {/* Aspect Ratio Selector */}
+            <div>
+              <p className={`text-[10px] font-bold mb-2 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Select Display Aspect Ratio (अनुपात चुनें):</p>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                {[
+                  { label: '21:9 Widescreen Banner', val: '21:9', icon: '▬' },
+                  { label: '16:9 Banner',             val: '16:9', icon: '▬' },
+                  { label: '4:3 Card',                val: '4:3',  icon: '⬛' },
+                  { label: '1:1 Square',              val: '1:1',  icon: '⬛' },
+                  { label: '3:4 Portrait',            val: '3:4',  icon: '▮' },
+                  { label: '9:16 Vertical',           val: '9:16', icon: '▮' },
+                  { label: 'Original',                val: 'orig', icon: '⬜' },
+                ].map((opt) => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setThumbnailAspect(opt.val)}
+                    className={`flex items-center justify-center gap-1 px-2 py-2 rounded-xl border text-[10px] font-bold transition cursor-pointer ${
+                      thumbnailAspect === opt.val
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-md'
+                        : isLight
+                          ? 'bg-white border-orange-200 text-slate-600 hover:border-orange-400'
+                          : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-orange-500'
+                    }`}
+                  >
+                    <span>{opt.icon}</span>
+                    <span className="leading-tight text-center">{opt.label}{thumbnailAspect === opt.val ? ' ✓' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload File + URL */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Upload Thumbnail File (अपलोड फाइल):</label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-[11px] transition cursor-pointer">Choose file</span>
+                  <span className={`text-[10px] font-semibold truncate max-w-[160px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {thumbnailFile ? thumbnailFile.name : 'No file chosen'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setThumbnailFile(f);
+                      if (f) {
+                        const localUrl = URL.createObjectURL(f);
+                        if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: localUrl });
+                        else setBlogForm({ ...blogForm, featured_image: localUrl });
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Or Image URL (इमेज यूआरएल):</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/image.jpg"
+                  value={editingBlog ? editingBlog.featured_image : blogForm.featured_image}
+                  onChange={(e) => {
+                    setThumbnailFile(null);
+                    editingBlog ? setEditingBlog({ ...editingBlog, featured_image: e.target.value }) : setBlogForm({ ...blogForm, featured_image: e.target.value });
+                  }}
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-white border-orange-200 text-slate-900 focus:border-orange-400' : 'bg-slate-950 border-slate-700 text-slate-100 focus:border-orange-500'}`}
+                />
+              </div>
+            </div>
+
+            {/* Live Preview */}
+            {(thumbnailFile || (editingBlog ? editingBlog.featured_image : blogForm.featured_image)) && (
+              <div className="flex flex-col items-start gap-2">
+                <p className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Live Preview:</p>
+                <div
+                  className="overflow-hidden rounded-xl border-2 border-orange-300 shadow-md bg-slate-100"
+                  style={{
+                    width: '100%',
+                    maxWidth: '400px',
+                    aspectRatio:
+                      thumbnailAspect === '21:9' ? '21/9' :
+                      thumbnailAspect === '16:9' ? '16/9' :
+                      thumbnailAspect === '4:3'  ? '4/3'  :
+                      thumbnailAspect === '1:1'  ? '1/1'  :
+                      thumbnailAspect === '3:4'  ? '3/4'  :
+                      thumbnailAspect === '9:16' ? '9/16' : 'auto',
+                  }}
+                >
+                  <img
+                    src={thumbnailFile ? URL.createObjectURL(thumbnailFile) : (editingBlog ? editingBlog.featured_image : blogForm.featured_image)}
+                    alt="Thumbnail Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Banner image URL */}
+            <div>
+              <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Banner Image URL (Optional — for blog detail page hero)</label>
+              <input
+                type="text"
+                placeholder="https://example.com/banner.jpg"
+                value={editingBlog ? editingBlog.banner_image : blogForm.banner_image}
+                onChange={(e) => editingBlog ? setEditingBlog({ ...editingBlog, banner_image: e.target.value }) : setBlogForm({ ...blogForm, banner_image: e.target.value })}
+                className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
+              />
             </div>
           </div>
 

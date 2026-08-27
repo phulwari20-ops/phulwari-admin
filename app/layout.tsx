@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ApiLogger } from "@/components/ApiLogger";
-import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,13 +32,6 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <Script
-          id="theme-initializer"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('phulwari_admin_theme');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}}catch(e){}})();`,
-          }}
-        />
         <ApiLogger />
         {children}
       </body>

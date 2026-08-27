@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus, ArrowRight, CalendarDays } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
@@ -117,31 +117,68 @@ export default function StudentErpModal({
   const [calMonth, setCalMonth] = useState(new Date().getMonth())
   const [calYear, setCalYear] = useState(new Date().getFullYear())
 
-  // Multi-item transaction builder states
-  const [transactionItems, setTransactionItems] = useState<Array<{
-    id: string
-    fee_head: string
-    month: string
-    custom_head_name: string
-    amount: number
-    discount: number
-    transaction_id?: string
-    collection_time?: string
-    remarks?: string
-  }>>([
-    { id: '1', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: 3500, discount: 0 }
-  ])
-  const [paymentMode, setPaymentMode] = useState('UPI / Online')
-  const [amountCollected, setAmountCollected] = useState('')
+  // ─── Image Upload State ───────────────────────────────────────────────────
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // ─── Fee Row State ────────────────────────────────────────────────────────
+  interface FeeRow {
+    id: string; fee_head: string; custom_head_name: string; collected_for: string
+    total_fee: number; discount: number; paid_amount: number; collection_date: string
+    mode_of_payment: string; transaction_id: string
+    due_amount: number; status: 'paid' | 'partial' | 'due'
+  }
+
+  const computeRow = (r: Omit<FeeRow,'due_amount'|'status'>): FeeRow => {
+    const due = Math.max(0, r.total_fee - r.discount - r.paid_amount)
+    return { ...r, due_amount: due, status: due === 0 ? 'paid' : r.paid_amount > 0 ? 'partial' : 'due' }
+  }
+
+  const buildInitialRows = useCallback((): FeeRow[] => {
+    const systemHeads = [
+      { name: 'Registration Fee', default_amount: 1000 },
+      { name: 'Monthly Fee',      default_amount: 3500 },
+    ]
+    const extra = (feeHeads || []).filter(h => !['Registration Fee','Monthly Fee'].includes(h.name))
+    const all = [...systemHeads, ...extra]
+    return all.map((h, i) => {
+      const isMonthly = h.name === 'Monthly Fee'
+      const batchObj = allAvailableBatches?.find(b => b.id === student?.batch_id)
+      const defaultAmt = isMonthly && batchObj?.fee_amount ? Number(batchObj.fee_amount) : Number(h.default_amount || 0)
+      return computeRow({
+        id: `row-init-${i}`, fee_head: h.name, custom_head_name: '', 
+        collected_for: isMonthly ? 'January 2027' : 'One Time',
+        total_fee: defaultAmt, discount: 0, paid_amount: 0, 
+        collection_date: new Date().toISOString().split('T')[0],
+        mode_of_payment: '', transaction_id: ''
+      })
+    })
+  }, [feeHeads, allAvailableBatches, student?.batch_id])
+
+  const [feeRows, setFeeRows] = useState<FeeRow[]>([])
+  const [collectionType, setCollectionType] = useState('Multiple Fee Collection')
+  const [collectionDate, setCollectionDate] = useState(new Date().toISOString().split('T')[0])
+  const [planValidityEnd, setPlanValidityEnd] = useState('')
+  const [globalPaymentMode, setGlobalPaymentMode] = useState('Cash')
+  const [globalTransactionId, setGlobalTransactionId] = useState('')
+  const [globalRemarks, setGlobalRemarks] = useState('')
   const [receiptNo, setReceiptNo] = useState('')
   const [loadingSubmit, setLoadingSubmit] = useState(false)
+  const [expandedFeeHead, setExpandedFeeHead] = useState<string | null>(null)
 
-  // Initialize and update form fields on open
+  // legacy - keep for batch compatibility
+  const [paymentMode, setPaymentMode] = useState('UPI / Online')
+  const [amountCollected, setAmountCollected] = useState('')
+
+  // ─── Initialize on open ───────────────────────────────────────────────────
   useEffect(() => {
     if (student && isOpen) {
       const studentCustSchedules = (studentCustomSchedules || []).filter(sch => sch.student_id === student.id);
       setEditForm({
         full_name: student.full_name || '',
+        print_date: student.print_date || new Date().toISOString().split('T')[0],
+        plan_start_date: student.plan_start_date || '',
         parent_phone: student.parent_phone || '',
         parent_alt_phone: student.parent_alt_phone || '',
         parent_email: student.parent_email || '',
@@ -162,216 +199,185 @@ export default function StudentErpModal({
         has_medical_condition: student.has_medical_condition || false,
         medical_condition_details: student.medical_condition_details || '',
         regular_medication: student.regular_medication || '',
+        hospital_preference: student.hospital_preference || '',
         doctor_name: student.doctor_name || '',
         doctor_phone: student.doctor_phone || '',
-        hospital_preference: student.hospital_preference || '',
-        consent_accepted: student.consent_accepted || false,
-        status: student.status || 'active',
-        category: student.category || 'Child Activity',
-        batch_id: student.batch_id || '',
-        classes_total: student.classes_total || 12,
-        classes_consumed: student.classes_consumed || 0,
-        admission_date: student.admission_date || '',
+        classes_total: student.classes_total !== undefined ? student.classes_total : 12,
+        classes_consumed: student.classes_consumed !== undefined ? student.classes_consumed : 0,
         validity_end_date: student.validity_end_date || '',
-        custom_days: student.custom_days || '',
         password: student.password || '',
         custom_schedules: studentCustSchedules
       })
       setDobInput(formatDateToDisplay(student.dob || ''));
-      
-      const batchObj = allAvailableBatches.find(b => b.id === student.batch_id);
+      setPhotoPreview(student.photo_url || null)
+      const batchObj = allAvailableBatches?.find(b => b.id === student.batch_id);
       const defaultAmount = student.total_fee ? Number(student.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500);
-
-      // Default receipt number
-      setReceiptNo(`REC-2027-${Math.floor(10000 + Math.random() * 90000)}`)
+      setReceiptNo(`RCPt26-27/${Math.floor(10000 + Math.random() * 90000).toString().padStart(5,'0')}`)
       setPaymentMode(student.payment_mode || 'UPI / Online')
-      
-      // Default to one Monthly Fee item with tracking fields
-      setTransactionItems([
-        { id: '1', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: defaultAmount, discount: 0, transaction_id: '', collection_time: new Date().toISOString().slice(0, 16), remarks: '' }
-      ])
+      setFeeRows(buildInitialRows())
       setAmountCollected(String(defaultAmount))
+      setGlobalPaymentMode('Cash')
+      setGlobalTransactionId('')
+      setGlobalRemarks('')
     }
   }, [student?.id, isOpen])
+
+  // ─── Fee Row Calculations ─────────────────────────────────────────────────
+  const feeCalc = useMemo(() => {
+    const totalFee      = feeRows.reduce((s, r) => s + r.total_fee, 0)
+    const totalDiscount = feeRows.reduce((s, r) => s + r.discount, 0)
+    const totalPaid     = feeRows.reduce((s, r) => s + r.paid_amount, 0)
+    const totalDue      = feeRows.reduce((s, r) => s + r.due_amount, 0)
+    return { totalFee, totalDiscount, totalPaid, totalDue }
+  }, [feeRows])
+
+  // keep legacy calc for other tabs
+  const calculatedTotals = useMemo(() => {
+    const studentFees = fees.filter(f => f.student_id === student?.id || f.students?.admission_id === student?.admission_id)
+    const original = studentFees.reduce((s, f) => s + Number(f.amount || 0), 0)
+    const net = studentFees.reduce((s, f) => s + Number(f.net_amount || f.amount || 0), 0)
+    return { original, net }
+  }, [fees, student?.id])
+
+  // ─── Amount in Words helper ───────────────────────────────────────────────
+  const amountToWords = (n: number): string => {
+    if (n === 0) return 'Zero Rupees Only'
+    const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen']
+    const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']
+    const toWords = (num: number): string => {
+      if (num < 20) return ones[num]
+      if (num < 100) return tens[Math.floor(num/10)] + (num%10 ? ' '+ones[num%10] : '')
+      if (num < 1000) return ones[Math.floor(num/100)] + ' Hundred' + (num%100 ? ' '+toWords(num%100) : '')
+      if (num < 100000) return toWords(Math.floor(num/1000)) + ' Thousand' + (num%1000 ? ' '+toWords(num%1000) : '')
+      return toWords(Math.floor(num/100000)) + ' Lakh' + (num%100000 ? ' '+toWords(num%100000) : '')
+    }
+    return toWords(n) + ' Rupees Only'
+  }
+
+  // ─── Fee Row Handlers ─────────────────────────────────────────────────────
+  const updateFeeRow = (id: string, field: keyof FeeRow, val: any) => {
+    setFeeRows(prev => prev.map(r => r.id !== id ? r : computeRow({ ...r, [field]: val })))
+  }
+
+  const addFeeRow = () => {
+    setFeeRows(prev => [...prev, computeRow({
+      id: `row-${Date.now()}`, fee_head: 'Other', custom_head_name: '', collected_for: 'One Time',
+      total_fee: 0, discount: 0, paid_amount: 0,
+      collection_date: new Date().toISOString().split('T')[0],
+      mode_of_payment: '', transaction_id: ''
+    })])
+  }
+
+  const removeFeeRow = (id: string) => {
+    setFeeRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev)
+  }
+
+  // ─── Photo Upload (any format → WebP) ─────────────────────────────────────
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const img = new window.Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width; canvas.height = img.height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      const previewUrl = canvas.toDataURL('image/webp', 0.85)
+      setPhotoPreview(previewUrl)
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        setPhotoUploading(true)
+        try {
+          const supabase = createClient()
+          const fileName = `student-${student.id}-${Date.now()}.webp`
+          const { error: upErr } = await supabase.storage.from('student-photos')
+            .upload(fileName, blob, { contentType: 'image/webp', upsert: true })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('student-photos').getPublicUrl(fileName)
+            await supabase.from('students').update({ photo_url: urlData.publicUrl }).eq('id', student.id)
+            await loadAllAdminData()
+          }
+        } catch(err) { console.error('Photo upload failed', err) }
+        setPhotoUploading(false)
+      }, 'image/webp', 0.85)
+      URL.revokeObjectURL(objectUrl)
+    }
+    img.src = objectUrl
+  }
+
+  // ─── Fee Submit ───────────────────────────────────────────────────────────
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoadingSubmit(true)
+    const supabase = createClient()
+    const rNo = receiptNo.trim() || `RCPt26-27/${Math.floor(10000+Math.random()*90000).toString().padStart(5,'0')}`
+    const today = collectionDate || new Date().toISOString().split('T')[0]
+
+    for (let i = 0; i < feeRows.length; i++) {
+      const row = feeRows[i]
+      if (row.paid_amount === 0 && row.due_amount === 0) continue // skip empty
+      const titleText = row.fee_head === 'Other' && row.custom_head_name 
+        ? row.custom_head_name 
+        : row.fee_head === 'Monthly Fee' 
+          ? `Monthly Fee (${row.collected_for})`
+          : row.fee_head
+      const dbRow = {
+        id: `fee-${Date.now()}-${i}-${Math.floor(Math.random()*1000)}`,
+        student_id: student.id,
+        title: titleText,
+        fee_head: row.fee_head === 'Other' ? (row.custom_head_name || 'Other') : row.fee_head,
+        collected_for: row.collected_for,
+        amount: row.total_fee,
+        discount_type: 'flat',
+        discount: row.discount,
+        net_amount: Math.max(0, row.total_fee - row.discount),
+        due_date: today,
+        collection_date: today,
+        status: row.status === 'due' ? 'pending' : row.status,
+        payment_method: row.paid_amount > 0 ? (row.mode_of_payment || globalPaymentMode) : null,
+        mode_of_payment: row.mode_of_payment || globalPaymentMode,
+        paid_date: row.paid_amount > 0 ? today : null,
+        receipt_no: rNo,
+        month: row.fee_head === 'Monthly Fee' ? row.collected_for : null,
+        amount_paid: row.paid_amount,
+        pending_amount: row.due_amount,
+        transaction_id: row.transaction_id || globalTransactionId || null,
+        collection_time: new Date().toISOString(),
+        remarks: globalRemarks || null,
+        plan_validity_end: planValidityEnd || null,
+        collection_type: collectionType
+      }
+      try {
+        const { error } = await supabase.from('fees').insert([dbRow])
+        if (error) console.error('Fee insert error:', error)
+      } catch(err) { console.error('Fee save failed:', err) }
+    }
+
+    // Update student summary
+    try {
+      await supabase.from('students').update({
+        amount_paid: feeCalc.totalPaid,
+        total_fee: feeCalc.totalFee,
+        payment_mode: globalPaymentMode,
+        payment_for: feeRows.map(r => r.fee_head).join(', ')
+      }).eq('id', student.id)
+    } catch(_) {}
+
+    alert(`✅ Fee saved! Receipt: ${rNo}`)
+    await loadAllAdminData()
+    setLoadingSubmit(false)
+    setErpModalTab('fee_history')
+  }
+
+
+
 
   const additionalBatches: any[] = Array.isArray(student?.additional_batches)
     ? student.additional_batches
     : (() => { try { return JSON.parse(student?.additional_batches || '[]') } catch { return [] } })()
 
-  // Auto calculate transaction sums
-  const calculatedTotals = useMemo(() => {
-    let totalOrig = 0
-    let totalNet = 0
-    transactionItems.forEach(item => {
-      totalOrig += Number(item.amount || 0)
-      const net = Math.max(0, Number(item.amount || 0) - Number(item.discount || 0))
-      totalNet += net
-    })
-    return {
-      original: totalOrig,
-      net: totalNet
-    }
-  }, [transactionItems])
 
-  if (!isOpen || !student) return null
-
-  const inputCls = `w-full border rounded-xl px-3 py-2 font-semibold outline-none text-xs ${
-    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
-  }`
-
-  // Handlers for adding/removing items in transaction builder
-  const handleAddTransactionItem = () => {
-    setTransactionItems(prev => [
-      ...prev,
-      {
-        id: String(Date.now() + Math.random()),
-        fee_head: 'Other',
-        month: '',
-        custom_head_name: '',
-        amount: 500,
-        discount: 0,
-        transaction_id: '',
-        collection_time: new Date().toISOString().slice(0, 16),
-        remarks: ''
-      }
-    ])
-  }
-
-  const handleRemoveTransactionItem = (id: string) => {
-    if (transactionItems.length === 1) return
-    setTransactionItems(prev => prev.filter(item => item.id !== id))
-  }
-
-  const handleItemFieldChange = (id: string, field: string, val: any) => {
-    setTransactionItems(prev => prev.map(item => {
-      if (item.id !== id) return item
-      const updated = { ...item, [field]: val }
-
-      // If head changes, update default amount from configured feeHeads
-      if (field === 'fee_head') {
-        if (val === 'Monthly Fee') {
-          const batchObj = allAvailableBatches.find(b => b.id === student.batch_id);
-          updated.amount = batchObj ? Number(batchObj.fee_amount) : 3500
-          updated.month = 'January 2027'
-        } else if (val === 'Registration Fee') {
-          updated.amount = 1000
-          updated.month = ''
-        } else {
-          const matchedHead = feeHeads.find(h => h.name === val)
-          updated.amount = matchedHead ? Number(matchedHead.default_amount) : 500
-          updated.month = ''
-        }
-      }
-      return updated
-    }))
-  }
-
-  // Duplicate Check & Transaction Submission
-  const handleTransactionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoadingSubmit(true)
-
-    // 1. Validate Duplicate Monthly Payments
-    for (const item of transactionItems) {
-      if (item.fee_head === 'Monthly Fee') {
-        const alreadyPaid = fees.some(f => 
-          (f.student_id === student.id || f.students?.admission_id === student.admission_id) &&
-          f.month === item.month &&
-          f.status === 'paid'
-        )
-        if (alreadyPaid) {
-          alert(`⚠️ Warning: Selected month (${item.month}) fee already paid for this student!`)
-          setLoadingSubmit(false)
-          return
-        }
-      }
-    }
-
-    // 2. Build insertion payload for each item
-    const collectedAmt = parseFloat(amountCollected) || 0
-    let remainingPaidPool = collectedAmt
-    const finalInsertedItems: any[] = []
-
-    const supabase = createClient()
-    const rNo = receiptNo.trim() || `REC-2027-${Math.floor(10000 + Math.random() * 90000)}`
-
-    for (let i = 0; i < transactionItems.length; i++) {
-      const item = transactionItems[i]
-      const origAmt = Number(item.amount || 0)
-      const discAmt = Number(item.discount || 0)
-      const netAmt = Math.max(0, origAmt - discAmt)
-
-      // Allocate payment pool sequentially
-      let itemPaid = 0
-      let itemStatus: 'paid' | 'partial' | 'pending' = 'pending'
-
-      if (remainingPaidPool >= netAmt) {
-        itemPaid = netAmt
-        remainingPaidPool -= netAmt
-        itemStatus = 'paid'
-      } else if (remainingPaidPool > 0) {
-        itemPaid = remainingPaidPool
-        remainingPaidPool = 0
-        itemStatus = 'partial'
-      } else {
-        itemPaid = 0
-        itemStatus = 'pending'
-      }
-
-      const itemPending = Math.max(0, netAmt - itemPaid)
-      const titleText = item.fee_head === 'Other' && item.custom_head_name
-        ? item.custom_head_name
-        : item.fee_head === 'Monthly Fee'
-          ? `Monthly Fee (${item.month})`
-          : item.fee_head
-
-      const dbRow = {
-        id: `fee-${Date.now()}-${i}-${Math.floor(Math.random() * 100)}`,
-        student_id: student.id,
-        title: titleText,
-        amount: origAmt,
-        discount_type: 'flat',
-        discount: discAmt,
-        net_amount: netAmt,
-        due_date: new Date().toISOString().split('T')[0],
-        status: itemStatus,
-        payment_method: itemPaid > 0 ? paymentMode : null,
-        paid_date: itemPaid > 0 ? new Date().toISOString().split('T')[0] : null,
-        receipt_no: rNo,
-        month: item.fee_head === 'Monthly Fee' ? item.month : null,
-        amount_paid: itemPaid,
-        pending_amount: itemPending,
-        transaction_id: item.transaction_id || null,
-        collection_time: item.collection_time || new Date().toISOString(),
-        remarks: item.remarks || null
-      }
-
-      try {
-        const { error } = await supabase.from('fees').insert([dbRow])
-        if (error) throw error
-        finalInsertedItems.push(dbRow)
-      } catch (err: any) {
-        console.error('Failed to save fee row:', err)
-      }
-    }
-
-    // 3. Update parent/student table defaults for receipt display
-    try {
-      const totalFee = calculatedTotals.net
-      await supabase.from('students').update({
-        amount_paid: collectedAmt,
-        total_fee: totalFee,
-        payment_mode: paymentMode,
-        payment_for: transactionItems.map(item => item.fee_head).join(', ')
-      }).eq('id', student.id)
-    } catch (_) {}
-
-    // Reload layout and close or print
-    alert('✅ Transaction submitted successfully!')
-    await loadAllAdminData()
-    setLoadingSubmit(false)
-    setErpModalTab('fee_history')
-  }
 
   // Unified Print Receipt function
   const handlePrintTransactionReceipt = (matchReceiptNo: string) => {
@@ -517,9 +523,15 @@ export default function StudentErpModal({
     }
   }
 
+  if (!isOpen || !student) return null
+
+  const inputCls = `w-full border rounded-xl px-3 py-2 font-semibold outline-none text-xs ${
+    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+  }`
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto relative`}>
+      <div className={`${bgCard} rounded-3xl p-6 max-w-5xl w-full space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto relative`}>
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -603,213 +615,324 @@ export default function StudentErpModal({
         {/* ── TAB: COLLECT FEE (ITEMIZED TRANSACTION BUILDER) ── */}
         {erpModalTab === 'collect_fee' && (
           <form onSubmit={handleTransactionSubmit} className="space-y-4 text-xs">
-            <div className={`p-3 rounded-xl border flex items-center justify-between ${tipBannerBg}`}>
-              <span>💸 Record payments for dynamic fee heads. Click <strong>+ Add Item</strong> to combine multiple heads.</span>
-              <button
-                type="button"
-                onClick={handleAddTransactionItem}
-                className="px-2.5 py-1 bg-blue-600 text-white font-extrabold rounded-lg hover:bg-blue-700 transition flex items-center gap-1 shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Item
+
+            {/* ── Section Header ── */}
+            <div className="flex items-center justify-between">
+              <h4 className="font-black text-[11px] uppercase tracking-wider text-emerald-600">5. Payment Details &amp; Initial Fee Collection</h4>
+              <button type="button" onClick={addFeeRow}
+                className="px-2.5 py-1 bg-emerald-600 text-white font-extrabold rounded-lg hover:bg-emerald-700 transition flex items-center gap-1 text-[10px]">
+                <Plus className="w-3 h-3" /> ADD FEE HEAD
               </button>
             </div>
 
-            {/* List of items */}
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-              {transactionItems.map((item, index) => (
-                <div key={item.id} className={`p-4 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'} space-y-3`}>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-[10px] font-black uppercase text-blue-600`}>Item #{index + 1}</span>
-                    {transactionItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTransactionItem(item.id)}
-                        className="text-rose-500 hover:text-rose-700 font-extrabold text-[10px] uppercase"
-                      >
-                        ✕ Remove
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div>
-                      <label className={`block font-bold mb-1 ${textSecondary}`}>Fee Head</label>
-                      <select
-                        value={item.fee_head}
-                        onChange={e => handleItemFieldChange(item.id, 'fee_head', e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="Monthly Fee">Monthly Fee</option>
-                        <option value="Registration Fee">Registration Fee</option>
-                        {feeHeads.filter(h => !h.is_system).map(h => (
-                          <option key={h.id} value={h.name}>{h.name}</option>
-                        ))}
-                        <option value="Other">Other Custom Fee</option>
-                      </select>
-                    </div>
-
-                    {item.fee_head === 'Monthly Fee' && (
-                      <div>
-                        <label className={`block font-bold mb-1 ${textSecondary}`}>Select Month</label>
-                        <select
-                          value={item.month}
-                          onChange={e => handleItemFieldChange(item.id, 'month', e.target.value)}
-                          className={inputCls}
-                        >
-                          {MONTHS_LIST.map(m => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {item.fee_head === 'Other' && (
-                      <div>
-                        <label className={`block font-bold mb-1 ${textSecondary}`}>Fee Name</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Activity Fee"
-                          value={item.custom_head_name}
-                          onChange={e => handleItemFieldChange(item.id, 'custom_head_name', e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className={`block font-bold mb-1 ${textSecondary}`}>Amount (₹)</label>
-                      <input
-                        type="number"
-                        required
-                        value={item.amount}
-                        onChange={e => handleItemFieldChange(item.id, 'amount', parseFloat(e.target.value) || 0)}
-                        className={inputCls}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-amber-600 mb-1">Discount (₹)</label>
-                      <input
-                        type="number"
-                        value={item.discount}
-                        onChange={e => handleItemFieldChange(item.id, 'discount', parseFloat(e.target.value) || 0)}
-                        className={inputCls}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Dynamic tracking fields per Fee Head */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-slate-200/50 dark:border-slate-800/50 pt-3 mt-1">
-                    <div>
-                      <label className={`block font-bold mb-1 ${textSecondary}`}>Transaction / Ref ID (Online/UPI)</label>
-                      <input
-                        type="text"
-                        placeholder="UPI Ref, Txn ID, etc."
-                        value={item.transaction_id || ''}
-                        onChange={e => handleItemFieldChange(item.id, 'transaction_id', e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block font-bold mb-1 ${textSecondary}`}>Collection Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        value={item.collection_time || ''}
-                        onChange={e => handleItemFieldChange(item.id, 'collection_time', e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block font-bold mb-1 ${textSecondary}`}>Remarks / Notes</label>
-                      <input
-                        type="text"
-                        placeholder="Remarks for this head"
-                        value={item.remarks || ''}
-                        onChange={e => handleItemFieldChange(item.id, 'remarks', e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Transaction Settings */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-500/5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+            {/* ── Top Controls Row ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className={`block font-bold mb-1 ${textSecondary}`}>Payment Mode</label>
-                <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className={inputCls}>
-                  <option value="UPI / Online">UPI / Online</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Credit / Debit Card">Credit / Debit Card</option>
-                  <option value="NetBanking">NetBanking</option>
+                <label className={`block font-bold mb-1 ${textSecondary}`}>Select Collection Type</label>
+                <select value={collectionType} onChange={e => setCollectionType(e.target.value)} className={inputCls}>
+                  <option>Multiple Fee Collection</option>
+                  <option>Single Fee Collection</option>
                 </select>
               </div>
-
+              <div>
+                <label className={`block font-bold mb-1 ${textSecondary}`}>Collection Date</label>
+                <input type="date" value={collectionDate} onChange={e => setCollectionDate(e.target.value)} className={inputCls} />
+              </div>
               <div>
                 <label className={`block font-bold mb-1 ${textSecondary}`}>Receipt No.</label>
-                <input
-                  type="text"
-                  required
-                  value={receiptNo}
-                  onChange={e => setReceiptNo(e.target.value)}
-                  className={inputCls}
-                />
+                <input type="text" value={receiptNo} onChange={e => setReceiptNo(e.target.value)} className={inputCls} />
               </div>
-
               <div>
-                <label className="block font-bold text-emerald-600 mb-1">Total Amount Collected (₹)</label>
-                <input
-                  type="number"
-                  required
-                  value={amountCollected}
-                  onChange={e => setAmountCollected(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 font-mono font-extrabold text-xs bg-emerald-50 border-emerald-300 text-emerald-800 focus:outline-none"
-                />
+                <label className={`block font-bold mb-1 ${textSecondary}`}>Student Batch</label>
+                <input type="text" readOnly
+                  value={allAvailableBatches?.find(b => b.id === student.batch_id)?.name || student.class_name || 'General'}
+                  className={`${inputCls} opacity-70 cursor-not-allowed`} />
               </div>
             </div>
 
-            {/* Calculations Summary */}
-            <div className="p-4 rounded-2xl border border-emerald-200/40 bg-emerald-500/5 grid grid-cols-4 gap-3 text-center">
-              <div>
-                <div className="text-[9px] font-bold text-slate-500">ORIGINAL TOTAL</div>
-                <div className="text-xs font-black font-mono text-slate-800 dark:text-slate-200">₹{calculatedTotals.original.toLocaleString('en-IN')}</div>
+            {/* ── Fee Head Wise Collection Details Table ── */}
+            <div>
+              <p className="font-black text-[10px] uppercase tracking-wider mb-2 text-blue-600">Fee Head Wise Collection Details</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                <table className="w-full text-[10px] border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="bg-emerald-600 text-white">
+                      {['Fee Head','Collected For (Month/Year)','Total Fee (₹)','Discount (₹)','Collected/Paid Amount (₹)','Collection Date','Remaining/Due Amount (₹)','Status','Mode of Payment','Payment Reference / Transaction ID',''].map((h,i) => (
+                        <th key={i} className="px-2 py-2 text-left font-bold whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feeRows.map((row, idx) => (
+                      <tr key={row.id} className={`border-b border-slate-100 dark:border-slate-800 ${idx%2===0?(isLight?'bg-white':'bg-slate-950'):(isLight?'bg-slate-50':'bg-slate-900')}`}>
+                        {/* Fee Head */}
+                        <td className="px-2 py-1.5">
+                          {row.fee_head === 'Other'
+                            ? <input type="text" placeholder="Custom fee name" value={row.custom_head_name}
+                                onChange={e => updateFeeRow(row.id,'custom_head_name',e.target.value)}
+                                className={`${inputCls} w-28`} />
+                            : <div className="flex flex-col gap-0.5">
+                                <span className="font-bold">{row.fee_head}</span>
+                                {row.fee_head !== 'Other' && (
+                                  <select value={row.fee_head} onChange={e => {
+                                    const h = feeHeads.find((f:any)=>f.name===e.target.value)
+                                    updateFeeRow(row.id,'fee_head',e.target.value)
+                                    if(h) updateFeeRow(row.id,'total_fee',Number(h.default_amount||0))
+                                  }} className={`${inputCls} text-[9px] py-0.5`}>
+                                    <option value="Registration Fee">Registration Fee</option>
+                                    <option value="Monthly Fee">Monthly Fee</option>
+                                    {(feeHeads||[]).filter((h:any)=>!['Registration Fee','Monthly Fee'].includes(h.name)).map((h:any)=>(
+                                      <option key={h.id} value={h.name}>{h.name}</option>
+                                    ))}
+                                    <option value="Other">Other (Custom)</option>
+                                  </select>
+                                )}
+                              </div>
+                          }
+                        </td>
+                        {/* Collected For */}
+                        <td className="px-2 py-1.5">
+                          {row.fee_head === 'Monthly Fee'
+                            ? <select value={row.collected_for} onChange={e=>updateFeeRow(row.id,'collected_for',e.target.value)} className={`${inputCls} w-28`}>
+                                {MONTHS_LIST.map(m=><option key={m}>{m}</option>)}
+                              </select>
+                            : <span className="text-slate-500 font-semibold">One Time</span>
+                          }
+                        </td>
+                        {/* Total Fee */}
+                        <td className="px-2 py-1.5">
+                          <input type="number" value={row.total_fee} min={0}
+                            onChange={e=>updateFeeRow(row.id,'total_fee',parseFloat(e.target.value)||0)}
+                            className={`${inputCls} w-28 text-right font-mono`} />
+                        </td>
+                        {/* Discount */}
+                        <td className="px-2 py-1.5">
+                          <input type="number" value={row.discount} min={0}
+                            onChange={e=>updateFeeRow(row.id,'discount',parseFloat(e.target.value)||0)}
+                            className={`${inputCls} w-24 text-right font-mono text-amber-600`} />
+                        </td>
+                        {/* Paid Amount */}
+                        <td className="px-2 py-1.5">
+                          <input type="number" value={row.paid_amount} min={0} max={row.total_fee-row.discount}
+                            onChange={e=>updateFeeRow(row.id,'paid_amount',parseFloat(e.target.value)||0)}
+                            className={`${inputCls} w-28 text-right font-mono font-extrabold text-emerald-700`} />
+                        </td>
+                        {/* Collection Date */}
+                        <td className="px-2 py-1.5">
+                          <input type="date" value={row.collection_date}
+                            onChange={e=>updateFeeRow(row.id,'collection_date',e.target.value)}
+                            className={`${inputCls} w-28`} />
+                        </td>
+                        {/* Due Amount - read only, auto calculated */}
+                        <td className="px-2 py-1.5 text-right font-mono font-extrabold">
+                          <span className={row.due_amount>0?'text-rose-600':'text-emerald-600'}>
+                            {row.due_amount.toLocaleString('en-IN')}
+                          </span>
+                        </td>
+                        {/* Status Badge */}
+                        <td className="px-2 py-1.5">
+                          {row.status==='paid' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-extrabold text-[9px]">Paid</span>}
+                          {row.status==='partial' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-extrabold text-[9px]">Partial</span>}
+                          {row.status==='due' && <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded font-extrabold text-[9px]">Due</span>}
+                        </td>
+                        {/* Mode of Payment */}
+                        <td className="px-2 py-1.5">
+                          <select value={row.mode_of_payment} onChange={e=>updateFeeRow(row.id,'mode_of_payment',e.target.value)} className={`${inputCls} w-24`}>
+                            <option value="">Select</option>
+                            <option>Cash</option><option>UPI</option>
+                            <option>Bank Transfer</option><option>Card</option><option>Other</option>
+                          </select>
+                        </td>
+                        {/* Transaction ID */}
+                        <td className="px-2 py-1.5">
+                          <input type="text" value={row.transaction_id} placeholder={row.mode_of_payment==='Cash'?'NA':'Enter reference id'}
+                            onChange={e=>updateFeeRow(row.id,'transaction_id',e.target.value)}
+                            className={`${inputCls} w-28`} />
+                        </td>
+                        {/* Delete */}
+                        <td className="px-2 py-1.5">
+                          <button type="button" onClick={()=>removeFeeRow(row.id)} className="text-rose-500 hover:text-rose-700 p-1 rounded transition">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <div className="text-[9px] font-bold text-amber-600">DISCOUNT TOTAL</div>
-                <div className="text-xs font-black font-mono text-amber-700 dark:text-amber-400">₹{(calculatedTotals.original - calculatedTotals.net).toLocaleString('en-IN')}</div>
+              <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                <button type="button" onClick={addFeeRow}
+                  className="text-emerald-600 font-bold text-[10px] hover:underline flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Add Another Fee Head
+                </button>
+                <p className="text-[9px] text-slate-400 font-semibold">
+                  Note: Remaining/Due Amount = Total Fee − Discount − Collected Amount &nbsp;
+                  <span className="text-emerald-600">● Paid</span> &nbsp;
+                  <span className="text-amber-600">● Partial</span> &nbsp;
+                  <span className="text-rose-600">● Due</span>
+                </p>
               </div>
-              <div>
-                <div className="text-[9px] font-bold text-emerald-600">NET DUE</div>
-                <div className="text-xs font-black font-mono text-emerald-700 dark:text-emerald-400">₹{calculatedTotals.net.toLocaleString('en-IN')}</div>
+            </div>
+
+            {/* ── Payment Summary ── */}
+            <div className={`rounded-2xl border p-4 ${isLight?'bg-slate-50 border-slate-200':'bg-slate-900 border-slate-800'}`}>
+              <p className="font-black text-[10px] uppercase tracking-wider mb-3 text-slate-500">Payment Summary</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                <div className={`p-3 rounded-xl border ${isLight?'bg-white border-slate-200':'bg-slate-950 border-slate-700'}`}>
+                  <div className="text-[9px] font-bold text-slate-500 mb-1">Total Fee Amount (₹)</div>
+                  <div className="text-base font-extrabold font-mono text-slate-800 dark:text-slate-100">{feeCalc.totalFee.toLocaleString('en-IN')}</div>
+                </div>
+                <div className={`p-3 rounded-xl border ${isLight?'bg-amber-50 border-amber-200':'bg-amber-950/30 border-amber-900'}`}>
+                  <div className="text-[9px] font-bold text-amber-600 mb-1">Total Discount Amount (₹)</div>
+                  <div className="text-base font-extrabold font-mono text-amber-700 dark:text-amber-400">{feeCalc.totalDiscount.toLocaleString('en-IN')}</div>
+                </div>
+                <div className={`p-3 rounded-xl border ${isLight?'bg-emerald-50 border-emerald-200':'bg-emerald-950/30 border-emerald-900'}`}>
+                  <div className="text-[9px] font-bold text-emerald-600 mb-1">Total Fee Collected / Paid (₹)</div>
+                  <div className="text-base font-extrabold font-mono text-emerald-700 dark:text-emerald-400">{feeCalc.totalPaid.toLocaleString('en-IN')}</div>
+                </div>
+                <div className={`p-3 rounded-xl border ${isLight?'bg-rose-50 border-rose-200':'bg-rose-950/30 border-rose-900'}`}>
+                  <div className="text-[9px] font-bold text-rose-600 mb-1">Total Fee Pending / Due (₹)</div>
+                  <div className="text-base font-extrabold font-mono text-rose-700 dark:text-rose-400">{feeCalc.totalDue.toLocaleString('en-IN')}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-[9px] font-bold text-rose-600">PENDING BALANCE</div>
-                <div className="text-xs font-black font-mono text-rose-700 dark:text-rose-400">
-                  ₹{Math.max(0, calculatedTotals.net - (parseFloat(amountCollected) || 0)).toLocaleString('en-IN')}
+              <p className="text-[10px] text-slate-500 font-semibold mt-2 text-center">
+                Amount in Words: <strong className={textPrimary}>{amountToWords(feeCalc.totalPaid)}</strong>
+              </p>
+            </div>
+
+            {/* ── Payment Details ── */}
+            <div className={`rounded-2xl border p-4 space-y-3 ${isLight?'bg-slate-50 border-slate-200':'bg-slate-900 border-slate-800'}`}>
+              <p className="font-black text-[10px] uppercase tracking-wider text-slate-500">Payment Details</p>
+              <div className="flex flex-wrap gap-4">
+                <label className="font-bold text-[10px] text-slate-600 mb-1 block">Mode of Payment *</label>
+                <div className="flex flex-wrap gap-3">
+                  {['Cash','UPI','Bank Transfer','Cheque','Other'].map(m=>(
+                    <label key={m} className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold">
+                      <input type="radio" name="globalMode" value={m} checked={globalPaymentMode===m}
+                        onChange={()=>setGlobalPaymentMode(m)} className="accent-emerald-600" />
+                      {m}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-emerald-600 mb-1">Net Amount Paid (₹)</label>
+                  <input type="number" readOnly value={feeCalc.totalPaid}
+                    className="w-full border rounded-xl px-3 py-2 font-mono font-extrabold text-xs bg-emerald-50 border-emerald-300 text-emerald-800 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block font-bold text-rose-600 mb-1">Total Pending / Due (₹)</label>
+                  <input type="number" readOnly value={feeCalc.totalDue}
+                    className="w-full border rounded-xl px-3 py-2 font-mono font-extrabold text-xs bg-rose-50 border-rose-300 text-rose-800 focus:outline-none" />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Payment Reference / Transaction ID</label>
+                  <input type="text" value={globalTransactionId} onChange={e=>setGlobalTransactionId(e.target.value)}
+                    placeholder="UPI ref / Txn ID / Cheque No." className={inputCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Remarks (if any)</label>
+                  <textarea value={globalRemarks} onChange={e=>setGlobalRemarks(e.target.value)}
+                    rows={2} placeholder="Any additional notes or remarks"
+                    className={`${inputCls} resize-none`} />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Plan Validity End Date</label>
+                  <input type="date" value={planValidityEnd} onChange={e=>setPlanValidityEnd(e.target.value)} className={inputCls} />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition"
-              >
-                Close
+            {/* ── Collection History (Fee Head Wise) ── */}
+            {(() => {
+              const studentFees = fees.filter((f:any) => f.student_id===student.id || f.students?.admission_id===student.admission_id)
+              if (studentFees.length === 0) return null
+              const headMap = new Map<string,any[]>()
+              studentFees.forEach((f:any) => {
+                const k = f.fee_head || f.title || 'Other'
+                if(!headMap.has(k)) headMap.set(k,[])
+                headMap.get(k)!.push(f)
+              })
+              return (
+                <div>
+                  <p className="font-black text-[10px] uppercase tracking-wider mb-2 text-slate-500">Collection History (Fee Head Wise)</p>
+                  <div className="space-y-2">
+                    {Array.from(headMap.entries()).map(([head, items]) => {
+                      const totalFeeH = items.reduce((s,f)=>s+Number(f.amount||0),0)
+                      const discH = items.reduce((s,f)=>s+Number(f.discount||0),0)
+                      const paidH = items.reduce((s,f)=>s+Number(f.amount_paid||0),0)
+                      const dueH = Math.max(0, totalFeeH - discH - paidH)
+                      const isExpanded = expandedFeeHead === head
+                      return (
+                        <div key={head} className={`rounded-xl border overflow-hidden ${isLight?'border-slate-200':'border-slate-700'}`}>
+                          <button type="button"
+                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left ${isLight?'bg-slate-100 hover:bg-slate-200':'bg-slate-800 hover:bg-slate-700'} transition`}
+                            onClick={()=>setExpandedFeeHead(isExpanded?null:head)}>
+                            <span className="font-bold">
+                              {isExpanded?'▼':'▶'} {head} — Total Fee: ₹{totalFeeH.toLocaleString('en-IN')} | Discount: ₹{discH}
+                            </span>
+                            <span className={dueH===0?'text-emerald-600 font-extrabold text-[10px]':'text-rose-600 font-extrabold text-[10px]'}>
+                              {dueH===0?'Paid':`Due: ₹${dueH.toLocaleString('en-IN')}`}
+                            </span>
+                          </button>
+                          {isExpanded && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[10px]">
+                                <thead>
+                                  <tr className={isLight?'bg-slate-50':'bg-slate-900'}>
+                                    {['#','Amount Paid (₹)','Collection Date','Mode of Payment','Payment Ref / Txn ID','Collected For Month','Receipt No.'].map(h=>(
+                                      <th key={h} className={`px-3 py-2 text-left font-bold ${textSecondary}`}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.map((f:any,i:number)=>(
+                                    <tr key={f.id||i} className={`border-t ${isLight?'border-slate-100':'border-slate-800'}`}>
+                                      <td className="px-3 py-2 font-mono">{i+1}</td>
+                                      <td className="px-3 py-2 font-mono font-extrabold text-emerald-600">₹{Number(f.amount_paid||0).toLocaleString('en-IN')}</td>
+                                      <td className="px-3 py-2">{f.collection_date||f.paid_date||'—'}</td>
+                                      <td className="px-3 py-2">{f.mode_of_payment||f.payment_method||'—'}</td>
+                                      <td className="px-3 py-2 font-mono text-blue-600">{f.transaction_id||'NA'}</td>
+                                      <td className="px-3 py-2">{f.collected_for||f.month||'One Time'}</td>
+                                      <td className="px-3 py-2 font-mono text-[9px]">{f.receipt_no||'—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className={`flex items-center justify-between px-4 py-2 text-[10px] font-bold ${isLight?'bg-emerald-50':'bg-emerald-950/30'}`}>
+                                <span>Total Paid: <strong className="text-emerald-600">₹{paidH.toLocaleString('en-IN')}</strong></span>
+                                <span className={dueH>0?'text-rose-600':'text-emerald-600'}>
+                                  Remaining / Due: ₹{dueH.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Buttons ── */}
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button type="button" onClick={onClose}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition">
+                Cancel
               </button>
-              <button
-                type="submit"
-                disabled={loadingSubmit}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
-              >
-                {loadingSubmit ? 'Submitting...' : 'Collect Fee & Generate Receipt'}
+              <button type="submit" disabled={loadingSubmit}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer">
+                <Save className="w-3.5 h-3.5" />
+                {loadingSubmit ? 'Saving...' : '💾 Save & Generate Receipt'}
               </button>
             </div>
           </form>
         )}
+
 
         {/* ── TAB: MONTHLY FEE LEDGER & AUDIT TRAIL ── */}
         {erpModalTab === 'fee_history' && (
@@ -1365,7 +1488,19 @@ export default function StudentErpModal({
             {/* Section 4: Program Details */}
             <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
               <h4 className="font-extrabold text-[10px] text-green-600 uppercase tracking-wider pb-1 border-b">4. Program & Validity</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Registration Date</label>
+                  <input type="date" required value={editForm.print_date || ''} onChange={(e) => setEditForm({ ...editForm, print_date: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Validity Start Date</label>
+                  <input type="date" value={editForm.plan_start_date || ''} onChange={(e) => setEditForm({ ...editForm, plan_start_date: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
+                  <input type="date" required value={editForm.validity_end_date || ''} onChange={(e) => setEditForm({ ...editForm, validity_end_date: e.target.value })} className={inputCls} />
+                </div>
                 <div>
                   <label className={`font-bold ${textSecondary}`}>Total Allowed Classes</label>
                   <input type="number" required value={editForm.classes_total || 12} onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value) || 12 })} className={inputCls} />
@@ -1373,10 +1508,6 @@ export default function StudentErpModal({
                 <div>
                   <label className={`font-bold ${textSecondary}`}>Consumed Classes</label>
                   <input type="number" required value={editForm.classes_consumed !== undefined ? editForm.classes_consumed : 0} onChange={(e) => setEditForm({ ...editForm, classes_consumed: parseInt(e.target.value) || 0 })} className={inputCls} />
-                </div>
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
-                  <input type="date" required value={editForm.validity_end_date || ''} onChange={(e) => setEditForm({ ...editForm, validity_end_date: e.target.value })} className={inputCls} />
                 </div>
               </div>
             </div>
