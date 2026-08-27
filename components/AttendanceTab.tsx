@@ -12,7 +12,7 @@ interface AttendanceTabProps {
   attendanceDate: string;
   setAttendanceDate: (d: string) => void;
   setActiveTab: (tab: any) => void;
-  handleMarkAttendance: (studentId: string, date: string, status: any, className: string, classTime: string) => void;
+  handleMarkAttendance: (studentId: string, date: string, status: any, className: string, classTime: string, leaveReason?: string) => void;
   searchQuery: string;
   batchSchedules: any[];
   studentCustomSchedules: any[];

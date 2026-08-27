@@ -125,6 +125,9 @@ export default function StudentErpModal({
     custom_head_name: string
     amount: number
     discount: number
+    transaction_id?: string
+    collection_time?: string
+    remarks?: string
   }>>([
     { id: '1', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: 3500, discount: 0 }
   ])
