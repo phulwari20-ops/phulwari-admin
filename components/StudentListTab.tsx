@@ -1,6 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { Users, Download, ArrowUpDown, CalendarDays, Hash, ArrowUp, ArrowDown } from 'lucide-react';
 
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '—';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  // If it is ISO timestamp (e.g. created_at), parse date portion
+  if (dateStr.includes('T')) {
+    const dateOnly = dateStr.split('T')[0];
+    const partsT = dateOnly.split('-');
+    if (partsT.length === 3) {
+      const [y, m, d] = partsT;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+  }
+  return dateStr;
+};
+
 interface StudentListTabProps {
   bgCard: string;
   textPrimary: string;
@@ -249,9 +269,9 @@ export default function StudentListTab({
           <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
             {sortedStudents.map((st, idx) => {
               const admDate = st.admission_date
-                ? new Date(st.admission_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                ? formatDateToDisplay(st.admission_date)
                 : st.created_at
-                  ? new Date(st.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                  ? formatDateToDisplay(st.created_at)
                   : '—';
 
               return (

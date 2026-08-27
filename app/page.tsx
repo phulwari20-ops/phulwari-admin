@@ -429,6 +429,7 @@ export default function AdminDashboardPage() {
 
   // Edit Batch Modal State
   const [editingBatch, setEditingBatch] = useState<any>(null)
+  const [batchEditTab, setBatchEditTab] = useState<'core' | 'landing'>('core')
 
   // Student Admission Form Modal
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
@@ -1222,6 +1223,25 @@ export default function AdminDashboardPage() {
           }
         }
 
+        // Auto sync batch fee to dynamic fee heads table
+        ;(async () => {
+          try {
+            const supabase = createClient()
+            const batchFeeHead = {
+              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              name: `${inserted.batch_name} Fee`,
+              default_amount: parseFloat(newBatchForm.fee_amount) || 3500,
+              is_system: false
+            }
+            const { data: headData, error: headErr } = await supabase.from('fee_heads').insert([batchFeeHead]).select()
+            if (!headErr && headData) {
+              setFeeHeads(prev => [...prev, headData[0]])
+            }
+          } catch (headSyncErr) {
+            console.error('Failed to sync new batch fee to fee_heads:', headSyncErr)
+          }
+        })()
+
         // Only update UI AFTER DB confirms success
         setBatches(prev => [inserted, ...prev])
 
@@ -1687,7 +1707,9 @@ export default function AdminDashboardPage() {
   const handleUpdateStudentBatch = async (
     studentId: string,
     mode: 'change' | 'add' | 'remove',
-    batchId: string
+    batchId: string,
+    reason: string = 'General Change',
+    changeDate: string = new Date().toISOString().split('T')[0]
   ) => {
     const student = students.find(s => s.id === studentId)
     if (!student) return false
@@ -1699,19 +1721,89 @@ export default function AdminDashboardPage() {
       ? [...student.additional_batches]
       : (() => { try { return JSON.parse(student.additional_batches || '[]') } catch { return [] } })()
 
-    if (mode === 'change') {
+    const supabase = createClient()
+
+    if (mode === 'change' && batch) {
+      let history = Array.isArray(student.batch_history)
+        ? [...student.batch_history]
+        : (() => { try { return JSON.parse(student.batch_history || '[]') } catch { return [] } })()
+
+      history.push({
+        changed_at: changeDate,
+        from_batch_id: student.batch_id,
+        from_batch_name: student.batch_name || 'N/A',
+        to_batch_id: batch.id,
+        to_batch_name: batch.batch_name,
+        reason: reason
+      })
+
       updates = {
         batch_id: batch.id,
         batch_name: batch.batch_name,
         classes_total: batch.classes_total || student.classes_total || 12,
-        validity_end_date: new Date(Date.now() + (batch.validity_days || 30) * 86400000).toISOString().split('T')[0],
+        validity_end_date: new Date(new Date(changeDate).getTime() + (batch.validity_days || 30) * 86400000).toISOString().split('T')[0],
+        batch_history: history
       }
-    } else if (mode === 'add') {
+
+      // Generate Auto Ledger Fee entry
+      const ledgerEntry = {
+        id: `fee-auto-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        student_id: studentId,
+        title: `Monthly Fee - ${batch.batch_name}`,
+        amount: Number(batch.fee_amount || 3500),
+        discount_type: 'flat',
+        discount: 0,
+        net_amount: Number(batch.fee_amount || 3500),
+        due_date: changeDate,
+        status: 'pending',
+        payment_method: null,
+        paid_date: null,
+        receipt_no: `AUTO-${Math.floor(100000 + Math.random() * 900000)}`,
+        month: new Date(changeDate).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+        amount_paid: 0,
+        pending_amount: Number(batch.fee_amount || 3500)
+      }
+      
+      try {
+        await supabase.from('fees').insert([ledgerEntry])
+        setFees(prev => [ledgerEntry, ...prev])
+      } catch (feeErr) {
+        console.error('Failed to auto-generate fee ledger entry:', feeErr)
+      }
+
+    } else if (mode === 'add' && batch) {
       if (student.batch_id === batchId || extras.some((e: any) => e.batch_id === batchId)) {
         alert('Student is already enrolled in this batch.'); return false
       }
       extras.push({ batch_id: batch.id, batch_name: batch.batch_name, fee_amount: batch.fee_amount || null, added_on: new Date().toISOString().split('T')[0] })
       updates = { additional_batches: extras }
+
+      // Generate Auto Ledger Fee entry for additional batch
+      const ledgerEntry = {
+        id: `fee-auto-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        student_id: studentId,
+        title: `Batch Fee - ${batch.batch_name}`,
+        amount: Number(batch.fee_amount || 2500),
+        discount_type: 'flat',
+        discount: 0,
+        net_amount: Number(batch.fee_amount || 2500),
+        due_date: new Date().toISOString().split('T')[0],
+        status: 'pending',
+        payment_method: null,
+        paid_date: null,
+        receipt_no: `AUTO-${Math.floor(100000 + Math.random() * 900000)}`,
+        month: new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+        amount_paid: 0,
+        pending_amount: Number(batch.fee_amount || 2500)
+      }
+      
+      try {
+        await supabase.from('fees').insert([ledgerEntry])
+        setFees(prev => [ledgerEntry, ...prev])
+      } catch (feeErr) {
+        console.error('Failed to auto-generate additional fee ledger entry:', feeErr)
+      }
+
     } else if (mode === 'remove') {
       extras = extras.filter((e: any) => e.batch_id !== batchId)
       updates = { additional_batches: extras }
@@ -1725,11 +1817,10 @@ export default function AdminDashboardPage() {
     setSelectedERPStudent((prev: any) => (prev && prev.id === studentId ? { ...prev, ...updates } : prev))
 
     try {
-      const supabase = createClient()
-      // additional_batches is a jsonb column — send the array as-is (no stringify).
+      // additional_batches is a jsonb column — send the array as-is.
       const { error } = await supabase.from('students').update(updates).eq('id', studentId)
       if (error) {
-        console.warn('⚠️ Batch update could not persist (column may be missing):', error.message)
+        console.warn('⚠️ Batch update could not persist:', error.message)
       }
     } catch (err) { /* keep optimistic local state */ }
 
@@ -2420,9 +2511,10 @@ Management Phulwari Mother and Child Activity Centre`
   const handleMarkAttendance = async (
     studentId: string,
     targetDate: string,
-    status: 'present' | 'absent',
+    status: 'present' | 'absent' | 'halfday' | 'leave' | 'holiday' | 'unmarked',
     className: string = 'General',
-    classTime: string = 'General'
+    classTime: string = 'General',
+    reason: string = ''
   ) => {
     const targetStudent = students.find(s => s.id === studentId || s.admission_id === studentId)
 
@@ -2439,6 +2531,38 @@ Management Phulwari Mother and Child Activity Centre`
       consumedDiff = -1
     }
 
+    const supabase = createClient()
+
+    if (status === 'unmarked') {
+      // Optimistic local state update
+      setAttendance(prev => prev.filter(
+        a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
+      ))
+
+      if (consumedDiff !== 0 && targetStudent) {
+        const currentConsumed = Number(targetStudent.classes_consumed || 0)
+        const newConsumed = Math.max(0, currentConsumed + consumedDiff)
+        setStudents(prev => prev.map(s => s.id === targetStudent.id ? { ...s, classes_consumed: newConsumed } : s))
+        try {
+          await supabase.from('students').update({ classes_consumed: newConsumed }).eq('id', targetStudent.id)
+        } catch (_) {}
+      }
+
+      try {
+        const { error } = await supabase.from('attendance')
+          .delete()
+          .eq('student_id', studentId)
+          .eq('date', targetDate)
+          .eq('class_name', className)
+          .eq('class_time', classTime)
+        if (error) throw error
+      } catch (err) {
+        console.error('❌ [ATTENDANCE DELETE ERROR]:', err)
+        await refreshAttendanceFromDb()
+      }
+      return
+    }
+
     setAttendance(prev => {
       const filtered = prev.filter(
         a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
@@ -2449,7 +2573,9 @@ Management Phulwari Mother and Child Activity Centre`
         status: status,
         class_name: className,
         class_time: classTime,
-        remarks: `Marked ${status} for ${className} on ${targetDate}`,
+        remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked ${status} for ${className} on ${targetDate}`,
+        leave_reason: status === 'leave' ? reason : null,
+        holiday_reason: status === 'holiday' ? reason : null,
         students: targetStudent ? {
           full_name: targetStudent.full_name,
           admission_id: targetStudent.admission_id,
@@ -2459,8 +2585,6 @@ Management Phulwari Mother and Child Activity Centre`
       }
       return [newEntry, ...filtered]
     })
-
-    const supabase = createClient()
 
     if (consumedDiff !== 0 && targetStudent) {
       const currentConsumed = Number(targetStudent.classes_consumed || 0)
@@ -2486,12 +2610,6 @@ Management Phulwari Mother and Child Activity Centre`
     }
 
     try {
-      // `attendance` has a unique index on
-      // (student_id, date, class_name, class_time) — one row per class, per the
-      // batch/attendance blueprint. Without naming it via onConflict, PostgREST
-      // resolves against the primary key instead and re-marking an already
-      // marked class fails with 23505, leaving the optimistic UI showing a
-      // status the database never accepted.
       const { error } = await supabase
         .from('attendance')
         .upsert(
@@ -2502,7 +2620,9 @@ Management Phulwari Mother and Child Activity Centre`
               status,
               class_name: className,
               class_time: classTime,
-              remarks: `Marked on ${targetDate}`
+              remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
+              leave_reason: status === 'leave' ? reason : null,
+              holiday_reason: status === 'holiday' ? reason : null
             }
           ],
           { onConflict: 'student_id,date,class_name,class_time' }
@@ -2569,6 +2689,43 @@ Management Phulwari Mother and Child Activity Centre`
     setBatches(prev => prev.map(b => b.id === editingBatch.id ? dbBatchDetails : b))
     try {
       const supabase = createClient()
+      
+      // Auto sync edited batch fee to fee_heads table
+      ;(async () => {
+        try {
+          const oldBatch = batches.find(b => b.id === editingBatch.id)
+          const oldHeadName = oldBatch ? `${oldBatch.batch_name} Fee` : `${editingBatch.batch_name} Fee`
+          const newHeadName = `${editingBatch.batch_name} Fee`
+          const newAmount = parseFloat(editingBatch.fee_amount) || 3500
+
+          const { data: matchedHeads } = await supabase.from('fee_heads').select('*').eq('name', oldHeadName)
+          if (matchedHeads && matchedHeads.length > 0) {
+            const headId = matchedHeads[0].id
+            const { error: headUpdateErr } = await supabase.from('fee_heads').update({
+              name: newHeadName,
+              default_amount: newAmount
+            }).eq('id', headId)
+
+            if (!headUpdateErr) {
+              setFeeHeads(prev => prev.map(h => h.id === headId ? { ...h, name: newHeadName, default_amount: newAmount } : h))
+            }
+          } else {
+            const newHead = {
+              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              name: newHeadName,
+              default_amount: newAmount,
+              is_system: false
+            }
+            const { data: insertedHead } = await supabase.from('fee_heads').insert([newHead]).select()
+            if (insertedHead) {
+              setFeeHeads(prev => [...prev, insertedHead[0]])
+            }
+          }
+        } catch (feeSyncErr) {
+          console.error('Failed to sync edited batch fee to fee_heads:', feeSyncErr)
+        }
+      })()
+
       await supabase.from('batches').upsert([dbBatchDetails])
 
       // Delete existing and insert new schedules
@@ -2598,6 +2755,7 @@ Management Phulwari Mother and Child Activity Centre`
   }
 
   const handleStartEditBatch = (batch: any) => {
+    setBatchEditTab('core')
     const schedulesForBatch = batchSchedules.filter(s => s.batch_id === batch.id)
     setEditingBatch({
       ...batch,
@@ -2882,7 +3040,10 @@ Management Phulwari Mother and Child Activity Centre`
 
     const presentCount = dayRecords.filter(a => a.status === 'present').length
     const absentCount = dayRecords.filter(a => a.status === 'absent').length
-    return { dayNum, dateStr, dayRecords, presentCount, absentCount }
+    const halfdayCount = dayRecords.filter(a => a.status === 'halfday').length
+    const leaveCount = dayRecords.filter(a => a.status === 'leave').length
+    const holidayCount = dayRecords.filter(a => a.status === 'holiday').length
+    return { dayNum, dateStr, dayRecords, presentCount, absentCount, halfdayCount, leaveCount, holidayCount }
   })
 
   const handlePrevMonth = () => {
@@ -3110,6 +3271,7 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'teachers', label: 'Teacher Management', icon: UserPlus, count: teachers.length },
               { id: 'batches', label: 'Batches & Class Timings', icon: Clock, count: batches.length },
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
+              { id: 'calendar', label: 'Batch Attendance Calendar', icon: CalendarDays },
               { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
@@ -3371,6 +3533,40 @@ Management Phulwari Mother and Child Activity Centre`
           </div>
         </div>
 
+        {/* TODAY'S LEAD FOLLOW-UP ALERT BANNER */}
+        {(() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const todaysFollowupsCount = enquiries.filter((enq: any) => {
+            if (!enq.next_follow_up_date) return false;
+            const fDate = String(enq.next_follow_up_date).split('T')[0];
+            return fDate === todayStr && enq.status !== 'Admission Done';
+          }).length;
+
+          if (todaysFollowupsCount === 0) return null;
+
+          return (
+            <div
+              onClick={() => setActiveTab('enquiries')}
+              className="p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-2xl flex items-center justify-between gap-3 animate-fadeIn cursor-pointer hover:from-blue-500/15 hover:to-indigo-500/15 transition"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-blue-600/20 shrink-0">
+                  📋
+                </div>
+                <div>
+                  <h4 className={`text-xs font-extrabold ${textPrimary} flex items-center gap-2`}>
+                    <span>Today's Follow-ups ({todaysFollowupsCount})</span>
+                  </h4>
+                  <p className={`text-xs ${textSecondary}`}>
+                    You have {todaysFollowupsCount} lead follow-up{todaysFollowupsCount !== 1 ? 's' : ''} scheduled for today. Click here to view and manage them.
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-blue-550 shrink-0" />
+            </div>
+          );
+        })()}
+
         {/* TAB 0: ADVANCED ERP ANALYTICS DASHBOARD */}
         {activeTab === 'dashboard' && (
           <DashboardTab
@@ -3598,6 +3794,25 @@ Management Phulwari Mother and Child Activity Centre`
           />
         )}
 
+        {/* TAB 3: MONTHLY BATCH ATTENDANCE CALENDAR */}
+        {activeTab === 'calendar' && (
+          <CalendarTab
+            bgCard={bgCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            badgeClass={badgeClass}
+            badgeStatus={badgeStatus}
+            monthName={monthName}
+            currentYear={currentYear}
+            selectedBatchId={selectedBatchId}
+            calendarDays={calendarDays}
+            handlePrevMonth={handlePrevMonth}
+            handleNextMonth={handleNextMonth}
+            setSelectedCalendarDate={setSelectedCalendarDate}
+          />
+        )}
+
         {/* TAB 4: FEES MANAGEMENT */}
         {activeTab === 'fees' && (
           <FeesTab
@@ -3805,7 +4020,7 @@ Management Phulwari Mother and Child Activity Centre`
       {/* MODAL: EDIT BATCH DETAILS */}
       {editingBatch && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl`}>
+          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className={`text-base font-bold ${textPrimary}`}>Edit Batch Details</h3>
               <button onClick={() => setEditingBatch(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -3813,88 +4028,179 @@ Management Phulwari Mother and Child Activity Centre`
               </button>
             </div>
 
-            <form onSubmit={handleSaveBatch} className="space-y-3 text-xs">
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Batch Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingBatch.batch_name}
-                  onChange={(e) => setEditingBatch({ ...editingBatch, batch_name: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                  }`}
-                />
-              </div>
+            {/* Segmented Tab Toggles */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 pb-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setBatchEditTab('core')}
+                className={`flex-1 py-2 font-bold border-b-2 transition cursor-pointer ${
+                  batchEditTab === 'core' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-500'
+                }`}
+              >
+                1. Core Settings &amp; Pricing
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchEditTab('landing')}
+                className={`flex-1 py-2 font-bold border-b-2 transition cursor-pointer ${
+                  batchEditTab === 'landing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-500'
+                }`}
+              >
+                2. Public Landing Details
+              </button>
+            </div>
 
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Age Group</label>
-                <input
-                  type="text"
-                  required
-                  value={editingBatch.age_group || ''}
-                  onChange={(e) => setEditingBatch({ ...editingBatch, age_group: e.target.value })}
-                  className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                  }`}
-                />
-              </div>
+            <form onSubmit={handleSaveBatch} className="space-y-4 text-xs">
+              {batchEditTab === 'core' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Batch Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingBatch.batch_name}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, batch_name: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Category</label>
+                      <select
+                        value={editingBatch.category || 'Child Activity'}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, category: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none cursor-pointer ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      >
+                        <option value="Child Activity">Child Activity</option>
+                        <option value="Zumba &amp; Yoga">Zumba &amp; Yoga</option>
+                        <option value="Activities">Activities</option>
+                      </select>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Start Time</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingBatch.start_time || ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, start_time: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Subcategory</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Toddler Program"
+                        value={editingBatch.subcategory || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, subcategory: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Branch Location</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Kidwaipuri Main Branch"
+                        value={editingBatch.location || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, location: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
 
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>End Time</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingBatch.end_time || ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, end_time: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Age Group</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingBatch.age_group || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, age_group: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Student Capacity</label>
+                      <input
+                        type="number"
+                        required
+                        value={editingBatch.capacity ?? ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, capacity: Number(e.target.value) })}
+                        className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Days</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingBatch.days || ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, days: e.target.value })}
-                    className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>Start Time</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingBatch.start_time || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, start_time: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`font-bold ${textSecondary}`}>End Time</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingBatch.end_time || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, end_time: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
 
-                <div>
-                  <label className={`font-bold ${textSecondary}`}>Student Capacity</label>
-                  <input
-                    type="number"
-                    required
-                    value={editingBatch.capacity ?? ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, capacity: Number(e.target.value) })}
-                    className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
-                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                    }`}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-1">
+                      <label className={`font-bold ${textSecondary}`}>Days</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingBatch.days || ''}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, days: e.target.value })}
+                        className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <label className={`font-bold ${textSecondary}`}>Plan Validity (Days)</label>
+                      <input
+                        type="number"
+                        required
+                        value={editingBatch.validity_days || 30}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, validity_days: Number(e.target.value) })}
+                        className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${
+                          isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <label className={`font-bold text-orange-500`}>Fee Amount (₹)</label>
+                      <input
+                        type="number"
+                        required
+                        value={editingBatch.fee_amount || 0}
+                        onChange={(e) => setEditingBatch({ ...editingBatch, fee_amount: Number(e.target.value) })}
+                        className={`w-full border border-orange-500/30 rounded-xl px-3 py-2 font-mono font-bold outline-none ${
+                          isLight ? 'bg-orange-500/5 text-slate-900 focus:border-orange-550' : 'bg-orange-950/20 text-orange-200 focus:border-orange-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
 
               {/* Class schedules sub-form for editing */}
               <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -3976,16 +4282,113 @@ Management Phulwari Mother and Child Activity Centre`
                   + Add Schedule Entry
                 </button>
               </div>
-
-              <div className="pt-3 flex items-center justify-end space-x-3">
-                <button type="button" onClick={() => setEditingBatch(null)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
-                  Cancel
-                </button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer">
-                  Save Batch Changes
-                </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className={`font-bold ${textSecondary}`}>Emoji Symbol</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 🤸"
+                    value={editingBatch.emoji || ''}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, emoji: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={`font-bold ${textSecondary}`}>Tagline / Catchphrase</label>
+                  <input
+                    type="text"
+                    placeholder="Tagline shown on public portal"
+                    value={editingBatch.tagline || ''}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, tagline: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
               </div>
-            </form>
+
+              <div>
+                <label className={`font-bold ${textSecondary}`}>Best For</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Kids aged 2-5 seeking developmental activity..."
+                  value={editingBatch.best_for || ''}
+                  onChange={(e) => setEditingBatch({ ...editingBatch, best_for: e.target.value })}
+                  className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className={`font-bold ${textSecondary}`}>Program Description</label>
+                <textarea
+                  rows={3}
+                  placeholder="Full description of the batch activities..."
+                  value={editingBatch.description || ''}
+                  onChange={(e) => setEditingBatch({ ...editingBatch, description: e.target.value })}
+                  className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className={`font-bold ${textSecondary}`}>What's Included (One item per line)</label>
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Standard Gym access&#10;Trainer Guidance&#10;Complimentary assessment"
+                  value={Array.isArray(editingBatch.includes) ? editingBatch.includes.join('\n') : ''}
+                  onChange={(e) => setEditingBatch({ ...editingBatch, includes: e.target.value.split('\n').filter(Boolean) })}
+                  className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Child Benefits (One per line)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Cognitive growth&#10;Physical flexibility"
+                    value={Array.isArray(editingBatch.child_benefits) ? editingBatch.child_benefits.join('\n') : ''}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, child_benefits: e.target.value.split('\n').filter(Boolean) })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Mother Benefits (One per line)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Social connectivity&#10;Relaxed waiting zone"
+                    value={Array.isArray(editingBatch.mother_benefits) ? editingBatch.mother_benefits.join('\n') : ''}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, mother_benefits: e.target.value.split('\n').filter(Boolean) })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
+                      isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-3 flex items-center justify-end space-x-3 border-t border-slate-200 dark:border-slate-800">
+            <button type="button" onClick={() => setEditingBatch(null)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer">
+              Cancel
+            </button>
+            <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer">
+              Save Batch Changes
+            </button>
+          </div>
+        </form>
           </div>
         </div>
       )}
@@ -4172,6 +4575,7 @@ Management Phulwari Mother and Child Activity Centre`
           badgePassword={badgePassword}
           tipBannerBg={tipBannerBg}
           fees={fees}
+          attendance={attendance}
           handlePrintRegistrationForm={printRegistrationFormEnriched}
           handleDeactivateStudent={handleDeactivateStudent}
           handleUpdateStudent={handleUpdateStudent}
@@ -4224,43 +4628,92 @@ Management Phulwari Mother and Child Activity Centre`
 
                 return sortedList.map((st) => {
                   const attRecord = attendance.find(a => a.date === selectedCalendarDate && (a.student_id === st.id || a.students?.admission_id === st.admission_id))
-                  const isPresent = attRecord?.status === 'present'
-                  const isAbsent = attRecord?.status === 'absent'
-                  const isPending = !attRecord
+                  const currentStatus = attRecord?.status || 'unmarked'
 
                   return (
-                    <div key={st.id} className={`p-3.5 border rounded-xl flex items-center justify-between text-xs ${bgSubCard}`}>
+                    <div key={st.id} className={`p-3.5 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${bgSubCard}`}>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className={`font-bold ${textPrimary}`}>{st.full_name}</h4>
                           <span className="text-blue-500 font-mono">({st.admission_id})</span>
-                          {isPending && <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[9px] font-bold">UNMARKED</span>}
-                          {isPresent && <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">PRESENT</span>}
-                          {isAbsent && <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold">ABSENT</span>}
+                          {currentStatus === 'unmarked' && <span className="px-2 py-0.5 bg-slate-500/20 text-slate-400 border border-slate-500/30 rounded text-[9px] font-bold">UNMARKED</span>}
+                          {currentStatus === 'present' && <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">PRESENT</span>}
+                          {currentStatus === 'absent' && <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold">ABSENT</span>}
+                          {currentStatus === 'halfday' && <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[9px] font-bold">HALF DAY</span>}
+                          {currentStatus === 'leave' && <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-[9px] font-bold">LEAVE</span>}
+                          {currentStatus === 'holiday' && <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-[9px] font-bold">HOLIDAY</span>}
+                          {attRecord?.remarks && (
+                            <span className="text-[9px] text-slate-400 italic">({attRecord.remarks})</span>
+                          )}
                         </div>
-                        <p className={`text-[11px] ${textSecondary}`}>
+                        <p className={`text-[11px] ${textSecondary} mt-1`}>
                           Class: <strong className={textPrimary}>{st.class_name || 'Nursery'} - {st.section_name || 'A'}</strong> | Parent: {st.parent_name}
                         </p>
                       </div>
 
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50 self-start sm:self-auto">
+                        {/* P Button */}
                         <button
-                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, 'present')}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-[11px] cursor-pointer transition ${
-                            isPresent ? 'bg-emerald-600 text-white shadow-sm font-extrabold' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/20'
+                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, currentStatus === 'present' ? 'unmarked' : 'present')}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
+                            currentStatus === 'present' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:bg-emerald-500/10'
                           }`}
-                        >
-                          PRESENT
-                        </button>
+                          title="Present"
+                        >P</button>
 
+                        {/* A Button */}
                         <button
-                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, 'absent')}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-[11px] cursor-pointer transition ${
-                            isAbsent ? 'bg-rose-600 text-white shadow-sm font-extrabold' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-500/20'
+                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, currentStatus === 'absent' ? 'unmarked' : 'absent')}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
+                            currentStatus === 'absent' ? 'bg-rose-600 text-white' : 'text-rose-600 hover:bg-rose-500/10'
                           }`}
-                        >
-                          ABSENT
-                        </button>
+                          title="Absent"
+                        >A</button>
+
+                        {/* HD Button */}
+                        <button
+                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday')}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
+                            currentStatus === 'halfday' ? 'bg-amber-500 text-white' : 'text-amber-505 hover:bg-amber-500/10'
+                          }`}
+                          title="Half Day"
+                        >HD</button>
+
+                        {/* L Button */}
+                        <button
+                          onClick={() => {
+                            if (currentStatus === 'leave') {
+                              handleMarkAttendance(st.id, selectedCalendarDate, 'unmarked')
+                            } else {
+                              const r = prompt("Enter Leave Reason:", "Sick Leave")
+                              if (r !== null) {
+                                handleMarkAttendance(st.id, selectedCalendarDate, 'leave', 'General', 'General', r || 'Leave')
+                              }
+                            }
+                          }}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
+                            currentStatus === 'leave' ? 'bg-blue-600 text-white' : 'text-blue-605 hover:bg-blue-500/10'
+                          }`}
+                          title="Leave"
+                        >L</button>
+
+                        {/* H Button */}
+                        <button
+                          onClick={() => {
+                            if (currentStatus === 'holiday') {
+                              handleMarkAttendance(st.id, selectedCalendarDate, 'unmarked')
+                            } else {
+                              const r = prompt("Enter Holiday Reason:", "School Trip")
+                              if (r !== null) {
+                                handleMarkAttendance(st.id, selectedCalendarDate, 'holiday', 'General', 'General', r || 'Holiday')
+                              }
+                            }
+                          }}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
+                            currentStatus === 'holiday' ? 'bg-purple-600 text-white' : 'text-purple-655 hover:bg-purple-500/10'
+                          }`}
+                          title="Student Holiday"
+                        >H</button>
                       </div>
                     </div>
                   )

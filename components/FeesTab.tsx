@@ -94,6 +94,7 @@ export default function FeesTab({
     setLoadingAction(true)
 
     const payload = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       name: newHeadName.trim(),
       default_amount: parseFloat(newHeadAmount) || 0,
       is_system: false

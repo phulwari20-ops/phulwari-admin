@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
-import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus, ArrowRight } from 'lucide-react'
+import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus, ArrowRight, CalendarDays } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface StudentErpModalProps {
@@ -18,6 +18,7 @@ interface StudentErpModalProps {
   badgePassword: string
   tipBannerBg: string
   fees: any[]
+  attendance: any[]
   handlePrintRegistrationForm: (st: any) => void
   handleDeactivateStudent: (id: string) => Promise<void>
   handleDeleteStudent: (id: string) => Promise<void>
@@ -32,7 +33,7 @@ interface StudentErpModalProps {
   studentCustomSchedules: any[]
   handleUpdateStudent: (studentId: string, updates: Record<string, any>) => Promise<boolean>
   allAvailableBatches: any[]
-  handleUpdateStudentBatch: (studentId: string, mode: 'change' | 'add' | 'remove', batchId: string) => Promise<boolean>
+  handleUpdateStudentBatch: (studentId: string, mode: 'change' | 'add' | 'remove', batchId: string, reason?: string, changeDate?: string) => Promise<boolean>
   categories: any[]
   setCategories: (val: any) => void
   feeHeads: any[]
@@ -82,6 +83,7 @@ export default function StudentErpModal({
   badgePassword,
   tipBannerBg,
   fees,
+  attendance,
   handlePrintRegistrationForm,
   handleDeactivateStudent,
   handleDeleteStudent,
@@ -103,12 +105,17 @@ export default function StudentErpModal({
   loadAllAdminData
 }: StudentErpModalProps) {
   
-  const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'edit_details' | 'manage_batch' | 'password'>('collect_fee')
+  const [erpModalTab, setErpModalTab] = useState<'collect_fee' | 'fee_history' | 'profile' | 'attendance_calendar' | 'edit_details' | 'manage_batch' | 'password'>('collect_fee')
 
   // Local editable copy for the "Edit Details" tab.
   const [editForm, setEditForm] = useState<any>({})
   const [dobInput, setDobInput] = useState('')
   const [batchSelect, setBatchSelect] = useState<string>('')
+  const [changeReason, setChangeReason] = useState('General Change')
+  const [changeDate, setChangeDate] = useState(new Date().toISOString().split('T')[0])
+  const [additionalBatchSelect, setAdditionalBatchSelect] = useState('')
+  const [calMonth, setCalMonth] = useState(new Date().getMonth())
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
 
   // Multi-item transaction builder states
   const [transactionItems, setTransactionItems] = useState<Array<{
@@ -164,6 +171,7 @@ export default function StudentErpModal({
         admission_date: student.admission_date || '',
         validity_end_date: student.validity_end_date || '',
         custom_days: student.custom_days || '',
+        password: student.password || '',
         custom_schedules: studentCustSchedules
       })
       setDobInput(formatDateToDisplay(student.dob || ''));
@@ -175,9 +183,9 @@ export default function StudentErpModal({
       setReceiptNo(`REC-2027-${Math.floor(10000 + Math.random() * 90000)}`)
       setPaymentMode(student.payment_mode || 'UPI / Online')
       
-      // Default to one Monthly Fee item
+      // Default to one Monthly Fee item with tracking fields
       setTransactionItems([
-        { id: '1', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: defaultAmount, discount: 0 }
+        { id: '1', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: defaultAmount, discount: 0, transaction_id: '', collection_time: new Date().toISOString().slice(0, 16), remarks: '' }
       ])
       setAmountCollected(String(defaultAmount))
     }
@@ -218,7 +226,10 @@ export default function StudentErpModal({
         month: '',
         custom_head_name: '',
         amount: 500,
-        discount: 0
+        discount: 0,
+        transaction_id: '',
+        collection_time: new Date().toISOString().slice(0, 16),
+        remarks: ''
       }
     ])
   }
@@ -326,7 +337,10 @@ export default function StudentErpModal({
         receipt_no: rNo,
         month: item.fee_head === 'Monthly Fee' ? item.month : null,
         amount_paid: itemPaid,
-        pending_amount: itemPending
+        pending_amount: itemPending,
+        transaction_id: item.transaction_id || null,
+        collection_time: item.collection_time || new Date().toISOString(),
+        remarks: item.remarks || null
       }
 
       try {
@@ -455,7 +469,12 @@ export default function StudentErpModal({
             <tbody>
               ${printableList.map(item => `
                 <tr>
-                  <td>${item.title}</td>
+                  <td>
+                    <div style="font-weight: 700; color: #0f172a;">${item.title}</div>
+                    ${item.transaction_id ? `<div style="font-size: 9px; color: #64748b; margin-top: 2px;">⚡ Ref ID: ${item.transaction_id}</div>` : ''}
+                    ${item.collection_time ? `<div style="font-size: 9px; color: #64748b;">📅 Date/Time: ${item.collection_time.includes('T') ? formatDateToDisplay(item.collection_time.split('T')[0]) + ' ' + item.collection_time.split('T')[1] : formatDateToDisplay(item.collection_time)}</div>` : ''}
+                    ${item.remarks ? `<div style="font-size: 9px; color: #64748b; font-style: italic;">📌 Notes: ${item.remarks}</div>` : ''}
+                  </td>
                   <td class="amount">₹${Number(item.amount).toFixed(2)}</td>
                   <td class="amount" style="color:#d97706;">- ₹${Number(item.discount).toFixed(2)}</td>
                   <td class="amount" style="color:#16a34a;">₹${Number(item.amount_paid || item.net_amount || 0).toFixed(2)}</td>
@@ -556,6 +575,7 @@ export default function StudentErpModal({
             { id: 'collect_fee', label: 'Submit Fee & Discount', icon: IndianRupee },
             { id: 'fee_history', label: 'Monthly Fee Ledger', icon: FileText },
             { id: 'profile', label: 'Student Profile', icon: Users },
+            { id: 'attendance_calendar', label: 'Attendance Calendar', icon: CalendarDays },
             { id: 'edit_details', label: 'Edit Details', icon: Pencil },
             { id: 'manage_batch', label: 'Manage Batch', icon: Layers },
             { id: 'password', label: 'Reset Password', icon: Key },
@@ -671,6 +691,39 @@ export default function StudentErpModal({
                         type="number"
                         value={item.discount}
                         onChange={e => handleItemFieldChange(item.id, 'discount', parseFloat(e.target.value) || 0)}
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dynamic tracking fields per Fee Head */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-slate-200/50 dark:border-slate-800/50 pt-3 mt-1">
+                    <div>
+                      <label className={`block font-bold mb-1 ${textSecondary}`}>Transaction / Ref ID (Online/UPI)</label>
+                      <input
+                        type="text"
+                        placeholder="UPI Ref, Txn ID, etc."
+                        value={item.transaction_id || ''}
+                        onChange={e => handleItemFieldChange(item.id, 'transaction_id', e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${textSecondary}`}>Collection Date & Time</label>
+                      <input
+                        type="datetime-local"
+                        value={item.collection_time || ''}
+                        onChange={e => handleItemFieldChange(item.id, 'collection_time', e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${textSecondary}`}>Remarks / Notes</label>
+                      <input
+                        type="text"
+                        placeholder="Remarks for this head"
+                        value={item.remarks || ''}
+                        onChange={e => handleItemFieldChange(item.id, 'remarks', e.target.value)}
                         className={inputCls}
                       />
                     </div>
@@ -848,8 +901,11 @@ export default function StudentErpModal({
                                 </div>
                               ))}
                             </div>
-                            <p className="text-[10px] text-slate-400 font-semibold font-mono mt-2">
-                              Paid: {new Date(datePaid).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} | Mode: {items[0].payment_method || 'UPI'}
+                            <p className="text-[10px] text-slate-400 font-semibold font-mono mt-2 flex flex-wrap gap-x-2">
+                              <span>Paid: {formatDateToDisplay(datePaid)}</span>
+                              <span>| Mode: {items[0].payment_method || 'UPI'}</span>
+                              {items[0].transaction_id && <span>| Ref: {items[0].transaction_id}</span>}
+                              {items[0].remarks && <span>| Remarks: {items[0].remarks}</span>}
                             </p>
                           </div>
 
@@ -897,25 +953,299 @@ export default function StudentErpModal({
             })()}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Section 1: Child Details */}
               <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
-                <h4 className="font-bold text-pink-600 uppercase tracking-wider text-[10px] border-b pb-1">Child Details</h4>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-pink-600 uppercase tracking-wider text-[10px]">1. Child Details</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
                 <p><strong className={textSecondary}>Full Name:</strong> {student.full_name}</p>
                 <p><strong className={textSecondary}>Admission ID:</strong> {student.admission_id}</p>
-                <p><strong className={textSecondary}>Date of Birth:</strong> {student.dob || 'N/A'}</p>
+                <p><strong className={textSecondary}>Date of Birth:</strong> {formatDateToDisplay(student.dob) || 'N/A'}</p>
                 <p><strong className={textSecondary}>Gender:</strong> {student.gender || 'N/A'}</p>
                 <p><strong className={textSecondary}>Blood Group:</strong> {student.blood_group || 'N/A'}</p>
                 <p><strong className={textSecondary}>Address:</strong> {student.address || 'N/A'}</p>
-                <p><strong className={textSecondary}>Password:</strong> <span className={`font-mono font-bold border px-2 py-0.5 rounded ${badgePassword}`}>{student.password}</span></p>
+                <p><strong className={textSecondary}>City/State/PIN:</strong> {student.city || 'Patna'}, {student.state || 'Bihar'} - {student.pin_code || '800001'}</p>
               </div>
 
+              {/* Section 2: Parent Details */}
               <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
-                <h4 className="font-bold text-purple-600 uppercase tracking-wider text-[10px] border-b pb-1">Parent Details</h4>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-purple-600 uppercase tracking-wider text-[10px]">2. Parent / Guardian Details</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
                 <p><strong className={textSecondary}>Parent Name:</strong> {student.parent_name}</p>
                 <p><strong className={textSecondary}>Relationship:</strong> {student.parent_relationship || 'Father'}</p>
                 <p><strong className={textSecondary}>Contact Phone:</strong> {student.parent_phone}</p>
+                <p><strong className={textSecondary}>Alternate Phone:</strong> {student.parent_alt_phone || 'N/A'}</p>
                 <p><strong className={textSecondary}>Email:</strong> {student.parent_email || 'N/A'}</p>
+                <p><strong className={textSecondary}>Occupation:</strong> {student.parent_occupation || 'N/A'}</p>
+              </div>
+
+              {/* Section 3: Emergency Contacts */}
+              <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-amber-600 uppercase tracking-wider text-[10px]">3. Emergency Contacts</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
+                <p><strong className={textSecondary}>Emergency Name:</strong> {student.emergency_contact_name || 'N/A'}</p>
+                <p><strong className={textSecondary}>Relationship:</strong> {student.emergency_relationship || 'N/A'}</p>
+                <p><strong className={textSecondary}>Emergency Phone:</strong> {student.emergency_phone || 'N/A'}</p>
+                <p><strong className={textSecondary}>Alternate Phone:</strong> {student.emergency_alt_phone || 'N/A'}</p>
+              </div>
+
+              {/* Section 4: Program Details */}
+              <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-green-600 uppercase tracking-wider text-[10px]">4. Program & Validity</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
+                <p><strong className={textSecondary}>Batch Name:</strong> {student.batch_name || 'N/A'}</p>
+                <p><strong className={textSecondary}>Monthly Allowed Classes:</strong> {student.classes_total || 12}</p>
+                <p><strong className={textSecondary}>Consumed Classes:</strong> {student.classes_consumed || 0}</p>
+                <p><strong className={textSecondary}>Validity End Date:</strong> {formatDateToDisplay(student.validity_end_date) || 'N/A'}</p>
+              </div>
+
+              {/* Section 5: Medical Details */}
+              <div className={`p-4 rounded-2xl border col-span-1 md:col-span-2 space-y-2 ${bgSubCard}`}>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-cyan-600 uppercase tracking-wider text-[10px]">5. Medical Details & Consent</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
+                <p><strong className={textSecondary}>Has Medical Condition / Allergies?</strong> {student.has_medical_condition ? 'Yes' : 'No'}</p>
+                {student.has_medical_condition && <p><strong className={textSecondary}>Condition Details:</strong> {student.medical_condition_details}</p>}
+                <p><strong className={textSecondary}>Regular Medication:</strong> {student.regular_medication || 'N/A'}</p>
+                <p><strong className={textSecondary}>Preferred Hospital:</strong> {student.hospital_preference || 'N/A'}</p>
+                <p><strong className={textSecondary}>Doctor Details:</strong> {student.doctor_name || 'N/A'} (Phone: {student.doctor_phone || 'N/A'})</p>
+              </div>
+
+              {/* Section 6: Portal Access Credentials */}
+              <div className={`p-4 rounded-2xl border col-span-1 md:col-span-2 space-y-2 ${bgSubCard}`}>
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="font-bold text-blue-600 uppercase tracking-wider text-[10px]">6. Portal Access Credentials</h4>
+                  <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
+                </div>
+                <p><strong className={textSecondary}>Login Username:</strong> <span className="font-mono font-bold text-blue-500">{student.admission_id}</span></p>
+                <p><strong className={textSecondary}>Password:</strong> <span className={`font-mono font-bold border px-2 py-0.5 rounded ${badgePassword}`}>{student.password}</span></p>
+              </div>
+
+              {/* Additional Enrolled Batches */}
+              {additionalBatches.length > 0 && (
+                <div className={`p-4 rounded-2xl border col-span-1 md:col-span-2 space-y-2 ${bgSubCard}`}>
+                  <h4 className="font-bold text-emerald-600 uppercase tracking-wider text-[10px] border-b pb-1">Additional Enrolled Batches</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                    {additionalBatches.map((b: any) => (
+                      <div key={b.batch_id} className={`p-2.5 rounded-xl border flex items-center justify-between ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                        <div>
+                          <span className={`font-bold ${textPrimary}`}>{b.batch_name}</span>
+                          <div className="text-[9px] text-slate-400 font-mono mt-0.5">Assigned: {formatDateToDisplay(b.added_on)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Batch History Timeline */}
+              {(() => {
+                const history = Array.isArray(student.batch_history)
+                  ? student.batch_history
+                  : (() => { try { return JSON.parse(student.batch_history || '[]') } catch { return [] } })()
+
+                if (history.length === 0) return null
+
+                return (
+                  <div className={`p-4 rounded-2xl border col-span-1 md:col-span-2 space-y-2 ${bgSubCard}`}>
+                    <h4 className="font-bold text-purple-600 uppercase tracking-wider text-[10px] border-b pb-1">Batch Change Logs History</h4>
+                    <div className="relative border-l border-slate-200 dark:border-slate-850 pl-4 space-y-4 ml-2 mt-2">
+                      {history.map((log: any, idx: number) => (
+                        <div key={idx} className="relative">
+                          <span className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-purple-500 border-2 border-white dark:border-slate-950" />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-[9px] bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded">
+                                {formatDateToDisplay(log.changed_at)}
+                              </span>
+                              <span className={`text-[10px] ${textSecondary}`}>
+                                Changed from <strong className={textPrimary}>{log.from_batch_name}</strong> to <strong className={textPrimary}>{log.to_batch_name}</strong>
+                              </span>
+                            </div>
+                            {log.reason && (
+                              <p className="text-[10px] text-slate-400 font-medium italic mt-1 pl-1">Reason: {log.reason}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: ATTENDANCE CALENDAR ── */}
+        {erpModalTab === 'attendance_calendar' && (
+          <div className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-1">
+            {/* Header / Month selectors */}
+            <div className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+              <span className="font-extrabold text-sm text-slate-700 dark:text-slate-350">
+                📅 {new Date(calYear, calMonth).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setCalMonth(prev => {
+                      if (prev === 0) {
+                        setCalYear(y => y - 1)
+                        return 11
+                      }
+                      return prev - 1
+                    })
+                  }}
+                  className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 font-bold"
+                >
+                  ◀ Prev
+                </button>
+                <button
+                  onClick={() => {
+                    setCalMonth(prev => {
+                      if (prev === 11) {
+                        setCalYear(y => y + 1)
+                        return 0
+                      }
+                      return prev + 1
+                    })
+                  }}
+                  className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 font-bold"
+                >
+                  Next ▶
+                </button>
               </div>
             </div>
+
+            {/* Calendar grid */}
+            {(() => {
+              const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
+              const firstDayIndex = new Date(calYear, calMonth, 1).getDay()
+
+              const daysArr = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+              const blanksArr = Array.from({ length: firstDayIndex }, (_, i) => i)
+
+              // Filter attendance records of this student for this month/year
+              const studentAtts = attendance.filter(a => {
+                if (a.student_id !== student.id && a.students?.admission_id !== student.admission_id) return false
+                const [y, m, d] = a.date.split('-').map(Number)
+                return y === calYear && m === (calMonth + 1)
+              })
+
+              const pCount = studentAtts.filter(a => a.status === 'present').length
+              const aCount = studentAtts.filter(a => a.status === 'absent').length
+              const hdCount = studentAtts.filter(a => a.status === 'halfday').length
+              const lCount = studentAtts.filter(a => a.status === 'leave').length
+              const hCount = studentAtts.filter(a => a.status === 'holiday').length
+
+              return (
+                <div className="space-y-4">
+                  {/* Calendar Grid Box */}
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-4 bg-slate-500/5">
+                    <div className="grid grid-cols-7 gap-2 text-center font-bold text-[10px] text-slate-400 mb-2">
+                      <span>SUN</span>
+                      <span>MON</span>
+                      <span>TUE</span>
+                      <span>WED</span>
+                      <span>THU</span>
+                      <span>FRI</span>
+                      <span>SAT</span>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {blanksArr.map(b => (
+                        <div key={`blank-${b}`} className="h-10" />
+                      ))}
+
+                      {daysArr.map(dayNum => {
+                        const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+                        const dayAtts = studentAtts.filter(a => a.date === dateStr)
+
+                        // Choose status: prioritize present, leave, etc.
+                        let statusColor = 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350'
+                        let statusText = ''
+                        let remarksStr = ''
+
+                        if (dayAtts.length > 0) {
+                          const mainAtt = dayAtts[0]
+                          remarksStr = mainAtt.remarks || ''
+                          if (mainAtt.status === 'present') {
+                            statusColor = 'bg-emerald-500 text-white font-black'
+                            statusText = 'P'
+                          } else if (mainAtt.status === 'absent') {
+                            statusColor = 'bg-rose-500 text-white font-black'
+                            statusText = 'A'
+                          } else if (mainAtt.status === 'halfday') {
+                            statusColor = 'bg-amber-500 text-white font-black'
+                            statusText = 'HD'
+                          } else if (mainAtt.status === 'leave') {
+                            statusColor = 'bg-blue-600 text-white font-black'
+                            statusText = 'L'
+                            remarksStr = mainAtt.leave_reason ? `Leave: ${mainAtt.leave_reason}` : remarksStr
+                          } else if (mainAtt.status === 'holiday') {
+                            statusColor = 'bg-purple-600 text-white font-black'
+                            statusText = 'H'
+                            remarksStr = mainAtt.holiday_reason ? `Holiday: ${mainAtt.holiday_reason}` : remarksStr
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={`day-${dayNum}`}
+                            className={`h-10 rounded-xl flex flex-col items-center justify-center relative border transition group hover:scale-[1.05] shadow-sm ${statusColor}`}
+                            title={remarksStr ? `${remarksStr}` : `Date: ${dayNum}/${calMonth+1}/${calYear}`}
+                          >
+                            <span className="text-[10px] font-bold">{dayNum}</span>
+                            {statusText && (
+                              <span className="text-[8px] font-black uppercase opacity-90 mt-0.5">{statusText}</span>
+                            )}
+
+                            {/* Tooltip detail hover bubble */}
+                            {remarksStr && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-slate-950 text-white rounded-lg p-2 text-[9px] pointer-events-none opacity-0 group-hover:opacity-100 transition z-50 shadow-lg text-center leading-normal">
+                                <div className="font-extrabold">{dayNum} {new Date(calYear, calMonth).toLocaleString('default', { month: 'short' })}</div>
+                                <div className="mt-1 font-semibold text-slate-350">{remarksStr}</div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Summary grid */}
+                  <div className="grid grid-cols-5 gap-2 text-center">
+                    <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl">
+                      <div className="text-[18px] font-black">{pCount}</div>
+                      <div className="text-[9px] font-bold uppercase mt-0.5">Present</div>
+                    </div>
+                    <div className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 rounded-xl">
+                      <div className="text-[18px] font-black">{aCount}</div>
+                      <div className="text-[9px] font-bold uppercase mt-0.5">Absent</div>
+                    </div>
+                    <div className="p-2 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 rounded-xl">
+                      <div className="text-[18px] font-black">{hdCount}</div>
+                      <div className="text-[9px] font-bold uppercase mt-0.5">Half Day</div>
+                    </div>
+                    <div className="p-2 bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 rounded-xl">
+                      <div className="text-[18px] font-black">{lCount}</div>
+                      <div className="text-[9px] font-bold uppercase mt-0.5">Leave</div>
+                    </div>
+                    <div className="p-2 bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-400 rounded-xl">
+                      <div className="text-[18px] font-black">{hCount}</div>
+                      <div className="text-[9px] font-bold uppercase mt-0.5">Holiday</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -928,49 +1258,163 @@ export default function StudentErpModal({
             const ok = await handleUpdateStudent(student.id, payload)
             if (ok) onClose()
           }} className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Child Full Name</label>
-                <input type="text" required value={editForm.full_name || ''} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} className={inputCls} />
-              </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Date of Birth (DD/MM/YYYY)</label>
-                <input type="text" required placeholder="e.g. 01/01/2021" value={dobInput} onChange={(e) => setDobInput(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Parent Full Name</label>
-                <input type="text" required value={editForm.parent_name || ''} onChange={(e) => setEditForm({ ...editForm, parent_name: e.target.value })} className={inputCls} />
-              </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Parent Relationship</label>
-                <select value={editForm.parent_relationship || 'Father'} onChange={(e) => setEditForm({ ...editForm, parent_relationship: e.target.value })} className={inputCls}>
-                  <option value="Father">Father</option>
-                  <option value="Mother">Mother</option>
-                  <option value="Guardian">Guardian</option>
-                </select>
-              </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Contact Phone</label>
-                <input type="text" required value={editForm.parent_phone || ''} onChange={(e) => setEditForm({ ...editForm, parent_phone: e.target.value })} className={inputCls} />
-              </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Parent Email</label>
-                <input type="email" value={editForm.parent_email || ''} onChange={(e) => setEditForm({ ...editForm, parent_email: e.target.value })} className={inputCls} />
+            {/* Section 1: Child Details */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-pink-650 uppercase tracking-wider pb-1 border-b">1. Child's Details</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Child Full Name</label>
+                  <input type="text" required value={editForm.full_name || ''} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Date of Birth (DD/MM/YYYY)</label>
+                  <input type="text" required placeholder="e.g. 01/01/2021" value={dobInput} onChange={(e) => setDobInput(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Gender</label>
+                  <select value={editForm.gender || 'Boy'} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} className={inputCls}>
+                    <option value="Boy">Boy</option>
+                    <option value="Girl">Girl</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Blood Group</label>
+                  <input type="text" placeholder="e.g. B+" value={editForm.blood_group || ''} onChange={(e) => setEditForm({ ...editForm, blood_group: e.target.value })} className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className={`font-bold ${textSecondary}`}>Address</label>
+                  <input type="text" required value={editForm.address || ''} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>City</label>
+                  <input type="text" value={editForm.city || 'Patna'} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>State</label>
+                  <input type="text" value={editForm.state || 'Bihar'} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>PIN Code</label>
+                  <input type="text" value={editForm.pin_code || '800001'} onChange={(e) => setEditForm({ ...editForm, pin_code: e.target.value })} className={inputCls} />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Total Monthly Allowed Classes</label>
-                <input type="number" required value={editForm.classes_total || 12} onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value) || 12 })} className={inputCls} />
+            {/* Section 2: Parent Details */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-purple-650 uppercase tracking-wider pb-1 border-b">2. Parent / Guardian Details</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Parent Full Name</label>
+                  <input type="text" required value={editForm.parent_name || ''} onChange={(e) => setEditForm({ ...editForm, parent_name: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Relationship</label>
+                  <select value={editForm.parent_relationship || 'Father'} onChange={(e) => setEditForm({ ...editForm, parent_relationship: e.target.value })} className={inputCls}>
+                    <option value="Father">Father</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Guardian">Guardian</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Contact Phone</label>
+                  <input type="text" required value={editForm.parent_phone || ''} onChange={(e) => setEditForm({ ...editForm, parent_phone: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Parent Email</label>
+                  <input type="email" value={editForm.parent_email || ''} onChange={(e) => setEditForm({ ...editForm, parent_email: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Alternate Phone</label>
+                  <input type="text" value={editForm.parent_alt_phone || ''} onChange={(e) => setEditForm({ ...editForm, parent_alt_phone: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Occupation</label>
+                  <input type="text" value={editForm.parent_occupation || ''} onChange={(e) => setEditForm({ ...editForm, parent_occupation: e.target.value })} className={inputCls} />
+                </div>
               </div>
-              <div>
-                <label className={`font-bold ${textSecondary}`}>Consumed Classes</label>
-                <input type="number" required value={editForm.classes_consumed !== undefined ? editForm.classes_consumed : 0} onChange={(e) => setEditForm({ ...editForm, classes_consumed: parseInt(e.target.value) || 0 })} className={inputCls} />
+            </div>
+
+            {/* Section 3: Emergency Contact */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-amber-655 uppercase tracking-wider pb-1 border-b">3. Emergency Contact Details</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Emergency Name</label>
+                  <input type="text" value={editForm.emergency_contact_name || ''} onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Relationship</label>
+                  <input type="text" placeholder="e.g. Uncle" value={editForm.emergency_relationship || ''} onChange={(e) => setEditForm({ ...editForm, emergency_relationship: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Emergency Phone</label>
+                  <input type="text" value={editForm.emergency_phone || ''} onChange={(e) => setEditForm({ ...editForm, emergency_phone: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Alternate Phone</label>
+                  <input type="text" value={editForm.emergency_alt_phone || ''} onChange={(e) => setEditForm({ ...editForm, emergency_alt_phone: e.target.value })} className={inputCls} />
+                </div>
               </div>
+            </div>
+
+            {/* Section 4: Program Details */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-green-600 uppercase tracking-wider pb-1 border-b">4. Program & Validity</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Total Allowed Classes</label>
+                  <input type="number" required value={editForm.classes_total || 12} onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value) || 12 })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Consumed Classes</label>
+                  <input type="number" required value={editForm.classes_consumed !== undefined ? editForm.classes_consumed : 0} onChange={(e) => setEditForm({ ...editForm, classes_consumed: parseInt(e.target.value) || 0 })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
+                  <input type="date" required value={editForm.validity_end_date || ''} onChange={(e) => setEditForm({ ...editForm, validity_end_date: e.target.value })} className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 5: Medical Details */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-cyan-600 uppercase tracking-wider pb-1 border-b">5. Medical Details</h4>
+              <div className="flex items-center gap-2 mb-2">
+                <input type="checkbox" id="edit_has_medical" checked={editForm.has_medical_condition || false} onChange={(e) => setEditForm({ ...editForm, has_medical_condition: e.target.checked })} className="rounded text-blue-650" />
+                <label htmlFor="edit_has_medical" className={`font-bold ${textPrimary}`}>Has Medical Condition / Allergies?</label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className={`font-bold ${textSecondary}`}>Condition Details</label>
+                  <input type="text" placeholder="Details if yes" value={editForm.medical_condition_details || ''} onChange={(e) => setEditForm({ ...editForm, medical_condition_details: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Regular Medication</label>
+                  <input type="text" value={editForm.regular_medication || ''} onChange={(e) => setEditForm({ ...editForm, regular_medication: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Preferred Hospital</label>
+                  <input type="text" value={editForm.hospital_preference || ''} onChange={(e) => setEditForm({ ...editForm, hospital_preference: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Doctor Name</label>
+                  <input type="text" value={editForm.doctor_name || ''} onChange={(e) => setEditForm({ ...editForm, doctor_name: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Doctor Contact Phone</label>
+                  <input type="text" value={editForm.doctor_phone || ''} onChange={(e) => setEditForm({ ...editForm, doctor_phone: e.target.value })} className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: Login Credentials */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-[10px] text-blue-600 uppercase tracking-wider pb-1 border-b">6. Parent Portal Access</h4>
               <div>
-                <label className={`font-bold ${textSecondary}`}>Validity End Date</label>
-                <input type="date" required value={editForm.validity_end_date || ''} onChange={(e) => setEditForm({ ...editForm, validity_end_date: e.target.value })} className={inputCls} />
+                <label className={`font-bold ${textSecondary}`}>Portal Login Password</label>
+                <input type="text" value={editForm.password || ''} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} className="w-full border rounded-xl px-3 py-2 outline-none font-mono font-bold bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-blue-500" />
               </div>
             </div>
 
@@ -983,35 +1427,153 @@ export default function StudentErpModal({
 
         {/* ── TAB: MANAGE BATCH ── */}
         {erpModalTab === 'manage_batch' && (
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl">
-              ⚙️ Switch the student's primary batch, or assign additional batches.
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className={`block font-bold mb-1 ${textSecondary}`}>Primary Batch</label>
-                <div className="flex items-center gap-2">
+          <div className="space-y-6 text-xs max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            {/* Primary Batch change */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-xs text-blue-600 uppercase tracking-wider pb-1 border-b">🔄 Switch Primary Batch</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Select New Batch</label>
                   <select
                     value={batchSelect || student.batch_id}
                     onChange={e => setBatchSelect(e.target.value)}
                     className={inputCls}
                   >
+                    <option value="">-- Choose Batch --</option>
                     {allAvailableBatches.map(b => (
                       <option key={b.id} value={b.id}>{b.batch_name}</option>
                     ))}
                   </select>
-                  <button
-                    onClick={async () => {
-                      const ok = await handleUpdateStudentBatch(student.id, 'change', batchSelect)
-                      if (ok) onClose()
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl whitespace-nowrap"
-                  >
-                    Change Batch
-                  </button>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Change Date</label>
+                  <input
+                    type="date"
+                    value={changeDate}
+                    onChange={e => setChangeDate(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Change Reason</label>
+                  <input
+                    type="text"
+                    value={changeReason}
+                    onChange={e => setChangeReason(e.target.value)}
+                    placeholder="e.g. Schedule clash, upgrades"
+                    className={inputCls}
+                  />
                 </div>
               </div>
+              <div className="text-right pt-1">
+                <button
+                  onClick={async () => {
+                    const targetBatchId = batchSelect || student.batch_id
+                    const ok = await handleUpdateStudentBatch(student.id, 'change', targetBatchId, changeReason, changeDate)
+                    if (ok) {
+                      setChangeReason('General Change')
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition cursor-pointer"
+                >
+                  Apply Batch Switch
+                </button>
+              </div>
+            </div>
+
+            {/* Additional Active Batch Assignment */}
+            <div className="space-y-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-xs text-emerald-600 uppercase tracking-wider pb-1 border-b">➕ Assign Additional Active Batches</h4>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <select
+                    value={additionalBatchSelect}
+                    onChange={e => setAdditionalBatchSelect(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">-- Select Extra Program (e.g. Skating, Chess) --</option>
+                    {allAvailableBatches.filter(b => b.id !== student.batch_id).map(b => (
+                      <option key={b.id} value={b.id}>{b.batch_name} (₹{b.fee_amount || 2500})</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!additionalBatchSelect) { alert('Please select a batch.'); return; }
+                    const ok = await handleUpdateStudentBatch(student.id, 'add', additionalBatchSelect)
+                    if (ok) setAdditionalBatchSelect('')
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl whitespace-nowrap cursor-pointer transition shadow-sm"
+                >
+                  Assign Batch
+                </button>
+              </div>
+
+              {/* List of additional batches */}
+              <div>
+                <span className="block font-black text-[10px] uppercase text-slate-400 tracking-wider mb-2">Currently Assigned Extra Batches</span>
+                {additionalBatches.length === 0 ? (
+                  <p className="text-[11px] text-slate-450 italic pl-1">No additional batches assigned.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {additionalBatches.map((b: any) => (
+                      <div key={b.batch_id} className={`flex items-center justify-between p-2.5 rounded-xl border ${isLight ? 'bg-white border-slate-200' : 'bg-slate-950 border-slate-800'}`}>
+                        <div>
+                          <strong className={textPrimary}>{b.batch_name}</strong>
+                          <span className="text-[10px] text-slate-400 ml-2">(Added on: {formatDateToDisplay(b.added_on)})</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Are you sure you want to remove additional batch "${b.batch_name}"?`)) {
+                              await handleUpdateStudentBatch(student.id, 'remove', b.batch_id)
+                            }
+                          }}
+                          className="text-[10px] font-bold text-rose-500 hover:text-rose-700 uppercase cursor-pointer"
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Batch Change Logs History */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-xs text-purple-600 uppercase tracking-wider pb-1 border-b">📜 Batch Switching History Trail</h4>
+              {(() => {
+                const history = Array.isArray(student.batch_history)
+                  ? student.batch_history
+                  : (() => { try { return JSON.parse(student.batch_history || '[]') } catch { return [] } })()
+
+                if (history.length === 0) {
+                  return <p className="text-[11px] text-slate-450 italic pl-1">No primary batch changes logged yet.</p>
+                }
+
+                return (
+                  <div className="relative border-l border-slate-200 dark:border-slate-800 pl-4 space-y-4 ml-2 mt-2">
+                    {history.map((log: any, idx: number) => (
+                      <div key={idx} className="relative">
+                        <span className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-purple-500 border-2 border-white dark:border-slate-950" />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded">
+                              {formatDateToDisplay(log.changed_at)}
+                            </span>
+                            <span className={`text-[10px] ${textSecondary}`}>
+                              Changed from <strong className={textPrimary}>{log.from_batch_name}</strong> to <strong className={textPrimary}>{log.to_batch_name}</strong>
+                            </span>
+                          </div>
+                          {log.reason && (
+                            <p className="text-[10px] text-slate-400 font-medium italic mt-1 pl-1">Reason: {log.reason}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}

@@ -491,7 +491,7 @@ export default function AddStudentModal({
                     </div>
                     <select 
                       value={newStudentForm.category} 
-                      onChange={(e) => {
+                       onChange={(e) => {
                         const newCat = e.target.value;
                         const firstValid = (allAvailableBatches || []).find(b => {
                           if (b.id === '00000000-0000-0000-0000-000000000000') return false;
@@ -502,12 +502,26 @@ export default function AddStudentModal({
                         const weeklyCount = schedules.length;
                         const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
                         const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        
+                        const batchFee = firstValid ? Number(firstValid.fee_amount || 3500) : 3500;
+                        const updatedItems = (newStudentForm.payment_items || [
+                          { id: '1', fee_head: 'Registration Fee', month: '', custom_head_name: '', amount: 1000, discount: 0 },
+                          { id: '2', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: 3500, discount: 0 }
+                        ]).map((it: any) => {
+                          if (it.fee_head === 'Monthly Fee') {
+                            return { ...it, amount: batchFee };
+                          }
+                          return it;
+                        });
+
                         setNewStudentForm({
                           ...newStudentForm,
                           category: newCat,
                           batch_id: firstValid?.id || '',
                           classes_total: totalCls,
-                          custom_days: daysString || firstValid?.days || ''
+                          custom_days: daysString || firstValid?.days || '',
+                          payment_items: updatedItems,
+                          total_fee: updatedItems.reduce((sum: number, it: any) => sum + Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)), 0)
                         });
                       }}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer text-slate-800"
@@ -540,11 +554,25 @@ export default function AddStudentModal({
                         const weeklyCount = schedules.length;
                         const totalCls = weeklyCount > 0 ? weeklyCount * 4 : 12;
                         const daysString = Array.from(new Set(schedules.map(sch => sch.day_of_week))).join(', ');
+                        
+                        const batchFee = matchedBatch ? Number(matchedBatch.fee_amount || 3500) : 3500;
+                        const updatedItems = (newStudentForm.payment_items || [
+                          { id: '1', fee_head: 'Registration Fee', month: '', custom_head_name: '', amount: 1000, discount: 0 },
+                          { id: '2', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: 3500, discount: 0 }
+                        ]).map((it: any) => {
+                          if (it.fee_head === 'Monthly Fee') {
+                            return { ...it, amount: batchFee };
+                          }
+                          return it;
+                        });
+
                         setNewStudentForm({
                           ...newStudentForm,
                           batch_id: bId,
                           classes_total: totalCls,
-                          custom_days: daysString || matchedBatch?.days || ''
+                          custom_days: daysString || matchedBatch?.days || '',
+                          payment_items: updatedItems,
+                          total_fee: updatedItems.reduce((sum: number, it: any) => sum + Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)), 0)
                         });
                       }}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"

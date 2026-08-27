@@ -1,6 +1,25 @@
 import React, { useState } from 'react';
 import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle } from 'lucide-react';
 
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '—';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  if (dateStr.includes('T')) {
+    const dateOnly = dateStr.split('T')[0];
+    const partsT = dateOnly.split('-');
+    if (partsT.length === 3) {
+      const [y, m, d] = partsT;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+  }
+  return dateStr;
+};
+
 interface EnquiriesTabProps {
   bgCard: string;
   bgSubCard: string;
@@ -63,8 +82,86 @@ export default function EnquiriesTab({
     }
   };
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todaysFollowups = enquiries.filter(enq => {
+    if (!enq.next_follow_up_date) return false;
+    const fDate = String(enq.next_follow_up_date).split('T')[0];
+    return fDate === todayStr && enq.status !== 'Admission Done';
+  });
+
   return (
     <div className="space-y-6">
+      {/* ── TODAY'S LEAD FOLLOW-UP DEDICATED SECTION ── */}
+      {todaysFollowups.length > 0 && (
+        <div className={`${bgCard} rounded-2xl p-6 border border-pink-500/20 shadow-lg space-y-4 bg-gradient-to-br from-pink-500/5 to-purple-500/5 dark:from-pink-950/10 dark:to-purple-950/10 animate-fadeIn`}>
+          <div className="flex items-center justify-between pb-3 border-b border-pink-200 dark:border-pink-900/50">
+            <div>
+              <h4 className="text-sm font-black text-pink-600 dark:text-pink-400 flex items-center gap-2">
+                <span>📋</span> Today's Follow-up Alerts ({todaysFollowups.length} Leads Scheduled)
+              </h4>
+              <p className={`text-[11px] ${textSecondary}`}>Leads requiring immediate attention today.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {todaysFollowups.map(enq => {
+              let logsList: any[] = [];
+              try {
+                const parsed = JSON.parse(enq.notes || '[]');
+                if (Array.isArray(parsed)) logsList = parsed;
+              } catch (_) {}
+              const lastLog = logsList.length > 0 ? logsList[logsList.length - 1].text : enq.notes || 'No notes logged yet.';
+
+              return (
+                <div key={enq.id} className={`${bgSubCard} p-4 rounded-xl border border-pink-500/10 dark:border-pink-500/5 flex flex-col justify-between space-y-3 hover:border-pink-400 dark:hover:border-pink-700 transition`}>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <strong className={`text-xs ${textPrimary}`}>{enq.child_name || 'N/A'} (Age: {enq.age || 'N/A'})</strong>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-pink-500/10 text-pink-650 border border-pink-500/20">
+                        {enq.status || 'New'}
+                      </span>
+                    </div>
+                    <div className={`text-[10px] ${textSecondary} mt-1`}>
+                      Parent: <strong className={textPrimary}>{enq.parent_name}</strong>
+                    </div>
+                    <div className={`text-[10px] ${textSecondary} mt-1 font-mono`}>
+                      📞 {enq.phone}
+                    </div>
+                    <div className="mt-2 text-[10px] bg-white/50 dark:bg-slate-900/50 p-2 rounded border border-slate-200/50 dark:border-slate-800/50 italic text-slate-600 dark:text-slate-400 leading-relaxed truncate" title={lastLog}>
+                      💬 Remark: {lastLog}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <a href={`tel:${enq.phone}`} title="Call" className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-center font-bold text-[10px] transition cursor-pointer">
+                      Call
+                    </a>
+                    <a href={`sms:${enq.phone}`} title="SMS" className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-750 text-white rounded-lg text-center font-bold text-[10px] transition cursor-pointer">
+                      SMS
+                    </a>
+                    <a href={`https://wa.me/${enq.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-center font-bold text-[10px] transition cursor-pointer">
+                      WhatsApp
+                    </a>
+                    <button
+                      onClick={() => setLogModalEnq(enq)}
+                      className={`p-1.5 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-850 transition cursor-pointer text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'}`}
+                      title="Update Log"
+                    >
+                      📝
+                    </button>
+                    <button
+                      onClick={() => onUpdateStatus(enq.id, 'Admission Done')}
+                      className="p-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition cursor-pointer text-xs font-bold"
+                      title="Mark Completed"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className={`${bgCard} rounded-2xl p-6 space-y-4 shadow-sm`}>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div>
@@ -104,7 +201,7 @@ export default function EnquiriesTab({
                 enquiries.map((enq) => (
                   <tr key={enq.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-semibold text-slate-500">
-                      <div>{enq.created_at ? new Date(enq.created_at).toLocaleDateString('en-GB') : 'N/A'}</div>
+                      <div>{enq.created_at ? formatDateToDisplay(enq.created_at) : 'N/A'}</div>
                       {enq.source && (
                         <div className="mt-1 text-[10px] font-sans px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 inline-block text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                           {enq.source}

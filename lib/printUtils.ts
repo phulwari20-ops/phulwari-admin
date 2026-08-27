@@ -21,6 +21,17 @@ const isMode = (paymentMode: string, target: 'Cash' | 'UPI' | 'Bank') => {
   return m.includes('bank') || m.includes('net') || m.includes('card')
 }
 
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
+
 const buildRegistrationFormHtml = (st: any): string => {
   const paymentMode = esc(st.payment_mode)
   const amountPaid = st.amount_paid !== '' && st.amount_paid != null ? `₹ ${esc(st.amount_paid)}` : ''
@@ -82,24 +93,22 @@ const buildRegistrationFormHtml = (st: any): string => {
 
           <!-- Header -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <div style="flex: 1;">
-              <img src="/Logo-png.png" style="width: 150px; height: auto;" alt="Phulwari Logo" />
-              <div style="color: #10B981; font-weight: bold; font-size: 14px; background: #064E3B; color: white; display: inline-block; padding: 4px 16px; border-radius: 20px; margin-top: 10px;">Where Growth Meets Wellness</div>
-            </div>
-
-            <div style="flex: 2; text-align: center;">
-              <h1 style="color: #1B1464; font-size: 42px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
-              <h2 style="color: #E11D48; font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
-            </div>
-
-            <div style="flex: 1; text-align: right; font-size: 11px; line-height: 1.5; color: #333;">
-              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
-                <span>📍 M/32, Road No. 25,<br/>Sri Krishna Nagar,<br/>Kidwaipuri, Patna - 800001</span>
+            <div style="flex: 1.2;">
+              <img src="/Logo-png.png" style="width: 140px; height: auto;" alt="Phulwari Logo" />
+              <div style="color: #10B981; font-weight: bold; font-size: 10px; background: #064E3B; color: white; display: inline-block; padding: 2px 10px; border-radius: 12px; margin-top: 4px;">Where Growth Meets Wellness</div>
+              <div style="font-size: 9px; line-height: 1.3; color: #444; margin-top: 6px;">
+                📍 M/32, Road No. 25, Sri Krishna Nagar, Kidwaipuri, Patna - 800001<br/>
+                📞 +91 6207368839 | ✉️ phulwari02@gmail.com
               </div>
-              <div style="margin-top: 4px;">📞 +91 6207368839</div>
-              <div>✉️ phulwari02@gmail.com</div>
-              <div>🌐 www.phulwari.co.in</div>
-              <div>📸 @phulwari.activitycentre</div>
+            </div>
+
+            <div style="flex: 1.8; text-align: center;">
+              <h1 style="color: #1B1464; font-size: 36px; font-weight: 900; margin: 0; line-height: 1;">PARENT</h1>
+              <h2 style="color: #E11D48; font-size: 24px; font-weight: 900; margin: 0; line-height: 1.2;">REGISTRATION FORM</h2>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+              ${st.photo_url ? `<img src="${esc(st.photo_url)}" style="width: 100px; height: 120px; object-fit: cover; border: 2px solid #E11D48; border-radius: 8px;" />` : `<div style="width: 100px; height: 120px; border: 2px dashed #E11D48; border-radius: 8px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; font-weight: bold; color: #E11D48; background: #FFF1F2; box-sizing: border-box; padding: 4px;">Affix Photo Here</div>`}
             </div>
           </div>
 
@@ -127,9 +136,9 @@ const buildRegistrationFormHtml = (st: any): string => {
 
             <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
               <span style="white-space: nowrap;">Child's Full Name:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.full_name)}</span>
+              <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${esc(st.full_name)}</span>
               <span style="white-space: nowrap;">Date of Birth:</span>
-              <span style="border-bottom: 1px solid #000; width: 120px; text-align: center;">${esc(st.dob)}</span>
+              <span style="border-bottom: 1px solid #000; width: 120px; text-align: center; font-weight: bold;">${formatDateToDisplay(esc(st.dob))}</span>
             </div>
 
             <div style="display: flex; margin-bottom: 15px; gap: 20px; align-items: flex-end;">
@@ -137,8 +146,13 @@ const buildRegistrationFormHtml = (st: any): string => {
               <span><input type="checkbox" ${st.gender === 'Boy' ? 'checked' : ''}> Male</span>
               <span><input type="checkbox" ${st.gender === 'Girl' ? 'checked' : ''}> Female</span>
               <span><input type="checkbox" ${st.gender !== 'Boy' && st.gender !== 'Girl' ? 'checked' : ''}> Other</span>
-              <span style="margin-left: 30px; white-space: nowrap;">Age (as on today):</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;"></span>
+              <span style="margin-left: 30px; white-space: nowrap;">Blood Group:</span>
+              <span style="border-bottom: 1px solid #000; width: 100px; text-align: center; font-weight: bold;">${esc(st.blood_group) || 'N/A'}</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px;">
+              <span style="white-space: nowrap;">Address:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.address)}</span>
             </div>
 
             <div style="display: flex; gap: 10px; align-items: flex-end;">
@@ -157,7 +171,7 @@ const buildRegistrationFormHtml = (st: any): string => {
 
             <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
               <span style="white-space: nowrap;">Parent / Guardian Full Name:</span>
-              <span style="border-bottom: 1px solid #000; flex: 2;">${esc(st.parent_name)}</span>
+              <span style="border-bottom: 1px solid #000; flex: 2; font-weight: bold;">${esc(st.parent_name)}</span>
               <span style="white-space: nowrap;">Relationship:</span>
               <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_relationship)}</span>
             </div>
@@ -171,16 +185,62 @@ const buildRegistrationFormHtml = (st: any): string => {
 
             <div style="display: flex; gap: 10px; align-items: flex-end;">
               <span style="white-space: nowrap;">Phone No.:</span>
-              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_phone)}</span>
+              <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${esc(st.parent_phone)}</span>
               <span style="white-space: nowrap;">Alternate Phone No.:</span>
               <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.parent_alt_phone)}</span>
             </div>
           </div>
 
+          <!-- 3. EMERGENCY CONTACT DETAILS -->
+          <div style="border: 2px solid #D97706; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #D97706; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. EMERGENCY CONTACT DETAILS</div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Emergency Contact Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 2;">${esc(st.emergency_contact_name)}</span>
+              <span style="white-space: nowrap;">Relationship:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.emergency_relationship)}</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${esc(st.emergency_phone)}</span>
+              <span style="white-space: nowrap;">Alternate Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.emergency_alt_phone)}</span>
+            </div>
+          </div>
+
+          <!-- 4. MEDICAL DETAILS & SPECIAL INSTRUCTIONS -->
+          <div style="border: 2px solid #0891B2; border-radius: 8px; position: relative; padding: 25px 15px 15px; margin-bottom: 20px;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #0891B2; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. MEDICAL DETAILS & SPECIAL INSTRUCTIONS</div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Has Medical Condition / Allergies?</span>
+              <span style="margin-left: 10px;"><input type="checkbox" ${st.has_medical_condition ? 'checked' : ''}> Yes</span>
+              <span><input type="checkbox" ${!st.has_medical_condition ? 'checked' : ''}> No</span>
+              <span style="white-space: nowrap; margin-left: 20px;">Details (if yes):</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.medical_condition_details)}</span>
+            </div>
+
+            <div style="display: flex; margin-bottom: 15px; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Regular Medication:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.regular_medication)}</span>
+              <span style="white-space: nowrap;">Preferred Hospital:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.hospital_preference)}</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <span style="white-space: nowrap;">Pediatrician/Doctor Name:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.doctor_name)}</span>
+              <span style="white-space: nowrap;">Doctor Phone No.:</span>
+              <span style="border-bottom: 1px solid #000; flex: 1;">${esc(st.doctor_phone)}</span>
+            </div>
+          </div>
+
           <div style="display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch;">
-            <!-- 3. PROGRAM / BATCH DETAILS -->
+            <!-- 5. PROGRAM / BATCH DETAILS -->
             <div style="flex: 1; border: 2px solid #166534; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-              <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">3. PROGRAM / BATCH DETAILS</div>
+              <div style="position: absolute; top: -14px; left: -2px; background: #166534; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. PROGRAM / BATCH DETAILS</div>
 
               <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
                 <span style="white-space: nowrap;">Plan / Batch:</span>
@@ -201,7 +261,7 @@ const buildRegistrationFormHtml = (st: any): string => {
 
               <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; font-size: 13px;">
                 <span style="white-space: nowrap;">📅 Plan Validity:</span>
-                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center; font-weight: bold; color: #166534;">${planStart || '—'} &nbsp;→&nbsp; ${planEnd || '—'}</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; text-align: center; font-weight: bold; color: #166534;">${formatDateToDisplay(planStart) || '—'} &nbsp;→&nbsp; ${formatDateToDisplay(planEnd) || '—'}</span>
               </div>
 
               <div style="display: flex; gap: 10px; align-items: flex-end; font-size: 13px;">
@@ -216,9 +276,9 @@ const buildRegistrationFormHtml = (st: any): string => {
               </div>
             </div>
 
-            <!-- 4. PAYMENT DETAILS -->
+            <!-- 6. PAYMENT DETAILS -->
             <div style="flex: 1; border: 2px solid #1D4ED8; border-radius: 8px; position: relative; padding: 25px 15px 15px;">
-              <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">4. PAYMENT DETAILS</div>
+              <div style="position: absolute; top: -14px; left: -2px; background: #1D4ED8; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">6. PAYMENT DETAILS</div>
 
               <div style="margin-bottom: 10px; font-size: 13px;">Mode of Payment:</div>
               <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 15px;">
@@ -234,7 +294,7 @@ const buildRegistrationFormHtml = (st: any): string => {
 
               <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; font-size: 13px;">
                 <span style="white-space: nowrap;">Payment Date:</span>
-                <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${printDate}</span>
+                <span style="border-bottom: 1px solid #000; flex: 1; font-weight: bold;">${formatDateToDisplay(printDate)}</span>
               </div>
 
               <!-- Fee breakdown: Total / Collected / Due -->
@@ -267,9 +327,9 @@ const buildRegistrationFormHtml = (st: any): string => {
             </div>
           </div>
 
-          <!-- 5. TERMS & CONDITIONS -->
-          <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px;">
-            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">5. TERMS & CONDITIONS</div>
+          <!-- 7. TERMS & CONDITIONS -->
+          <div style="border: 2px solid #F472B6; border-radius: 8px; position: relative; padding: 25px 15px 10px; page-break-inside: avoid;">
+            <div style="position: absolute; top: -14px; left: -2px; background: #E11D48; color: white; padding: 4px 15px; font-weight: bold; border-top-left-radius: 6px; border-bottom-right-radius: 6px; font-size: 14px;">7. TERMS & CONDITIONS</div>
 
             <ul style="font-size: 10px; line-height: 1.4; padding-left: 20px; margin: 0; color: #111;">
               <li>I confirm that all the information provided above is true and accurate to the best of my knowledge.</li>

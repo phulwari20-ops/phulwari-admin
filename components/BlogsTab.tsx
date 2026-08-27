@@ -204,6 +204,29 @@ export default function BlogsTab({
   const draftBlogs = blogs.filter(b => b.status === 'draft').length;
   const scheduledBlogs = blogs.filter(b => b.status === 'scheduled').length;
   const totalViews = blogs.reduce((sum, b) => sum + (b.views || 0), 0);
+  const insertText = (tagStart: string, tagEnd: string) => {
+    const textarea = document.getElementById('blog-content-textarea') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selected = text.substring(start, end);
+    const replacement = tagStart + (selected || '') + tagEnd;
+    const newValue = text.substring(0, start) + replacement + text.substring(end);
+
+    if (editingBlog) {
+      setEditingBlog({ ...editingBlog, content: newValue });
+    } else {
+      setBlogForm({ ...blogForm, content: newValue });
+    }
+
+    // Refocus and set cursor
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + tagStart.length, start + tagStart.length + (selected || '').length);
+    }, 0);
+  };
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
@@ -512,12 +535,95 @@ export default function BlogsTab({
 
           <div>
             <label className={`font-bold ${textSecondary}`}>Blog Content *</label>
+            <div className="flex flex-wrap items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-xl mt-1 border-b-0">
+              <button
+                type="button"
+                onClick={() => insertText('<strong>', '</strong>')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded font-bold text-xs"
+                title="Bold"
+              >B</button>
+              <button
+                type="button"
+                onClick={() => insertText('<em>', '</em>')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded italic text-xs font-serif"
+                title="Italic"
+              >I</button>
+              <button
+                type="button"
+                onClick={() => insertText('<u>', '</u>')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded underline text-xs"
+                title="Underline"
+              >U</button>
+              <span className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></span>
+              <button
+                type="button"
+                onClick={() => insertText('<h1>', '</h1>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded font-black text-xs"
+                title="Heading 1"
+              >H1</button>
+              <button
+                type="button"
+                onClick={() => insertText('<h2>', '</h2>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded font-bold text-xs"
+                title="Heading 2"
+              >H2</button>
+              <button
+                type="button"
+                onClick={() => insertText('<h3>', '</h3>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs"
+                title="Heading 3"
+              >H3</button>
+              <span className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></span>
+              <button
+                type="button"
+                onClick={() => insertText('<p class="my-4 leading-relaxed">', '</p>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded font-bold text-xs font-mono"
+                title="Paragraph"
+              >¶ P</button>
+              <button
+                type="button"
+                onClick={() => insertText('<ul>\n  <li>', '</li>\n</ul>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs"
+                title="Bullet List"
+              >• List</button>
+              <button
+                type="button"
+                onClick={() => insertText('<ol>\n  <li>', '</li>\n</ol>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs"
+                title="Numbered List"
+              >1. List</button>
+              <button
+                type="button"
+                onClick={() => insertText('<blockquote>', '</blockquote>\n')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs"
+                title="Blockquote"
+              >“ Quote</button>
+              <span className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></span>
+              <button
+                type="button"
+                onClick={() => insertText('<a href="https://" class="text-pink-600 underline font-bold" target="_blank">', '</a>')}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs text-blue-600 underline"
+                title="Add Link"
+              >Link</button>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = prompt("Enter Image URL:", "https://");
+                  if (url) {
+                    insertText(`<img src="${url}" class="rounded-2xl max-w-full my-4 shadow-md border" alt="Image" />\n`, '');
+                  }
+                }}
+                className="px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded text-xs text-emerald-600 font-bold"
+                title="Add Image"
+              >+ Image</button>
+            </div>
             <textarea
+              id="blog-content-textarea"
               required
-              placeholder="Write the full blog post content here (Supports HTML or Rich Text)..."
+              placeholder="Write the full blog post content here. You can use the formatting toolbar above to professionalize it with headings, lists, links, bold styles, blockquotes, and images..."
               value={editingBlog ? editingBlog.content : blogForm.content}
               onChange={(e) => editingBlog ? setEditingBlog({ ...editingBlog, content: e.target.value }) : setBlogForm({ ...blogForm, content: e.target.value })}
-              className={`w-full border rounded-xl px-3 py-2 outline-none mt-1 min-h-[160px] ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
+              className={`w-full border rounded-b-xl px-3 py-2 outline-none min-h-[220px] font-mono ${isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
             />
           </div>
 

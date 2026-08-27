@@ -67,13 +67,30 @@ export default function CalendarTab({
               }`}
             >
               <span className={`text-xs font-bold ${textPrimary}`}>{day.dayNum} {monthName.substring(0, 3)}</span>
-              <div className="space-y-1 w-full text-center">
-                <span className={`block text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${badgeStatus}`}>
-                  {day.presentCount > 0 ? `${day.presentCount} Present` : '2 Present'}
-                </span>
+              <div className="space-y-1 w-full mt-1.5">
+                {day.presentCount > 0 && (
+                  <span className="block text-[9px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded">
+                    {day.presentCount} P
+                  </span>
+                )}
                 {day.absentCount > 0 && (
-                  <span className="block text-[10px] font-bold text-rose-400 bg-rose-950/80 border border-rose-800 px-1.5 py-0.5 rounded-md">
-                    {day.absentCount} Absent
+                  <span className="block text-[9px] font-extrabold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1 py-0.5 rounded">
+                    {day.absentCount} A
+                  </span>
+                )}
+                {day.halfdayCount > 0 && (
+                  <span className="block text-[9px] font-extrabold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded">
+                    {day.halfdayCount} HD
+                  </span>
+                )}
+                {day.leaveCount > 0 && (
+                  <span className="block text-[9px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 py-0.5 rounded">
+                    {day.leaveCount} L
+                  </span>
+                )}
+                {day.holidayCount > 0 && (
+                  <span className="block text-[9px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1 py-0.5 rounded">
+                    {day.holidayCount} H
                   </span>
                 )}
               </div>

@@ -31,18 +31,52 @@ function renewalLabel(diff: number | null) {
   return { text: `Due in ${diff} days`, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' }
 }
 
-function buildRenewalWhatsapp(st: any, batchName: string, remainingClasses: number) {
+function getAlertInfo(remaining: number, daysDiff: number | null) {
+  const alerts: string[] = []
+  if (remaining <= 3) {
+    alerts.push(`Only ${remaining} class(es) left!`)
+  }
+  if (daysDiff !== null && daysDiff <= 3) {
+    if (daysDiff < 0) {
+      alerts.push(`Plan expired by ${Math.abs(daysDiff)} day(s)!`)
+    } else if (daysDiff === 0) {
+      alerts.push(`Plan expires Today!`)
+    } else {
+      alerts.push(`Plan expires in ${daysDiff} day(s)!`)
+    }
+  }
+  return alerts
+}
+
+function buildRenewalWhatsapp(st: any, batchName: string, remaining: number, daysDiff: number | null) {
   const phone = (st.parent_phone || '').replace(/[^0-9]/g, '')
   const target = phone.length === 10 ? `91${phone}` : phone || '919999999999'
-  const msg = `Dear ${st.parent_name || 'Parent'},\n\nThis is a gentle renewal reminder from Phulwari Mother & Child Activity Centre.\n\n🎓 Student: ${st.full_name} (${st.admission_id})\n📦 Package: ${batchName}\n📊 Remaining Classes: ${remainingClasses}\n\nYour child's class package is nearing completion. Please renew at the earliest to avoid any break in classes.\n\nFor queries, please contact us.\n\n🌸 Phulwari Mother & Child Activity Centre\nM/32, Road No. 25, Sri Krishna Nagar, Patna — 800001`
+  
+  const alerts = getAlertInfo(remaining, daysDiff)
+  const alertText = alerts.length > 0 ? alerts.map(a => `⚠️ ${a}`).join('\n') : 'Plan Renewal Reminder'
+  
+  const msg = `Dear ${st.parent_name || 'Parent'},\n\nThis is a gentle renewal reminder from Phulwari Mother & Child Activity Centre.\n\n🎓 Student: ${st.full_name} (${st.admission_id})\n📦 Package: ${batchName}\n\n${alertText}\n\nPlease renew at the earliest to ensure uninterrupted sessions.\n\n🌸 Phulwari Centre\nPatna`
   return `https://wa.me/${target}?text=${encodeURIComponent(msg)}`
 }
 
-function buildSmsLink(st: any, remainingClasses: number) {
+function buildSmsLink(st: any, remaining: number, daysDiff: number | null) {
   const phone = (st.parent_phone || '').replace(/[^0-9]/g, '')
-  const msg = `Dear ${st.parent_name}, ${st.full_name}'s class package has ${remainingClasses} classes remaining. Please renew soon. -Phulwari Centre`
+  const alerts = getAlertInfo(remaining, daysDiff)
+  const alertText = alerts.join(', ')
+  const msg = `Dear ${st.parent_name}, renewal notice for ${st.full_name}: ${alertText}. Please renew soon. -Phulwari Centre`
   return `sms:${phone}?body=${encodeURIComponent(msg)}`
 }
+
+const formatDateToDisplay = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (dateStr.includes('/')) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
 
 export default function RenewalAlertsTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight, students, batches
@@ -51,23 +85,23 @@ export default function RenewalAlertsTab({
   const analyzed = useMemo(() => {
     return students
       .map(st => {
-        const totalClasses = Number(st.total_classes || st.package_classes || 0)
+        const totalClasses = Number(st.classes_total !== undefined && st.classes_total !== null ? st.classes_total : 12)
         const consumed = Number(st.classes_consumed || 0)
         const remaining = Math.max(0, totalClasses - consumed)
         const batchObj = batches.find((b: any) => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name?.toLowerCase().trim()))
         const batchName = st.batch_name || batchObj?.batch_name || 'N/A'
 
-        // Try to find due date - either renewal_date from student, or calculated from admission + package
-        const renewalDate = st.renewal_date || st.next_due_date || null
+        // Use validity_end_date as Plan Expiry Date
+        const renewalDate = st.validity_end_date || st.plan_validity_date || st.renewal_date || null
         const daysDiff = getDaysInfo(renewalDate)
 
         return { ...st, totalClasses, consumed, remaining, batchName, renewalDate, daysDiff }
       })
       .filter(st => {
-        // Show if: 0 classes left, or renewal_date within 7 days, or overdue
-        if (st.remaining === 0) return true
-        if (st.daysDiff !== null && st.daysDiff <= 7) return true
-        return false
+        // Show if remaining classes <= 3 OR validity days left <= 3 (or overdue)
+        const classAlertActive = st.remaining <= 3
+        const dateAlertActive = st.daysDiff !== null && st.daysDiff <= 3
+        return classAlertActive || dateAlertActive
       })
       .sort((a, b) => {
         const da = a.daysDiff ?? 999
@@ -78,7 +112,7 @@ export default function RenewalAlertsTab({
 
   const overdueCount = analyzed.filter(s => (s.daysDiff !== null && s.daysDiff < 0) || s.remaining === 0).length
   const urgentCount = analyzed.filter(s => s.daysDiff !== null && s.daysDiff >= 0 && s.daysDiff <= 3).length
-  const upcomingCount = analyzed.filter(s => s.daysDiff !== null && s.daysDiff > 3 && s.daysDiff <= 7).length
+  const upcomingCount = analyzed.filter(s => s.remaining > 0 && s.remaining <= 3 && (s.daysDiff === null || s.daysDiff > 3)).length
 
   return (
     <div className="space-y-6">
@@ -129,7 +163,7 @@ export default function RenewalAlertsTab({
                   <th className="py-2.5 px-3 text-center">Total</th>
                   <th className="py-2.5 px-3 text-center">Used</th>
                   <th className="py-2.5 px-3 text-center">Left</th>
-                  <th className="py-2.5 px-3">Renewal Date</th>
+                  <th className="py-2.5 px-3">Plan Expiry Date</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Parent</th>
                   <th className="py-2.5 px-3">Actions</th>
@@ -163,19 +197,32 @@ export default function RenewalAlertsTab({
                       <td className="py-3 px-3 text-center font-bold text-slate-500">{st.totalClasses || '—'}</td>
                       <td className="py-3 px-3 text-center font-bold text-orange-500">{st.consumed}</td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`font-extrabold text-sm ${st.remaining === 0 ? 'text-rose-600' : st.remaining <= 2 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        <span className={`font-extrabold text-sm ${st.remaining === 0 ? 'text-rose-600' : st.remaining <= 3 ? 'text-amber-600' : 'text-emerald-600'}`}>
                           {st.remaining}
                         </span>
                       </td>
                       <td className="py-3 px-3 font-mono text-[10px] text-slate-400">
                         {st.renewalDate
-                          ? new Date(st.renewalDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          ? formatDateToDisplay(st.renewalDate)
                           : <span className="italic text-slate-300">Not set</span>}
                       </td>
                       <td className="py-3 px-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-extrabold ${label.bg} ${label.color}`}>
-                          {label.text}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          {st.remaining <= 3 && (
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-350 border border-rose-200 dark:border-rose-900 rounded-full font-bold text-[9px] w-fit">
+                              ⚠️ {st.remaining} Classes Left
+                            </span>
+                          )}
+                          {st.daysDiff !== null && st.daysDiff <= 3 && (
+                            <span className={`px-2 py-0.5 border rounded-full font-bold text-[9px] w-fit ${
+                              st.daysDiff < 0 
+                                ? 'bg-rose-150 text-rose-700 border-rose-300 dark:bg-rose-900/30 dark:text-rose-300' 
+                                : 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-350'
+                            }`}>
+                              📅 {st.daysDiff < 0 ? `Overdue (${Math.abs(st.daysDiff)}d)` : st.daysDiff === 0 ? 'Expires Today' : `Expires in ${st.daysDiff}d`}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-3">
                         <div className={`font-semibold ${textPrimary} text-[11px]`}>{st.parent_name}</div>
@@ -185,7 +232,7 @@ export default function RenewalAlertsTab({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {/* WhatsApp */}
                           <a
-                            href={buildRenewalWhatsapp(st, st.batchName, st.remaining)}
+                            href={buildRenewalWhatsapp(st, st.batchName, st.remaining, st.daysDiff)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-600 border border-emerald-500/20 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
@@ -203,7 +250,7 @@ export default function RenewalAlertsTab({
                           </a>
                           {/* SMS */}
                           <a
-                            href={buildSmsLink(st, st.remaining)}
+                            href={buildSmsLink(st, st.remaining, st.daysDiff)}
                             className="px-2 py-1.5 bg-violet-500/10 hover:bg-violet-600 hover:text-white text-violet-600 border border-violet-500/20 rounded-xl text-[10px] font-bold flex items-center gap-1 transition"
                             title="Send SMS"
                           >

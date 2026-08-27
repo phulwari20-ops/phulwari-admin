@@ -196,15 +196,20 @@ export default function AttendanceTab({
                           a.class_name === item.class_name && 
                           a.class_time === item.class_time
             );
-            const isPresent = currentAtt?.status === 'present';
-            const isAbsent = currentAtt?.status === 'absent';
+            const currentStatus = currentAtt?.status || 'unmarked';
             const classesLeft = (item.student.classes_total || 12) - (item.student.classes_consumed || 0);
 
             return (
-              <div key={`${item.student.id}-${item.class_name}-${idx}`} className={`p-4 rounded-xl border flex items-center justify-between ${bgSubCard}`}>
+              <div key={`${item.student.id}-${item.class_name}-${idx}`} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}>
                 <div>
-                  <h4 className={`text-xs font-bold ${textPrimary}`}>
-                    {item.student.full_name} <span className="text-blue-500 font-mono">({item.student.admission_id})</span>
+                  <h4 className={`text-xs font-bold ${textPrimary} flex items-center gap-2`}>
+                    <span>{item.student.full_name}</span>
+                    <span className="text-blue-500 font-mono">({item.student.admission_id})</span>
+                    {currentAtt?.remarks && (
+                      <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-semibold italic">
+                        {currentAtt.remarks}
+                      </span>
+                    )}
                   </h4>
                   <div className={`text-[11px] ${textSecondary} mt-1 flex flex-wrap gap-x-3 gap-y-1 items-center`}>
                     <span>Batch: <strong className={textPrimary}>{item.student.batch_name}</strong></span>
@@ -220,25 +225,85 @@ export default function AttendanceTab({
                     <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>{classesLeft}</span></span>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50 self-start sm:self-auto">
+                  {/* P Button */}
                   <button
                     disabled={isHoliday}
-                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, 'present', item.class_name, item.class_time)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shadow-sm ${
-                      isPresent 
-                        ? 'bg-emerald-600 text-white font-extrabold shadow-emerald-600/20' 
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/20'
+                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'present' ? 'unmarked' : 'present', item.class_name, item.class_time)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                      currentStatus === 'present'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-emerald-605 hover:bg-emerald-500/10'
                     }`}
-                  >Present</button>
+                    title="Present"
+                  >P</button>
+
+                  {/* A Button */}
                   <button
                     disabled={isHoliday}
-                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, 'absent', item.class_name, item.class_time)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
-                      isAbsent 
-                        ? 'bg-rose-600 text-white font-extrabold shadow-rose-600/20' 
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-500/20'
+                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'absent' ? 'unmarked' : 'absent', item.class_name, item.class_time)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                      currentStatus === 'absent'
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : 'text-rose-605 hover:bg-rose-500/10'
                     }`}
-                  >Absent</button>
+                    title="Absent"
+                  >A</button>
+
+                  {/* HD Button */}
+                  <button
+                    disabled={isHoliday}
+                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday', item.class_name, item.class_time)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                      currentStatus === 'halfday'
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'text-amber-505 hover:bg-amber-500/10'
+                    }`}
+                    title="Half Day"
+                  >HD</button>
+
+                  {/* L Button */}
+                  <button
+                    disabled={isHoliday}
+                    onClick={() => {
+                      if (currentStatus === 'leave') {
+                        handleMarkAttendance(item.student.id, attendanceDate, 'unmarked', item.class_name, item.class_time)
+                      } else {
+                        const r = prompt("Enter Leave Reason (e.g. Sick Leave, Out of Town, Family Function):", "Sick Leave")
+                        if (r !== null) {
+                          handleMarkAttendance(item.student.id, attendanceDate, 'leave', item.class_name, item.class_time, r || 'Leave')
+                        }
+                      }
+                    }}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                      currentStatus === 'leave'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-blue-605 hover:bg-blue-500/10'
+                    }`}
+                    title={currentStatus === 'leave' && currentAtt?.leave_reason ? `Leave: ${currentAtt.leave_reason}` : "Leave"}
+                  >L</button>
+
+                  {/* H Button */}
+                  <button
+                    disabled={isHoliday}
+                    onClick={() => {
+                      if (currentStatus === 'holiday') {
+                        handleMarkAttendance(item.student.id, attendanceDate, 'unmarked', item.class_name, item.class_time)
+                      } else {
+                        const r = prompt("Enter Student-specific Holiday Reason (e.g. Exam, Trip, Medical):", "School Trip")
+                        if (r !== null) {
+                          handleMarkAttendance(item.student.id, attendanceDate, 'holiday', item.class_name, item.class_time, r || 'Holiday')
+                        }
+                      }
+                    }}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                      currentStatus === 'holiday'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-purple-605 hover:bg-purple-500/10'
+                    }`}
+                    title={currentStatus === 'holiday' && currentAtt?.holiday_reason ? `Holiday: ${currentAtt.holiday_reason}` : "Student Holiday"}
+                  >H</button>
                 </div>
               </div>
             );
