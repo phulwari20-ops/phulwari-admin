@@ -63,18 +63,63 @@ export default function AttendanceTab({
     // Only process active students
     if (st.status === 'deactivated') return;
 
+    let isScheduledForDay = false;
+    const dayNameLower = dayName.toLowerCase();
+    const dayShortLower = dayName.slice(0, 3).toLowerCase();
+
+    // 1. Check custom_days string if student has explicit custom days configured
+    if (st.custom_days && st.custom_days.trim() !== '') {
+      const daysList = st.custom_days.split(',').map((d: string) => d.trim().toLowerCase());
+      const isDayMatched = daysList.some((d: string) => 
+        d === dayNameLower || d.startsWith(dayShortLower) || dayNameLower.startsWith(d)
+      );
+
+      if (!isDayMatched) {
+        // Explicitly NOT scheduled on this day!
+        return;
+      }
+      isScheduledForDay = true;
+    }
+
+    // 2. Fetch schedule entries from studentCustomSchedules or batchSchedules
     let schedules: any[] = [];
-    if (st.batch_id === '00000000-0000-0000-0000-000000000000') {
-      schedules = studentCustomSchedules.filter(sch => sch.student_id === st.id && sch.day_of_week === dayName);
+    if (st.batch_id === '00000000-0000-0000-0000-000000000000' || st.custom_days) {
+      schedules = studentCustomSchedules.filter(sch => 
+        sch.student_id === st.id && 
+        (sch.day_of_week?.toLowerCase() === dayNameLower || sch.day_of_week?.toLowerCase()?.startsWith(dayShortLower))
+      );
+      if (schedules.length === 0 && isScheduledForDay) {
+        // Synthetic schedule entry for custom plan
+        schedules = [{
+          class_name: st.program_interested || st.batch_name || 'Activity Class',
+          start_time: st.preferred_time_slot?.split('(')[1]?.split('-')[0]?.trim() || '10:30 AM',
+          end_time: st.preferred_time_slot?.split('-')[1]?.replace(')', '')?.trim() || '11:30 AM'
+        }];
+      }
     } else {
-      schedules = batchSchedules.filter(sch => sch.batch_id === st.batch_id && sch.day_of_week === dayName);
+      schedules = batchSchedules.filter(sch => 
+        sch.batch_id === st.batch_id && 
+        (sch.day_of_week?.toLowerCase() === dayNameLower || sch.day_of_week?.toLowerCase()?.startsWith(dayShortLower))
+      );
+      if (schedules.length === 0) {
+        // Check batch days
+        const matchedBatch = st.batch_id ? (filteredStudents.find(s => s.batch_id === st.batch_id)?.batch_days || '') : '';
+        const bDays = (st.batch_days || matchedBatch || 'Monday to Sunday').toLowerCase();
+        if (bDays.includes('monday to sunday') || bDays.includes('all days') || bDays.includes(dayNameLower) || bDays.includes(dayShortLower)) {
+          schedules = [{
+            class_name: st.batch_name || 'Batch Class',
+            start_time: '10:30 AM',
+            end_time: '11:30 AM'
+          }];
+        }
+      }
     }
 
     schedules.forEach(sch => {
       attendanceItems.push({
         student: st,
-        class_name: sch.class_name,
-        class_time: `${sch.start_time} - ${sch.end_time}`
+        class_name: sch.class_name || st.batch_name || 'Class',
+        class_time: sch.start_time && sch.end_time ? `${sch.start_time} - ${sch.end_time}` : (st.preferred_time_slot || '10:30 AM - 11:30 AM')
       });
     });
   });
