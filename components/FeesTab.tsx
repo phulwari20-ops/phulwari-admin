@@ -39,6 +39,121 @@ export default function FeesTab({
   const [localBatches, setLocalBatches] = useState<any[]>([])
   const [classFeeSaveStatus, setClassFeeSaveStatus] = useState('')
 
+  // View Ledger & Receipt Modal State
+  const [viewLedgerModal, setViewLedgerModal] = useState<{
+    isOpen: boolean
+    student: any | null
+    feeRecords: any[]
+    month: string
+  }>({
+    isOpen: false,
+    student: null,
+    feeRecords: [],
+    month: ''
+  })
+
+  const openLedgerViewForm = (st: any, studentFees: any[], month: string) => {
+    const studentFeeRecords = studentFees.length > 0 ? studentFees : fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+    setViewLedgerModal({
+      isOpen: true,
+      student: st,
+      feeRecords: studentFeeRecords,
+      month: month
+    })
+  }
+
+  const printLedgerDocument = (st: any, studentFeeRecords: any[], month: string) => {
+    const printWindow = window.open('', '_blank', 'width=850,height=900')
+    if (!printWindow) return
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Student Fee Ledger & Receipt - ${st.full_name}</title>
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 24px; color: #1e293b; }
+            .header { border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .title { font-size: 20px; font-weight: 800; color: #1e40af; }
+            .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+            .badge { background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+            .box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 8px; }
+            .lbl { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+            .val { font-size: 13px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { background: #1e40af; color: #ffffff; text-align: left; padding: 10px; font-size: 11px; font-weight: 700; }
+            td { padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+            .amount { text-align: right; font-family: monospace; font-weight: 700; }
+            .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="title">🌸 Phulwari Mother & Child Activity Centre</div>
+              <div class="sub">Official Student Fee Ledger & Payment Statement</div>
+            </div>
+            <div class="badge">Month: ${month}</div>
+          </div>
+
+          <div class="grid">
+            <div class="box"><div class="lbl">Student Name</div><div class="val">${st.full_name}</div></div>
+            <div class="box"><div class="lbl">Admission ID</div><div class="val">${st.admission_id}</div></div>
+            <div class="box"><div class="lbl">Assigned Batch</div><div class="val">${st.batch_name || 'General'}</div></div>
+            <div class="box"><div class="lbl">Parent Name & Phone</div><div class="val">${st.parent_name} (${st.parent_phone})</div></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date / Month</th>
+                <th>Fee Head / Description</th>
+                <th style="text-align:right;">Total Fee (₹)</th>
+                <th style="text-align:right;">Discount (₹)</th>
+                <th style="text-align:right;">Paid (₹)</th>
+                <th style="text-align:right;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${studentFeeRecords.length > 0 ? studentFeeRecords.map((f: any) => `
+                <tr>
+                  <td>${f.collection_date || f.paid_date || month}</td>
+                  <td>${f.title || f.fee_head || 'Monthly Fee'}</td>
+                  <td class="amount">₹${Number(f.amount || 0).toLocaleString()}</td>
+                  <td class="amount" style="color:#d97706;">₹${Number(f.discount || 0).toLocaleString()}</td>
+                  <td class="amount" style="color:#16a34a;">₹${Number(f.amount_paid || f.net_amount || 0).toLocaleString()}</td>
+                  <td><strong style="color:${f.status === 'paid' ? '#16a34a' : '#dc2626'}">${(f.status || 'PAID').toUpperCase()}</strong></td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td>${month}</td>
+                  <td>Monthly Fee</td>
+                  <td class="amount">₹${Number(st.total_fee || 3500).toLocaleString()}</td>
+                  <td class="amount">₹0</td>
+                  <td class="amount" style="color:#16a34a;">₹${Number(st.amount_paid || 0).toLocaleString()}</td>
+                  <td><strong>${st.amount_paid >= (st.total_fee || 3500) ? 'PAID' : 'DUE'}</strong></td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Printed on ${new Date().toLocaleString()} — Phulwari ERP System
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `
+    printWindow.document.write(htmlContent)
+    printWindow.document.close()
+  }
+
   const handleDirectPrintLedgerAndReceipt = (st: any, studentFees: any[], month: string) => {
     const studentFeeRecords = studentFees.length > 0 ? studentFees : fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id)
     const printWindow = window.open('', '_blank', 'width=850,height=900')
@@ -454,7 +569,7 @@ export default function FeesTab({
             return (
               <div
                 key={st.id}
-                onClick={() => handleDirectPrintLedgerAndReceipt(st, studentFees, feeSelectedMonth)}
+                onClick={() => openLedgerViewForm(st, studentFees, feeSelectedMonth)}
                 className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition ${bgSubCard} hover:border-blue-500/50`}
               >
                 <div className="flex items-center gap-4">
@@ -508,7 +623,7 @@ export default function FeesTab({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDirectPrintLedgerAndReceipt(st, studentFees, feeSelectedMonth);
+                      openLedgerViewForm(st, studentFees, feeSelectedMonth);
                     }}
                     className="text-blue-600 dark:text-blue-400 font-bold flex items-center justify-end gap-1 whitespace-nowrap 2xl:ml-2 hover:underline cursor-pointer"
                   >
@@ -722,6 +837,126 @@ export default function FeesTab({
                 Close &amp; Sync
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW LEDGER & RECEIPT MODAL FORM */}
+      {viewLedgerModal.isOpen && viewLedgerModal.student && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fadeIn overflow-y-auto">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90vh] overflow-y-auto`}>
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-extrabold text-lg">📄</div>
+                <div>
+                  <h3 className={`text-base font-extrabold ${textPrimary}`}>Student Fee Ledger &amp; Receipt View</h3>
+                  <p className={`text-xs ${textSecondary}`}>Itemized statement for <strong>{viewLedgerModal.month}</strong></p>
+                </div>
+              </div>
+              <button onClick={() => setViewLedgerModal(prev => ({ ...prev, isOpen: false }))} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Student Details Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span className="block text-[10px] font-extrabold uppercase text-slate-400">Student Name</span>
+                <span className={`text-xs font-bold ${textPrimary} mt-0.5 block`}>{viewLedgerModal.student.full_name}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span className="block text-[10px] font-extrabold uppercase text-slate-400">Admission ID</span>
+                <span className="text-xs font-mono font-bold text-blue-500 mt-0.5 block">{viewLedgerModal.student.admission_id}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span className="block text-[10px] font-extrabold uppercase text-slate-400">Assigned Batch</span>
+                <span className={`text-xs font-bold ${textPrimary} mt-0.5 block`}>{viewLedgerModal.student.batch_name || 'General'}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span className="block text-[10px] font-extrabold uppercase text-slate-400">Parent Phone</span>
+                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 mt-0.5 block">{viewLedgerModal.student.parent_phone || 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* Itemized Table */}
+            <div className="border rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 dark:bg-slate-900 font-extrabold text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2.5 px-3">Date / Month</th>
+                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3 text-right">Total (₹)</th>
+                    <th className="py-2.5 px-3 text-right">Discount (₹)</th>
+                    <th className="py-2.5 px-3 text-right">Paid (₹)</th>
+                    <th className="py-2.5 px-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
+                  {viewLedgerModal.feeRecords.length > 0 ? (
+                    viewLedgerModal.feeRecords.map((f: any, i: number) => (
+                      <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                        <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px]">{f.collection_date || f.paid_date || viewLedgerModal.month}</td>
+                        <td className="py-2.5 px-3">
+                          <div className={`font-bold ${textPrimary}`}>{f.title || f.fee_head || 'Monthly Fee'}</div>
+                          {f.receipt_no && <div className="text-[10px] text-slate-400 font-mono">RCPT: {f.receipt_no}</div>}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold">₹{Number(f.amount || 0).toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-600">- ₹{Number(f.discount || 0).toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-600">₹{Number(f.amount_paid || f.net_amount || 0).toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                            f.status === 'paid' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
+                          }`}>
+                            {f.status || 'PAID'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="py-3 px-3 font-mono text-slate-500">{viewLedgerModal.month}</td>
+                      <td className="py-3 px-3 font-bold">Monthly Fee</td>
+                      <td className="py-3 px-3 text-right font-mono font-bold">₹{Number(viewLedgerModal.student.total_fee || 3500).toLocaleString()}</td>
+                      <td className="py-3 px-3 text-right font-mono text-amber-600">₹0</td>
+                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-600">₹{Number(viewLedgerModal.student.amount_paid || 0).toLocaleString()}</td>
+                      <td className="py-3 px-3 text-right">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600">
+                          {viewLedgerModal.student.amount_paid >= (viewLedgerModal.student.total_fee || 3500) ? 'PAID' : 'DUE'}
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setViewLedgerModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => printLedgerDocument(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> Download / Save PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => printLedgerDocument(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+              >
+                <span>🖨️ Print Receipt</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}
