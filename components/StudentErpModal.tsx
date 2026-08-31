@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus, ArrowRight, CalendarDays } from 'lucide-react'
+import { X, IndianRupee, FileText, Users, Key, Download, Trash2, UserX, Pencil, Layers, Save, Plus, ArrowRight, CalendarDays, MessageSquare } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface StudentErpModalProps {
@@ -449,7 +449,6 @@ export default function StudentErpModal({
     : (() => { try { return JSON.parse(student?.additional_batches || '[]') } catch { return [] } })()
 
 
-
   // Unified Print Receipt function
   const handlePrintTransactionReceipt = (matchReceiptNo: string) => {
     // Find all items sharing the same receipt number
@@ -478,7 +477,7 @@ export default function StudentErpModal({
     const totalDisc = printableList.reduce((sum, item) => sum + Number(item.discount || 0), 0)
     const totalNet = printableList.reduce((sum, item) => sum + Number(item.net_amount || 0), 0)
     const totalPaid = printableList.reduce((sum, item) => sum + Number(item.amount_paid || item.net_amount || 0), 0)
-    const totalPending = printableList.reduce((sum, item) => sum + Number(item.pending_amount || 0), 0)
+    const totalPending = Math.max(0, totalOrig - totalDisc - totalPaid)
 
     const pdfWin = window.open('', '_blank', 'width=850,height=1100')
     if (pdfWin) {
@@ -547,20 +546,26 @@ export default function StudentErpModal({
               </tr>
             </thead>
             <tbody>
-              ${printableList.map(item => `
-                <tr>
-                  <td>
-                    <div style="font-weight: 700; color: #0f172a;">${item.title}</div>
-                    ${item.transaction_id ? `<div style="font-size: 9px; color: #64748b; margin-top: 2px;">⚡ Ref ID: ${item.transaction_id}</div>` : ''}
-                    ${item.collection_time ? `<div style="font-size: 9px; color: #64748b;">📅 Date/Time: ${item.collection_time.includes('T') ? formatDateToDisplay(item.collection_time.split('T')[0]) + ' ' + item.collection_time.split('T')[1] : formatDateToDisplay(item.collection_time)}</div>` : ''}
-                    ${item.remarks ? `<div style="font-size: 9px; color: #64748b; font-style: italic;">📌 Notes: ${item.remarks}</div>` : ''}
-                  </td>
-                  <td class="amount">₹${Number(item.amount).toFixed(2)}</td>
-                  <td class="amount" style="color:#d97706;">- ₹${Number(item.discount).toFixed(2)}</td>
-                  <td class="amount" style="color:#16a34a;">₹${Number(item.amount_paid || item.net_amount || 0).toFixed(2)}</td>
-                  <td class="amount" style="color:#dc2626;">₹${Number(item.pending_amount || 0).toFixed(2)}</td>
-                </tr>
-              `).join('')}
+              ${printableList.map(item => {
+                const itemOrig = Number(item.amount || 0);
+                const itemDisc = Number(item.discount || 0);
+                const itemPaid = Number(item.amount_paid || item.net_amount || 0);
+                const itemPending = Math.max(0, itemOrig - itemDisc - itemPaid);
+                return `
+                  <tr>
+                    <td>
+                      <div style="font-weight: 700; color: #0f172a;">${item.title}</div>
+                      ${item.transaction_id ? `<div style="font-size: 9px; color: #64748b; margin-top: 2px;">⚡ Ref ID: ${item.transaction_id}</div>` : ''}
+                      ${item.collection_time ? `<div style="font-size: 9px; color: #64748b;">📅 Date/Time: ${item.collection_time.includes('T') ? formatDateToDisplay(item.collection_time.split('T')[0]) + ' ' + item.collection_time.split('T')[1] : formatDateToDisplay(item.collection_time)}</div>` : ''}
+                      ${item.remarks ? `<div style="font-size: 9px; color: #64748b; font-style: italic;">📌 Notes: ${item.remarks}</div>` : ''}
+                    </td>
+                    <td class="amount">₹${itemOrig.toFixed(2)}</td>
+                    <td class="amount" style="color:#d97706;">- ₹${itemDisc.toFixed(2)}</td>
+                    <td class="amount" style="color:#16a34a;">₹${itemPaid.toFixed(2)}</td>
+                    <td class="amount" style="color:${itemPending === 0 ? '#16a34a' : '#dc2626'};">₹${itemPending.toFixed(2)}</td>
+                  </tr>
+                `
+              }).join('')}
               <tr class="total-row">
                 <td>TOTAL SUMMARY</td>
                 <td class="amount">₹${totalOrig.toFixed(2)}</td>

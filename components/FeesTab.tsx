@@ -116,16 +116,21 @@ export default function FeesTab({
               </tr>
             </thead>
             <tbody>
-              ${studentFeeRecords.length > 0 ? studentFeeRecords.map((f: any) => `
-                <tr>
-                  <td>${f.collection_date || f.paid_date || month}</td>
-                  <td>${f.title || f.fee_head || 'Monthly Fee'}</td>
-                  <td class="amount">₹${Number(f.amount || 0).toLocaleString()}</td>
-                  <td class="amount" style="color:#d97706;">₹${Number(f.discount || 0).toLocaleString()}</td>
-                  <td class="amount" style="color:#16a34a;">₹${Number(f.amount_paid || f.net_amount || 0).toLocaleString()}</td>
-                  <td><strong style="color:${f.status === 'paid' ? '#16a34a' : '#dc2626'}">${(f.status || 'PAID').toUpperCase()}</strong></td>
-                </tr>
-              `).join('') : `
+              ${studentFeeRecords.length > 0 ? studentFeeRecords.map((f: any) => {
+                const isRowPaid = f.status === 'paid' || (Number(f.amount_paid || 0) + Number(f.discount || 0) >= Number(f.amount || f.net_amount || 0) && Number(f.amount || 0) > 0);
+                const isRowPartial = !isRowPaid && Number(f.amount_paid || 0) > 0;
+                const rowStatusText = isRowPaid ? 'PAID' : isRowPartial ? 'PARTIAL' : 'DUE';
+                return `
+                  <tr>
+                    <td>${f.collection_date || f.paid_date || month}</td>
+                    <td>${f.title || f.fee_head || 'Monthly Fee'}</td>
+                    <td class="amount">₹${Number(f.amount || 0).toLocaleString()}</td>
+                    <td class="amount" style="color:#d97706;">₹${Number(f.discount || 0).toLocaleString()}</td>
+                    <td class="amount" style="color:#16a34a;">₹${Number(f.amount_paid || f.net_amount || 0).toLocaleString()}</td>
+                    <td><strong style="color:${isRowPaid ? '#16a34a' : isRowPartial ? '#d97706' : '#dc2626'}">${rowStatusText}</strong></td>
+                  </tr>
+                `
+              }).join('') : `
                 <tr>
                   <td>${month}</td>
                   <td>Monthly Fee</td>
@@ -906,11 +911,18 @@ export default function FeesTab({
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-600">- ₹{Number(f.discount || 0).toLocaleString()}</td>
                         <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-600">₹{Number(f.amount_paid || f.net_amount || 0).toLocaleString()}</td>
                         <td className="py-2.5 px-3 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                            f.status === 'paid' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
-                          }`}>
-                            {f.status || 'PAID'}
-                          </span>
+                          {(() => {
+                            const isRowPaid = f.status === 'paid' || (Number(f.amount_paid || 0) + Number(f.discount || 0) >= Number(f.amount || f.net_amount || 0) && Number(f.amount || 0) > 0);
+                            const isRowPartial = !isRowPaid && Number(f.amount_paid || 0) > 0;
+                            const rowStatusLabel = isRowPaid ? 'paid' : isRowPartial ? 'partial' : 'due';
+                            return (
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                isRowPaid ? 'bg-emerald-500/10 text-emerald-600' : isRowPartial ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-600'
+                              }`}>
+                                {rowStatusLabel}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))
@@ -943,7 +955,7 @@ export default function FeesTab({
               </button>
               <button
                 type="button"
-                onClick={() => printLedgerDocument(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
+                onClick={() => downloadLedgerPDF(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Download / Save PDF
