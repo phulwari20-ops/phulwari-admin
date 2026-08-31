@@ -92,6 +92,57 @@ export default function DashboardTab({
         </div>
       )}
 
+      {/* Admission & Student Status KPI Breakdown */}
+      {(() => {
+        const activeCount = students.filter(st => st.status !== 'deactivated').length
+        const deactivatedCount = students.filter(st => st.status === 'deactivated').length
+        const newCount = students.filter(st => {
+          if (st.status === 'deactivated') return false
+          if (st.status === 'new' || st.status === 'New') return true
+          const dateStr = st.created_at || st.print_date
+          if (dateStr) {
+            const d = new Date(dateStr)
+            const now = new Date()
+            return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          }
+          return false
+        }).length
+
+        return (
+          <div className={`p-4 rounded-2xl border ${bgCard} shadow-xs space-y-3 animate-fadeIn`}>
+            <div className="flex items-center justify-between">
+              <h4 className={`text-xs font-black uppercase tracking-wider ${textPrimary} flex items-center gap-2`}>
+                <Users className="w-4 h-4 text-blue-500" /> Admission &amp; Student Status Breakdown
+              </h4>
+              <span className="text-[10px] text-slate-400 font-semibold font-mono">Live Master Directory Sync</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-emerald-600">Total Active Students</p>
+                  <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">{activeCount}</p>
+                </div>
+                <UserCheck className="w-7 h-7 text-emerald-500 opacity-80" />
+              </div>
+              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-blue-600">Total New Admissions</p>
+                  <p className="text-xl font-black text-blue-700 dark:text-blue-400 mt-0.5">{newCount}</p>
+                </div>
+                <UserPlus className="w-7 h-7 text-blue-500 opacity-80" />
+              </div>
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-rose-600">Total Left / Deactivated</p>
+                  <p className="text-xl font-black text-rose-700 dark:text-rose-400 mt-0.5">{deactivatedCount}</p>
+                </div>
+                <Users className="w-7 h-7 text-rose-500 opacity-80" />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* 6 Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>

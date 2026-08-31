@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 
 interface AttendanceTabProps {
@@ -28,7 +28,8 @@ export default function AttendanceTab({
 }: AttendanceTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
-  const [localSearch, setLocalSearch] = React.useState<string>('');
+  const [localSearch, setLocalSearch] = useState('');
+  const [unscheduledSearch, setUnscheduledSearch] = useState('');
 
   // Derive the day of the week from the selected date.
   // `new Date('2026-08-21')` is parsed as UTC midnight while getDay() reads the
@@ -309,6 +310,147 @@ export default function AttendanceTab({
             );
           })
         )}
+      </div>
+
+      {/* ── UNSCHEDULED STUDENTS ATTENDANCE SECTION ── */}
+      <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 className={`text-xs font-black uppercase tracking-wider ${textPrimary} flex items-center gap-1.5`}>
+              <span>➕</span> Mark Unscheduled Student Attendance
+            </h4>
+            <p className={`text-[11px] ${textSecondary}`}>
+              Search and mark attendance for students not scheduled for {dayName}.
+            </p>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <input
+              type="text"
+              placeholder="Search unscheduled student name or ID..."
+              value={unscheduledSearch}
+              onChange={(e) => setUnscheduledSearch(e.target.value)}
+              className={`w-full text-xs font-semibold px-3 py-2 rounded-xl border outline-none ${
+                isLight ? 'bg-white border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
+              }`}
+            />
+          </div>
+        </div>
+
+        {/* 1. Show existing unscheduled marked attendance records for this date */}
+        {(() => {
+          const scheduledStudentIds = new Set(attendanceItems.map(i => i.student.id))
+          const existingUnscheduledMarked = attendance.filter((a: any) => 
+            a.date === attendanceDate && 
+            !scheduledStudentIds.has(a.student_id)
+          )
+
+          if (existingUnscheduledMarked.length === 0 && unscheduledSearch.trim() === '') {
+            return null
+          }
+
+          const searchFilteredUnscheduled = filteredStudents.filter(st => {
+            if (st.status === 'deactivated' || scheduledStudentIds.has(st.id)) return false
+            if (!unscheduledSearch.trim()) return existingUnscheduledMarked.some((a: any) => a.student_id === st.id)
+            const q = unscheduledSearch.toLowerCase().trim()
+            return st.full_name.toLowerCase().includes(q) || st.admission_id.toLowerCase().includes(q)
+          })
+
+          if (searchFilteredUnscheduled.length === 0) {
+            return (
+              <div className="p-4 text-center text-slate-400 text-xs font-semibold border border-dashed rounded-xl">
+                No unscheduled students match &quot;{unscheduledSearch}&quot;.
+              </div>
+            )
+          }
+
+          return (
+            <div className="space-y-2">
+              <span className="block font-bold text-[10px] uppercase text-blue-600 tracking-wider">Unscheduled Students ({searchFilteredUnscheduled.length})</span>
+              {searchFilteredUnscheduled.map(st => {
+                const defaultClass = st.batch_name ? `${st.batch_name} Extra` : 'General Extra Class'
+                const defaultTime = 'Custom Session'
+                const currentAtt = attendance.find(
+                  (a: any) => a.student_id === st.id && a.date === attendanceDate
+                )
+                const currentStatus = currentAtt?.status || 'unmarked'
+                const classesLeft = (st.classes_total || 12) - (st.classes_consumed || 0)
+
+                return (
+                  <div key={`unsched-${st.id}`} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}>
+                    <div>
+                      <h4 className={`text-xs font-bold ${textPrimary} flex items-center gap-2`}>
+                        <span>{st.full_name}</span>
+                        <span className="text-blue-500 font-mono">({st.admission_id})</span>
+                        <span className="text-[9px] bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1.5 py-0.5 rounded font-bold uppercase">Unscheduled</span>
+                        {currentAtt?.remarks && (
+                          <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-semibold italic">
+                            {currentAtt.remarks}
+                          </span>
+                        )}
+                      </h4>
+                      <div className={`text-[11px] ${textSecondary} mt-1 flex flex-wrap gap-x-3 gap-y-1 items-center`}>
+                        <span>Batch: <strong className={textPrimary}>{st.batch_name || 'General'}</strong></span>
+                        <span>|</span>
+                        <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500' : 'text-green-600'}`}>{classesLeft}</span></span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50 self-start sm:self-auto">
+                      {/* P Button */}
+                      <button
+                        disabled={isHoliday}
+                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'present' ? 'unmarked' : 'present', defaultClass, defaultTime)}
+                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'present' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-600 hover:bg-emerald-500/10'
+                        }`}
+                        title="Present"
+                      >P</button>
+
+                      {/* A Button */}
+                      <button
+                        disabled={isHoliday}
+                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'absent' ? 'unmarked' : 'absent', defaultClass, defaultTime)}
+                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'absent' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-600 hover:bg-rose-500/10'
+                        }`}
+                        title="Absent"
+                      >A</button>
+
+                      {/* HD Button */}
+                      <button
+                        disabled={isHoliday}
+                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday', defaultClass, defaultTime)}
+                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'halfday' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-600 hover:bg-amber-500/10'
+                        }`}
+                        title="Half Day"
+                      >HD</button>
+
+                      {/* L Button */}
+                      <button
+                        disabled={isHoliday}
+                        onClick={() => {
+                          if (currentStatus === 'leave') {
+                            handleMarkAttendance(st.id, attendanceDate, 'unmarked', defaultClass, defaultTime)
+                          } else {
+                            const r = prompt("Enter Leave Reason:", "Unscheduled Leave")
+                            if (r !== null) {
+                              handleMarkAttendance(st.id, attendanceDate, 'leave', defaultClass, defaultTime, r || 'Leave')
+                            }
+                          }
+                        }}
+                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'leave' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-600 hover:bg-blue-500/10'
+                        }`}
+                        title="Leave"
+                      >L</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
     </div>
   );

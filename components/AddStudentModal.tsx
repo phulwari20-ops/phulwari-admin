@@ -77,6 +77,12 @@ export default function AddStudentModal({
   const [editingCatName, setEditingCatName] = useState('')
   const [editingCatEmoji, setEditingCatEmoji] = useState('🧸')
 
+  // Manual Schedule Entry Builder state
+  const [manualSchDay, setManualSchDay] = useState('Monday')
+  const [manualSchClass, setManualSchClass] = useState('Gymnastics')
+  const [manualSchStart, setManualSchStart] = useState('05:00 PM')
+  const [manualSchEnd, setManualSchEnd] = useState('06:00 PM')
+
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return
     const name = newCatName.trim()
@@ -665,6 +671,121 @@ export default function AddStudentModal({
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* ➕ Manual Custom Schedule Builder */}
+                    <div className="p-3.5 bg-gradient-to-br from-orange-50 to-amber-50/60 border border-orange-200/90 rounded-2xl space-y-3 shadow-xs mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-orange-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>➕</span> Add Custom Schedule Entry
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-bold">Manual Day, Time &amp; Class Builder</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Day of Week</label>
+                          <select
+                            value={manualSchDay}
+                            onChange={(e) => setManualSchDay(e.target.value)}
+                            className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-orange-500"
+                          >
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Class / Activity</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Gymnastics"
+                            value={manualSchClass}
+                            onChange={(e) => setManualSchClass(e.target.value)}
+                            className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-orange-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Start Time</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 05:00 PM"
+                            value={manualSchStart}
+                            onChange={(e) => setManualSchStart(e.target.value)}
+                            className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none font-mono focus:border-orange-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">End Time</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 06:00 PM"
+                            value={manualSchEnd}
+                            onChange={(e) => setManualSchEnd(e.target.value)}
+                            className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none font-mono focus:border-orange-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!manualSchClass.trim()) return;
+                            const currentCustomSch = newStudentForm.custom_schedules || [];
+                            const updated = [
+                              ...currentCustomSch,
+                              {
+                                day_of_week: manualSchDay,
+                                class_name: manualSchClass.trim(),
+                                start_time: manualSchStart.trim() || '05:00 PM',
+                                end_time: manualSchEnd.trim() || '06:00 PM'
+                              }
+                            ];
+                            const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                            setNewStudentForm({
+                              ...newStudentForm,
+                              custom_schedules: updated,
+                              custom_days: uniqueDays,
+                              classes_total: updated.length * 4
+                            });
+                          }}
+                          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition cursor-pointer"
+                        >
+                          <span>➕ Add Schedule Entry</span>
+                        </button>
+                      </div>
+
+                      {/* Display configured custom entries */}
+                      {(newStudentForm.custom_schedules || []).length > 0 && (
+                        <div className="pt-2 border-t border-orange-200/80 space-y-1.5">
+                          <span className="text-[10px] font-extrabold uppercase text-orange-700 tracking-wider">Configured Custom Entries ({(newStudentForm.custom_schedules || []).length})</span>
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                            {(newStudentForm.custom_schedules || []).map((sch: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-orange-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+                                <span className="font-bold text-orange-600">📅 {sch.day_of_week}</span>
+                                <span>|</span>
+                                <span>{sch.class_name}</span>
+                                <span className="font-mono text-[10px] text-blue-500">({sch.start_time} - {sch.end_time})</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (newStudentForm.custom_schedules || []).filter((_: any, i: number) => i !== idx);
+                                    const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                                    setNewStudentForm({
+                                      ...newStudentForm,
+                                      custom_schedules: updated,
+                                      custom_days: uniqueDays,
+                                      classes_total: updated.length * 4
+                                    });
+                                  }}
+                                  className="text-rose-500 hover:text-rose-700 font-bold ml-1 cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

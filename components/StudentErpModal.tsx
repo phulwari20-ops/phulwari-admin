@@ -151,9 +151,7 @@ export default function StudentErpModal({
       { name: 'Registration Fee', default_amount: 1000 },
       { name: 'Monthly Fee',      default_amount: 3500 },
     ]
-    const extra = (feeHeads || []).filter(h => !['Registration Fee','Monthly Fee'].includes(h.name))
-    const all = [...systemHeads, ...extra]
-    return all.map((h, i) => {
+    return systemHeads.map((h, i) => {
       const isMonthly = h.name === 'Monthly Fee'
       const batchObj = allAvailableBatches?.find(b => b.id === student?.batch_id)
       const defaultAmt = isMonthly && batchObj?.fee_amount ? Number(batchObj.fee_amount) : Number(h.default_amount || 0)
@@ -178,9 +176,30 @@ export default function StudentErpModal({
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   const [expandedFeeHead, setExpandedFeeHead] = useState<string | null>(null)
 
+  // Money Input Edit Modal State
+  const [amountEditModal, setAmountEditModal] = useState<{
+    isOpen: boolean
+    rowId: string
+    field: 'total_fee' | 'discount' | 'paid_amount'
+    title: string
+    tempValue: string
+  }>({
+    isOpen: false,
+    rowId: '',
+    field: 'paid_amount',
+    title: '',
+    tempValue: ''
+  })
+
   // legacy - keep for batch compatibility
   const [paymentMode, setPaymentMode] = useState('UPI / Online')
   const [amountCollected, setAmountCollected] = useState('')
+
+  // ERP Manual Schedule Entry state
+  const [erpManualSchDay, setErpManualSchDay] = useState('Monday')
+  const [erpManualSchClass, setErpManualSchClass] = useState('Gymnastics')
+  const [erpManualSchStart, setErpManualSchStart] = useState('05:00 PM')
+  const [erpManualSchEnd, setErpManualSchEnd] = useState('06:00 PM')
 
   // ─── Initialize on open ───────────────────────────────────────────────────
   useEffect(() => {
@@ -217,6 +236,12 @@ export default function StudentErpModal({
         classes_consumed: student.classes_consumed !== undefined ? student.classes_consumed : 0,
         validity_end_date: student.validity_end_date || '',
         password: student.password || '',
+        category: student.category || 'Child Activity',
+        batch_id: student.batch_id || '',
+        batch_name: student.batch_name || '',
+        program_interested: student.program_interested || '',
+        preferred_time_slot: student.preferred_time_slot || '',
+        custom_days: student.custom_days || '',
         custom_schedules: studentCustSchedules
       })
       setDobInput(formatDateToDisplay(student.dob || ''));
@@ -711,22 +736,52 @@ export default function StudentErpModal({
                           }
                         </td>
                         {/* Total Fee */}
-                        <td className="px-2 py-1.5">
-                          <input type="number" value={row.total_fee} min={0}
-                            onChange={e=>updateFeeRow(row.id,'total_fee',parseFloat(e.target.value)||0)}
-                            className={`${inputCls} w-28 text-right font-mono`} />
+                        <td className="px-2 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setAmountEditModal({
+                              isOpen: true,
+                              rowId: row.id,
+                              field: 'total_fee',
+                              title: `Edit Total Fee (${row.fee_head === 'Other' ? (row.custom_head_name || 'Custom') : row.fee_head})`,
+                              tempValue: String(row.total_fee || 0)
+                            })}
+                            className="w-24 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-right font-mono font-bold hover:border-blue-500 cursor-pointer shadow-xs text-xs"
+                          >
+                            ₹{row.total_fee.toLocaleString()}
+                          </button>
                         </td>
                         {/* Discount */}
-                        <td className="px-2 py-1.5">
-                          <input type="number" value={row.discount} min={0}
-                            onChange={e=>updateFeeRow(row.id,'discount',parseFloat(e.target.value)||0)}
-                            className={`${inputCls} w-24 text-right font-mono text-amber-600`} />
+                        <td className="px-2 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setAmountEditModal({
+                              isOpen: true,
+                              rowId: row.id,
+                              field: 'discount',
+                              title: `Edit Discount (${row.fee_head === 'Other' ? (row.custom_head_name || 'Custom') : row.fee_head})`,
+                              tempValue: String(row.discount || 0)
+                            })}
+                            className="w-24 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-right font-mono font-bold hover:border-blue-500 cursor-pointer shadow-xs text-xs text-amber-600"
+                          >
+                            ₹{row.discount.toLocaleString()}
+                          </button>
                         </td>
                         {/* Paid Amount */}
-                        <td className="px-2 py-1.5">
-                          <input type="number" value={row.paid_amount} min={0} max={row.total_fee-row.discount}
-                            onChange={e=>updateFeeRow(row.id,'paid_amount',parseFloat(e.target.value)||0)}
-                            className={`${inputCls} w-28 text-right font-mono font-extrabold text-emerald-700`} />
+                        <td className="px-2 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setAmountEditModal({
+                              isOpen: true,
+                              rowId: row.id,
+                              field: 'paid_amount',
+                              title: `Edit Collected/Paid Amount (${row.fee_head === 'Other' ? (row.custom_head_name || 'Custom') : row.fee_head})`,
+                              tempValue: String(row.paid_amount || 0)
+                            })}
+                            className="w-24 px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 rounded-lg text-right font-mono font-bold hover:border-emerald-500 cursor-pointer shadow-xs text-xs"
+                          >
+                            ₹{row.paid_amount.toLocaleString()}
+                          </button>
                         </td>
                         {/* Collection Date */}
                         <td className="px-2 py-1.5">
@@ -1496,10 +1551,196 @@ export default function StudentErpModal({
               </div>
             </div>
 
-            {/* Section 4: Program Details */}
+            {/* Section 4: Program & Batch Details */}
             <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
-              <h4 className="font-extrabold text-[10px] text-green-600 uppercase tracking-wider pb-1 border-b">4. Program & Validity</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <h4 className="font-extrabold text-[10px] text-green-600 uppercase tracking-wider pb-1 border-b">4. Program &amp; Batch Details</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Category</label>
+                  <select
+                    value={editForm.category || 'Child Activity'}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="Child Activity">Child Activity</option>
+                    <option value="Zumba & Yoga">Zumba & Yoga</option>
+                    <option value="Daycare">Daycare</option>
+                    <option value="Events & Parties">Events & Parties</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Primary Batch</label>
+                  <select
+                    value={editForm.batch_id || ''}
+                    onChange={(e) => {
+                      const selectedBt = allAvailableBatches?.find(b => b.id === e.target.value)
+                      setEditForm({
+                        ...editForm,
+                        batch_id: e.target.value,
+                        batch_name: selectedBt?.batch_name || editForm.batch_name
+                      })
+                    }}
+                    className={inputCls}
+                  >
+                    <option value="">-- Select Batch --</option>
+                    {allAvailableBatches?.map(b => (
+                      <option key={b.id} value={b.id}>{b.batch_name} ({b.age_group || '1-3 Yrs'})</option>
+                    ))}
+                    <option value="00000000-0000-0000-0000-000000000000" className="font-bold text-orange-600">
+                      ⚙️ Customized Batch (Build Custom Schedule)
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Program Interested</label>
+                  <input
+                    type="text"
+                    value={editForm.program_interested || ''}
+                    onChange={(e) => setEditForm({ ...editForm, program_interested: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Preferred Time Slot</label>
+                  <select
+                    value={editForm.preferred_time_slot || 'Morning (9:00 AM - 12:00 PM)'}
+                    onChange={(e) => setEditForm({ ...editForm, preferred_time_slot: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="Morning (9:00 AM - 12:00 PM)">Morning (9:00 AM - 12:00 PM)</option>
+                    <option value="Afternoon (12:00 PM - 3:00 PM)">Afternoon (12:00 PM - 3:00 PM)</option>
+                    <option value="Evening (3:00 PM - 6:00 PM)">Evening (3:00 PM - 6:00 PM)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Custom Days / Schedule</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mon, Wed, Fri"
+                    value={editForm.custom_days || ''}
+                    onChange={(e) => setEditForm({ ...editForm, custom_days: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+
+                {/* Customized Batch Builder in ERP Edit Details */}
+                {editForm.batch_id === '00000000-0000-0000-0000-000000000000' && (
+                  <div className="col-span-2 md:col-span-3 p-3.5 bg-gradient-to-br from-orange-50 to-amber-50/60 border border-orange-200/90 rounded-2xl space-y-3 shadow-xs mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-orange-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>⚙️</span> Customized Batch Schedule Builder
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-bold">Manual Day, Time &amp; Class Builder</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">Day of Week</label>
+                        <select
+                          value={erpManualSchDay}
+                          onChange={(e) => setErpManualSchDay(e.target.value)}
+                          className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-orange-500"
+                        >
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">Class / Activity</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Gymnastics"
+                          value={erpManualSchClass}
+                          onChange={(e) => setErpManualSchClass(e.target.value)}
+                          className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-orange-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">Start Time</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 05:00 PM"
+                          value={erpManualSchStart}
+                          onChange={(e) => setErpManualSchStart(e.target.value)}
+                          className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none font-mono focus:border-orange-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">End Time</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 06:00 PM"
+                          value={erpManualSchEnd}
+                          onChange={(e) => setErpManualSchEnd(e.target.value)}
+                          className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white outline-none font-mono focus:border-orange-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!erpManualSchClass.trim()) return;
+                          const currentCustomSch = editForm.custom_schedules || [];
+                          const updated = [
+                            ...currentCustomSch,
+                            {
+                              day_of_week: erpManualSchDay,
+                              class_name: erpManualSchClass.trim(),
+                              start_time: erpManualSchStart.trim() || '05:00 PM',
+                              end_time: erpManualSchEnd.trim() || '06:00 PM'
+                            }
+                          ];
+                          const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                          setEditForm({
+                            ...editForm,
+                            custom_schedules: updated,
+                            custom_days: uniqueDays,
+                            classes_total: updated.length * 4
+                          });
+                        }}
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition cursor-pointer"
+                      >
+                        <span>➕ Add Schedule Entry</span>
+                      </button>
+                    </div>
+
+                    {/* Display configured custom entries */}
+                    {(editForm.custom_schedules || []).length > 0 && (
+                      <div className="pt-2 border-t border-orange-200/80 space-y-1.5">
+                        <span className="text-[10px] font-extrabold uppercase text-orange-700 tracking-wider">Configured Custom Entries ({(editForm.custom_schedules || []).length})</span>
+                        <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                          {(editForm.custom_schedules || []).map((sch: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-orange-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+                              <span className="font-bold text-orange-600">📅 {sch.day_of_week}</span>
+                              <span>|</span>
+                              <span>{sch.class_name}</span>
+                              <span className="font-mono text-[10px] text-blue-500">({sch.start_time} - {sch.end_time})</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = (editForm.custom_schedules || []).filter((_: any, i: number) => i !== idx);
+                                  const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                                  setEditForm({
+                                    ...editForm,
+                                    custom_schedules: updated,
+                                    custom_days: uniqueDays,
+                                    classes_total: updated.length * 4
+                                  });
+                                }}
+                                className="text-rose-500 hover:text-rose-700 font-bold ml-1 cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className={`font-bold ${textSecondary}`}>Registration Date</label>
                   <input type="date" required value={editForm.print_date || ''} onChange={(e) => setEditForm({ ...editForm, print_date: e.target.value })} className={inputCls} />
@@ -1746,6 +1987,63 @@ export default function StudentErpModal({
           </form>
         )}
       </div>
+
+      {/* MONEY EDIT POPUP MODAL */}
+      {amountEditModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fadeIn">
+          <div className={`${bgCard} rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800 relative`}>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+              <h4 className={`text-xs font-extrabold ${textPrimary}`}>{amountEditModal.title}</h4>
+              <button onClick={() => setAmountEditModal(prev => ({ ...prev, isOpen: false }))} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <label className={`block font-bold text-[11px] mb-1.5 ${textSecondary}`}>Enter Amount (₹)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-sm font-bold text-slate-400">₹</span>
+                <input
+                  type="number"
+                  autoFocus
+                  value={amountEditModal.tempValue}
+                  onChange={(e) => setAmountEditModal(prev => ({ ...prev, tempValue: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const val = Math.max(0, parseFloat(amountEditModal.tempValue) || 0)
+                      updateFeeRow(amountEditModal.rowId, amountEditModal.field, val)
+                      setAmountEditModal(prev => ({ ...prev, isOpen: false }))
+                    }
+                  }}
+                  className={`w-full text-lg font-bold font-mono pl-8 pr-3 py-2 rounded-xl border outline-none ${
+                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                  }`}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setAmountEditModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = Math.max(0, parseFloat(amountEditModal.tempValue) || 0)
+                  updateFeeRow(amountEditModal.rowId, amountEditModal.field, val)
+                  setAmountEditModal(prev => ({ ...prev, isOpen: false }))
+                }}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md shadow-emerald-600/20"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

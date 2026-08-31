@@ -107,6 +107,49 @@ export default function StudentListTab({
         </div>
       </div>
 
+      {/* ── Admission & Student Status KPI Cards ── */}
+      {(() => {
+        const activeCount = filteredStudents.filter(s => s.status !== 'deactivated').length
+        const deactivatedCount = filteredStudents.filter(s => s.status === 'deactivated').length
+        const newCount = filteredStudents.filter(st => {
+          if (st.status === 'deactivated') return false
+          if (st.status === 'new' || st.status === 'New') return true
+          const dateStr = st.created_at || st.print_date
+          if (dateStr) {
+            const d = new Date(dateStr)
+            const now = new Date()
+            return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          }
+          return false
+        }).length
+
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase text-emerald-600">Total Active Students</p>
+                <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">{activeCount}</p>
+              </div>
+              <Users className="w-6 h-6 text-emerald-500 opacity-80" />
+            </div>
+            <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase text-blue-600">Total New Admissions</p>
+                <p className="text-xl font-black text-blue-700 dark:text-blue-400 mt-0.5">{newCount}</p>
+              </div>
+              <Users className="w-6 h-6 text-blue-500 opacity-80" />
+            </div>
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase text-rose-600">Total Left / Deactivated</p>
+                <p className="text-xl font-black text-rose-700 dark:text-rose-400 mt-0.5">{deactivatedCount}</p>
+              </div>
+              <Users className="w-6 h-6 text-rose-500 opacity-80" />
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Sort / Filter Toolbar ── */}
       <div className={`rounded-2xl border p-4 space-y-3 ${
         isLight
