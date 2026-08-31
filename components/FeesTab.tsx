@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useMemo } from 'react'
-import { CreditCard, IndianRupee, ChevronRight, MessageSquare, Settings, Plus, Trash2, Edit3, Check, X, FileText, Download, Users, AlertCircle } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { CreditCard, IndianRupee, ChevronRight, MessageSquare, Settings, Plus, Trash2, Edit3, Check, X, FileText, Download, Users, AlertCircle, Save } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface FeesTabProps {
@@ -16,7 +16,6 @@ interface FeesTabProps {
   setFeeSelectedMonth: (m: string) => void
   feeStatusFilter: 'All' | 'PAID' | 'PENDING'
   setFeeStatusFilter: (f: 'All' | 'PAID' | 'PENDING') => void
-  setIsClassFeeModalOpen: (v: boolean) => void
   setSelectedERPStudent: (st: any) => void
   setErpModalTab: (tab: any) => void
   handleSendWhatsAppFeeReminder: (name: string, id: string, phone: string, month: string, amount: number, due: string) => void
@@ -29,19 +28,48 @@ interface FeesTabProps {
 export default function FeesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight, badgeStatus,
   filteredStudents, fees, feeSelectedMonth, setFeeSelectedMonth,
-  feeStatusFilter, setFeeStatusFilter, setIsClassFeeModalOpen,
+  feeStatusFilter, setFeeStatusFilter,
   setSelectedERPStudent, setErpModalTab, handleSendWhatsAppFeeReminder,
   batches, feeHeads, setFeeHeads, loadAllAdminData
 }: FeesTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = useState<string>('All')
-  const [isManageHeadsOpen, setIsManageHeadsOpen] = useState(false)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'batches' | 'heads'>('batches')
+  const [localBatches, setLocalBatches] = useState<any[]>([])
+  const [classFeeSaveStatus, setClassFeeSaveStatus] = useState('')
   const [newHeadName, setNewHeadName] = useState('')
   const [newHeadAmount, setNewHeadAmount] = useState('')
   const [editingHeadId, setEditingHeadId] = useState<string | null>(null)
   const [editHeadName, setEditHeadName] = useState('')
   const [editHeadAmount, setEditHeadAmount] = useState('')
   const [loadingAction, setLoadingAction] = useState(false)
+
+  // Sync local batches copy when opening settings modal or when batches update
+  useEffect(() => {
+    if (isSettingsModalOpen) {
+      setLocalBatches(JSON.parse(JSON.stringify(batches || [])))
+    }
+  }, [isSettingsModalOpen, batches])
+
+  const handleSaveClassFees = async () => {
+    setClassFeeSaveStatus('Updating batch fee structure in database...')
+    try {
+      const supabase = createClient()
+      for (const b of localBatches) {
+        const { error } = await supabase
+          .from('batches')
+          .update({ fee_amount: b.fee_amount })
+          .eq('id', b.id)
+        if (error) throw error
+      }
+      setClassFeeSaveStatus('✅ Batch fees updated & published live!')
+      await loadAllAdminData()
+    } catch (err: any) {
+      setClassFeeSaveStatus(`❌ Error: ${err.message || err}`)
+    }
+    setTimeout(() => setClassFeeSaveStatus(''), 3000)
+  }
 
   // Derive stats dynamically for the selected month
   const stats = useMemo(() => {
@@ -214,7 +242,7 @@ export default function FeesTab({
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {/* Dynamic settings */}
             <button
-              onClick={() => setIsManageHeadsOpen(true)}
+              onClick={() => { setSettingsTab('heads'); setIsSettingsModalOpen(true); }}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border ${
                 isLight ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100' : 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800'
               }`}
@@ -224,7 +252,7 @@ export default function FeesTab({
             </button>
 
             <button
-              onClick={() => setIsClassFeeModalOpen(true)}
+              onClick={() => { setSettingsTab('batches'); setIsSettingsModalOpen(true); }}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer whitespace-nowrap"
             >
               <IndianRupee className="w-4 h-4" />
@@ -393,136 +421,203 @@ export default function FeesTab({
         </div>
       </div>
 
-      {/* ── MANAGE FEE HEADS MODAL (SLIDE-OVER) ── */}
-      {isManageHeadsOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[99]">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-lg w-full space-y-6 shadow-2xl relative max-h-[85vh] overflow-y-auto`}>
+      {/* ── COMBINED FEE SETTINGS & CONFIGURATION MODAL ── */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[99] animate-fadeIn">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-6 shadow-2xl relative max-h-[85vh] overflow-y-auto`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className={`text-base font-black ${textPrimary} flex items-center gap-1.5`}>
-                <Settings className="w-5 h-5 text-blue-500" /> Manage Dynamic Fee Heads
+                <Settings className="w-5 h-5 text-blue-500" /> Fee Settings &amp; Configuration
               </h3>
-              <button onClick={() => setIsManageHeadsOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setIsSettingsModalOpen(false); loadAllAdminData(); }} className="text-slate-400 hover:text-slate-600">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Add New Head Form */}
-            <form onSubmit={handleAddHead} className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 space-y-3">
-              <span className="block font-bold text-[10px] uppercase text-blue-600 tracking-wider">➕ Create New Custom Fee Head</span>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className={`block font-bold mb-1 ${textSecondary}`}>Fee Head Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sports Fee"
-                    value={newHeadName}
-                    onChange={e => setNewHeadName(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 outline-none font-semibold text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className={`block font-bold mb-1 ${textSecondary}`}>Default Amount (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 500"
-                    value={newHeadAmount}
-                    onChange={e => setNewHeadAmount(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 outline-none font-semibold font-mono text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-              </div>
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800">
               <button
-                type="submit"
-                disabled={loadingAction}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1"
+                onClick={() => setSettingsTab('batches')}
+                className={`flex-1 pb-3 text-xs font-bold border-b-2 transition ${
+                  settingsTab === 'batches' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
               >
-                <Plus className="w-4 h-4" /> {loadingAction ? 'Adding...' : 'Add Fee Head'}
+                Batch Fees Structure (monthly defaults)
               </button>
-            </form>
+              <button
+                onClick={() => setSettingsTab('heads')}
+                className={`flex-1 pb-3 text-xs font-bold border-b-2 transition ${
+                  settingsTab === 'heads' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Dynamic Fee Heads
+              </button>
+            </div>
 
-            {/* List of Heads */}
-            <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-              <span className="block font-bold text-[10px] uppercase text-slate-400 tracking-wider mb-2">Configure Existing Heads</span>
-              
-              {feeHeads.map(head => {
-                const isEditing = editingHeadId === head.id
-                return (
-                  <div key={head.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-                    {isEditing ? (
-                      <div className="flex items-center gap-2 flex-1 mr-4">
-                        <input
-                          type="text"
-                          required
-                          value={editHeadName}
-                          disabled={head.is_system}
-                          onChange={e => setEditHeadName(e.target.value)}
-                          className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 font-semibold"
-                        />
+            {/* TAB CONTENT 1: BATCH FEES */}
+            {settingsTab === 'batches' && (
+              <div className="space-y-4">
+                {classFeeSaveStatus && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold animate-fadeIn">
+                    {classFeeSaveStatus}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {localBatches.map((b) => (
+                    <div key={b.id} className={`p-3 rounded-2xl border space-y-1.5 ${bgSubCard} border-slate-200 dark:border-slate-800`}>
+                      <label className={`font-bold block ${textPrimary}`}>{b.batch_name} ({b.age_group || '1-3 Yrs'})</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">₹</span>
                         <input
                           type="number"
-                          required
-                          value={editHeadAmount}
-                          onChange={e => setEditHeadAmount(e.target.value)}
-                          className="w-20 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 font-semibold font-mono"
+                          value={b.fee_amount || 0}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 0
+                            setLocalBatches(prev => prev.map(item => item.id === b.id ? { ...item, fee_amount: val } : item))
+                          }}
+                          className={`w-full text-xs font-mono font-bold pl-7 pr-3 py-2 rounded-xl border outline-none ${
+                            isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
+                          }`}
                         />
                       </div>
-                    ) : (
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <strong className={textPrimary}>{head.name}</strong>
-                          {head.is_system && (
-                            <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">System</span>
-                          )}
-                        </div>
-                        <div className={`text-[10px] ${textSecondary} mt-0.5 font-mono`}>Default: ₹{head.default_amount}</div>
-                      </div>
-                    )}
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <span className={`text-[10px] ${textSecondary}`}>Updating batch monthly default fees will not affect existing historical entries.</span>
+                  <button
+                    onClick={handleSaveClassFees}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Save Batch Fees</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {isEditing ? (
-                        <>
-                          <button
-                            onClick={() => handleSaveEditHead(head.id)}
-                            className="p-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setEditingHeadId(null)}
-                            className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleStartEditHead(head)}
-                            className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 rounded-lg transition"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          {!head.is_system && (
-                            <button
-                              onClick={() => handleDeleteHead(head.id, head.name)}
-                              className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
+            {/* TAB CONTENT 2: FEE HEADS */}
+            {settingsTab === 'heads' && (
+              <div className="space-y-4">
+                {/* Add New Head Form */}
+                <form onSubmit={handleAddHead} className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 space-y-3">
+                  <span className="block font-bold text-[10px] uppercase text-blue-600 tracking-wider">➕ Create New Custom Fee Head</span>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className={`block font-bold mb-1 ${textSecondary}`}>Fee Head Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Sports Fee"
+                        value={newHeadName}
+                        onChange={e => setNewHeadName(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 outline-none font-semibold text-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${textSecondary}`}>Default Amount (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 500"
+                        value={newHeadAmount}
+                        onChange={e => setNewHeadAmount(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 outline-none font-semibold font-mono text-slate-800 dark:text-slate-100"
+                      />
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                  <button
+                    type="submit"
+                    disabled={loadingAction}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> {loadingAction ? 'Adding...' : 'Add Fee Head'}
+                  </button>
+                </form>
+
+                {/* List of Heads */}
+                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                  <span className="block font-bold text-[10px] uppercase text-slate-400 tracking-wider mb-2">Configure Existing Heads</span>
+                  
+                  {feeHeads.map(head => {
+                    const isEditing = editingHeadId === head.id
+                    return (
+                      <div key={head.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 flex-1 mr-4">
+                            <input
+                              type="text"
+                              required
+                              value={editHeadName}
+                              disabled={head.is_system}
+                              onChange={e => setEditHeadName(e.target.value)}
+                              className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 font-semibold"
+                            />
+                            <input
+                              type="number"
+                              required
+                              value={editHeadAmount}
+                              onChange={e => setEditHeadAmount(e.target.value)}
+                              className="w-20 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 font-semibold font-mono"
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <strong className={textPrimary}>{head.name}</strong>
+                              {head.is_system && (
+                                <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">System</span>
+                              )}
+                            </div>
+                            <div className={`text-[10px] ${textSecondary} mt-0.5 font-mono`}>Default: ₹{head.default_amount}</div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isEditing ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveEditHead(head.id)}
+                                className="p-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setEditingHeadId(null)}
+                                className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleStartEditHead(head)}
+                                className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 rounded-lg transition cursor-pointer"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              {!head.is_system && (
+                                <button
+                                  onClick={() => handleDeleteHead(head.id, head.name)}
+                                  className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
               <button
-                onClick={() => { setIsManageHeadsOpen(false); loadAllAdminData(); }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition"
+                onClick={() => { setIsSettingsModalOpen(false); loadAllAdminData(); }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition cursor-pointer"
               >
                 Close &amp; Sync
               </button>

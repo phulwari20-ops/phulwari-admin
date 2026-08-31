@@ -57,7 +57,7 @@ export default function BlogsTab({
       const supabase = createClient();
       const { data, error } = await supabase
         .from('blogs')
-        .select('id, title, slug, short_description, category, author_name, created_at, featured_image, status, views, featured')
+        .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -111,7 +111,10 @@ export default function BlogsTab({
       author_name: rawData.author_name || 'Phulwari Admin',
       author_photo: rawData.author_photo || null,
       author_bio: rawData.author_bio || null,
-      published_at: rawData.published_at
+      published_at: rawData.published_at,
+      meta_title: rawData.meta_title || null,
+      meta_description: rawData.meta_description || null,
+      focus_keyword: rawData.focus_keyword || null
     };
 
     try {

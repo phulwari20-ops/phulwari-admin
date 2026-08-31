@@ -69,6 +69,17 @@ const MONTHS_LIST = [
   'January 2027', 'February 2027', 'March 2027'
 ]
 
+const generateUUID = (): string => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 export default function StudentErpModal({
   isOpen,
   onClose,
@@ -323,7 +334,7 @@ export default function StudentErpModal({
           ? `Monthly Fee (${row.collected_for})`
           : row.fee_head
       const dbRow = {
-        id: `fee-${Date.now()}-${i}-${Math.floor(Math.random()*1000)}`,
+        id: generateUUID(),
         student_id: student.id,
         title: titleText,
         fee_head: row.fee_head === 'Other' ? (row.custom_head_name || 'Other') : row.fee_head,
@@ -542,7 +553,7 @@ export default function StudentErpModal({
             <div>
               <h3 className={`text-lg font-bold ${textPrimary}`}>{student.full_name}</h3>
               <p className="text-xs text-blue-500 font-mono font-bold">
-                Admission ID: {student.admission_id} | Class: {student.class_name || 'Nursery'}-{student.section_name || 'A'}
+                Admission ID: {student.admission_id} | Class: {student.batch_name || 'Unassigned'}
               </p>
             </div>
           </div>

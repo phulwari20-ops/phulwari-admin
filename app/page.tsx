@@ -108,6 +108,17 @@ import {
 } from '../lib/printUtils'
 
 export default function AdminDashboardPage() {
+  const generateUUID = (): string => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID()
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+
   // Theme Toggle
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
@@ -328,9 +339,7 @@ export default function AdminDashboardPage() {
     { id: 'p2', name: 'Premium Birthday Package', tagline: 'Designed for a more memorable and exciting experience.', price: '₹9,999', includes: 'Theme-Based Decoration, Enhanced Activity Setup, Interactive Games, Photo-Friendly Setup' },
     { id: 'p3', name: 'Customized Birthday Package', tagline: 'A fully customized birthday experience, tailored to you.', price: 'Custom Pricing', includes: 'Custom Themes, Personalized Decoration, Special Activities, Flexible Planning Options' }
   ])
-  const [classFees, setClassFees] = useState<Record<string, number>>({})
-  const [classFeeSaveStatus, setClassFeeSaveStatus] = useState<string>('')
-  const [isClassFeeModalOpen, setIsClassFeeModalOpen] = useState<boolean>(false)
+  // Class fee states moved to FeesTab
   const [pkgSaveStatus, setPkgSaveStatus] = useState<string>('')
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
 
@@ -1378,13 +1387,6 @@ export default function AdminDashboardPage() {
       classes_total: newStudentObj.classes_total,
       classes_consumed: newStudentObj.classes_consumed,
       category: newStudentObj.category,
-      // Payment / plan fields so the printed Registration form shows real values
-      amount_paid: (newStudentForm as any).amount_paid || null,
-      total_fee: (newStudentForm as any).total_fee || null,
-      payment_mode: (newStudentForm as any).payment_mode || null,
-      payment_for: (newStudentForm as any).payment_for || null,
-      remarks: (newStudentForm as any).remarks || null,
-      plan_validity_date: (newStudentForm as any).plan_validity_date || null,
       validity_end_date: newStudentObj.validity_end_date || null,
       admission_date: newStudentObj.admission_date || null
     }
@@ -1413,12 +1415,6 @@ export default function AdminDashboardPage() {
           delete (strippedPayload as any).custom_days;
           delete (strippedPayload as any).classes_total;
           delete (strippedPayload as any).classes_consumed;
-          delete (strippedPayload as any).amount_paid;
-          delete (strippedPayload as any).total_fee;
-          delete (strippedPayload as any).payment_mode;
-          delete (strippedPayload as any).payment_for;
-          delete (strippedPayload as any).remarks;
-          delete (strippedPayload as any).plan_validity_date;
           delete (strippedPayload as any).validity_end_date;
 
           res = await fetch(`${supabaseUrl}/rest/v1/students`, {
@@ -1440,66 +1436,6 @@ export default function AdminDashboardPage() {
         const enriched = {
           ...inserted,
           batch_name: selectedBatchObj?.batch_name || inserted.batch_name
-        }
-
-        // Insert initial fee items into fees table if payment items are present
-        if ((newStudentForm as any).payment_items && (newStudentForm as any).payment_items.length > 0) {
-          const rNo = `REC-2027-${Math.floor(10000 + Math.random() * 90000)}`
-          const collectedAmt = parseFloat((newStudentForm as any).amount_paid) || 0
-          let remainingPaidPool = collectedAmt
-
-          const feePromises = (newStudentForm as any).payment_items.map(async (item: any, idx: number) => {
-            const origAmt = Number(item.amount || 0)
-            const discAmt = Number(item.discount || 0)
-            const netAmt = Math.max(0, origAmt - discAmt)
-
-            let itemPaid = 0
-            let itemStatus: 'paid' | 'partial' | 'pending' = 'pending'
-
-            if (remainingPaidPool >= netAmt) {
-              itemPaid = netAmt
-              remainingPaidPool -= netAmt
-              itemStatus = 'paid'
-            } else if (remainingPaidPool > 0) {
-              itemPaid = remainingPaidPool
-              remainingPaidPool = 0
-              itemStatus = 'partial'
-            } else {
-              itemPaid = 0
-              itemStatus = 'pending'
-            }
-
-            const itemPending = Math.max(0, netAmt - itemPaid)
-            const titleText = item.fee_head === 'Other' && item.custom_head_name
-              ? item.custom_head_name
-              : item.fee_head === 'Monthly Fee'
-                ? `Monthly Fee (${item.month})`
-                : item.fee_head
-
-            const dbRow = {
-              id: `fee-${Date.now()}-${idx}-${Math.floor(Math.random() * 100)}`,
-              student_id: inserted.id,
-              title: titleText,
-              amount: origAmt,
-              discount_type: 'flat',
-              discount: discAmt,
-              net_amount: netAmt,
-              due_date: new Date().toISOString().split('T')[0],
-              status: itemStatus,
-              payment_method: itemPaid > 0 ? ((newStudentForm as any).payment_mode || 'Cash') : null,
-              paid_date: itemPaid > 0 ? new Date().toISOString().split('T')[0] : null,
-              receipt_no: rNo,
-              month: item.fee_head === 'Monthly Fee' ? item.month : null,
-              amount_paid: itemPaid,
-              pending_amount: itemPending
-            }
-
-            const supabaseClient = createClient()
-            await supabaseClient.from('fees').insert([dbRow])
-          })
-
-          await Promise.all(feePromises)
-          await loadAllAdminData() // refresh local fees state
         }
 
         // If Customized Batch is selected, insert schedules to student_custom_schedules table
@@ -1747,7 +1683,7 @@ export default function AdminDashboardPage() {
 
       // Generate Auto Ledger Fee entry
       const ledgerEntry = {
-        id: `fee-auto-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateUUID(),
         student_id: studentId,
         title: `Monthly Fee - ${batch.batch_name}`,
         amount: Number(batch.fee_amount || 3500),
@@ -1780,7 +1716,7 @@ export default function AdminDashboardPage() {
 
       // Generate Auto Ledger Fee entry for additional batch
       const ledgerEntry = {
-        id: `fee-auto-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateUUID(),
         student_id: studentId,
         title: `Batch Fee - ${batch.batch_name}`,
         amount: Number(batch.fee_amount || 2500),
@@ -2207,7 +2143,7 @@ Management Phulwari Mother and Child Activity Centre`
     )
 
     const newFeeObj = {
-      id: `fee-${Date.now()}`,
+      id: generateUUID(),
       student_id: selectedERPStudent.id,
       title: feeForm.title,
       amount: origAmount,
@@ -2233,7 +2169,9 @@ Management Phulwari Mother and Child Activity Centre`
     try {
       localStorage.setItem('phulwari_admin_fees', JSON.stringify(updatedFees))
       const supabase = createClient()
-      await supabase.from('fees').insert([newFeeObj])
+      const dbRow = { ...newFeeObj }
+      delete (dbRow as any).students
+      await supabase.from('fees').insert([dbRow])
     } catch (err) {}
 
     setReceiptModalFee(newFeeObj)
@@ -2629,10 +2567,10 @@ Management Phulwari Mother and Child Activity Centre`
         )
 
       if (error) throw error
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ [ATTENDANCE UPSERT ERROR]:', err)
       alert(
-        'Attendance could not be saved to the database. Please check your connection and mark it again.'
+        `Attendance could not be saved to the database: ${err?.message || JSON.stringify(err)}. Please check your connection and mark it again.`
       )
       // Roll back to what the database actually holds.
       await refreshAttendanceFromDb()
@@ -3828,7 +3766,7 @@ Management Phulwari Mother and Child Activity Centre`
             setFeeSelectedMonth={setFeeSelectedMonth}
             feeStatusFilter={feeStatusFilter}
             setFeeStatusFilter={setFeeStatusFilter}
-            setIsClassFeeModalOpen={setIsClassFeeModalOpen}
+            // setIsClassFeeModalOpen handled locally
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
             handleSendWhatsAppFeeReminder={handleSendWhatsAppFeeReminder}
@@ -4838,71 +4776,7 @@ Management Phulwari Mother and Child Activity Centre`
         </div>
       )}
 
-      {/* MODAL: EDIT CLASS MONTHLY FEE STRUCTURE */}
-      {isClassFeeModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`${bgCard} rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <IndianRupee className="w-5 h-5 text-emerald-500" /> Batch Fee Structure Management
-                </h3>
-                <p className={`text-xs ${textSecondary}`}>Configure default monthly fees for all active dynamic batches.</p>
-              </div>
-
-              <button onClick={() => setIsClassFeeModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {classFeeSaveStatus && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold animate-fadeIn">
-                {classFeeSaveStatus}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {batches.map((b) => (
-                <div key={b.id} className={`p-3 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
-                  <label className={`font-bold block ${textPrimary}`}>{b.batch_name} ({b.age_group || '1-3 Yrs'})</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">₹</span>
-                    <input
-                      type="number"
-                      value={b.fee_amount || 3500}
-                      onChange={(e) => {
-                        const val = Number(e.target.value) || 0
-                        setBatches(prev => prev.map(item => item.id === b.id ? { ...item, fee_amount: val } : item))
-                      }}
-                      className={`w-full text-xs font-mono font-bold pl-7 pr-3 py-2 rounded-xl border outline-none ${
-                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                      }`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <span className={`text-xs ${textSecondary}`}>Updating fees will update default amounts for new payments.</span>
-
-              <div className="flex items-center space-x-3">
-                <button onClick={() => setIsClassFeeModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs cursor-pointer">
-                  Close
-                </button>
-
-                <button
-                  onClick={handleSaveClassFees}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Save Class Fees to Database</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL: EDIT CLASS MONTHLY FEE STRUCTURE — Moved to FeesTab */}
 
       {/* MODAL: MANAGE ADMIN USERS (CREATE & DELETE ADMNIS) */}
       {isAddAdminOpen && (
