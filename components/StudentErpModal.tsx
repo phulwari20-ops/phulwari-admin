@@ -201,6 +201,31 @@ export default function StudentErpModal({
   const [erpManualSchStart, setErpManualSchStart] = useState('05:00 PM')
   const [erpManualSchEnd, setErpManualSchEnd] = useState('06:00 PM')
 
+  // Saved Receipt Modal State (Pops up immediately after saving fee)
+  const [savedReceiptModal, setSavedReceiptModal] = useState<{
+    isOpen: boolean
+    receiptNo: string
+    totalPaid: number
+    totalDue: number
+    feeItems: any[]
+    student: any | null
+    date: string
+    paymentMode: string
+    txnId: string
+    remarks: string
+  }>({
+    isOpen: false,
+    receiptNo: '',
+    totalPaid: 0,
+    totalDue: 0,
+    feeItems: [],
+    student: null,
+    date: '',
+    paymentMode: '',
+    txnId: '',
+    remarks: ''
+  })
+
   // ─── Initialize on open ───────────────────────────────────────────────────
   useEffect(() => {
     if (student && isOpen) {
@@ -400,10 +425,20 @@ export default function StudentErpModal({
       }).eq('id', student.id)
     } catch(_) {}
 
-    alert(`✅ Fee saved! Receipt: ${rNo}`)
     await loadAllAdminData()
     setLoadingSubmit(false)
-    setErpModalTab('fee_history')
+    setSavedReceiptModal({
+      isOpen: true,
+      receiptNo: rNo,
+      totalPaid: feeCalc.totalPaid,
+      totalDue: feeCalc.totalDue,
+      feeItems: [...feeRows],
+      student: student,
+      date: today,
+      paymentMode: globalPaymentMode,
+      txnId: globalTransactionId,
+      remarks: globalRemarks
+    })
   }
 
 
@@ -1101,13 +1136,29 @@ export default function StudentErpModal({
                             </p>
                           </div>
 
-                          <button
-                            onClick={() => handlePrintTransactionReceipt(rNo)}
-                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm shrink-0"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Receipt</span>
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handlePrintTransactionReceipt(rNo)}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-xs"
+                              title="Print / Save Receipt PDF"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Receipt</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const phone = (student.parent_phone || '').replace(/[^0-9]/g, '')
+                                const text = `Dear Parent,\nThank you for your payment to Phulwari Mother & Child Activity Centre!\n\nReceipt No: ${rNo}\nStudent: ${student.full_name} (${student.admission_id})\nAmount Paid: Rs. ${totalPaid}\nRemaining Balance: Rs. ${totalPending}\n\nView Centre Details: https://phulwari.co.in`
+                                window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank')
+                              }}
+                              className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                              title="Share Receipt on WhatsApp"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" /> Share
+                            </button>
+                          </div>
                         </div>
                       )
                     })}
@@ -1623,6 +1674,66 @@ export default function StudentErpModal({
                   />
                 </div>
 
+                {/* Select Attendance Days Checkboxes */}
+                <div className="col-span-2 md:col-span-3">
+                  <label className={`block font-bold mb-1.5 ${textSecondary}`}>Select Attendance Days (Custom Plan)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                      const isChecked = editForm.custom_days ? editForm.custom_days.split(', ').includes(day) : false
+                      return (
+                        <label key={day} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-green-600 rounded"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              let days = editForm.custom_days ? editForm.custom_days.split(', ') : []
+                              if (e.target.checked) days.push(day)
+                              else days = days.filter((d: string) => d !== day)
+                              const totalCls = days.length * 4
+                              setEditForm({
+                                ...editForm,
+                                custom_days: days.join(', '),
+                                classes_total: totalCls > 0 ? totalCls : 12
+                              })
+                            }}
+                          />
+                          <span>{day.slice(0,3)}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Program / Activity Interested Checkboxes */}
+                <div className="col-span-2 md:col-span-3">
+                  <label className={`block font-bold mb-1.5 ${textSecondary}`}>Program / Activity Interested In</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {['Playzone', 'Weekend Program', '3 Days Program', '5 Days Program', '6 Days Program', '7 Days Program', 'Mother Zumba'].map(prog => {
+                      const isChecked = editForm.program_interested ? editForm.program_interested.split(', ').includes(prog) : false
+                      return (
+                        <label key={prog} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-green-600 rounded"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              let progs = editForm.program_interested ? editForm.program_interested.split(', ') : []
+                              if (e.target.checked) progs.push(prog)
+                              else progs = progs.filter((p: string) => p !== prog)
+                              setEditForm({
+                                ...editForm,
+                                program_interested: progs.join(', ')
+                              })
+                            }}
+                          />
+                          <span>{prog}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Customized Batch Builder in ERP Edit Details */}
                 {editForm.batch_id === '00000000-0000-0000-0000-000000000000' && (
                   <div className="col-span-2 md:col-span-3 p-3.5 bg-gradient-to-br from-orange-50 to-amber-50/60 border border-orange-200/90 rounded-2xl space-y-3 shadow-xs mt-2">
@@ -1814,6 +1925,154 @@ export default function StudentErpModal({
         {/* ── TAB: MANAGE BATCH ── */}
         {erpModalTab === 'manage_batch' && (
           <div className="space-y-6 text-xs max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            {/* Program & Batch Overview Details Editor */}
+            <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+              <h4 className="font-extrabold text-xs text-green-600 uppercase tracking-wider pb-1 border-b">4. Program &amp; Batch Details Overview</h4>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Registration Category</label>
+                  <select
+                    value={editForm.category || 'Child Activity'}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="Child Activity">Child Activity 🧸</option>
+                    <option value="Zumba & Yoga">Zumba &amp; Yoga</option>
+                    <option value="Daycare">Daycare</option>
+                    <option value="Events & Parties">Events & Parties</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Current Student Batch</label>
+                  <select
+                    value={editForm.batch_id || ''}
+                    onChange={(e) => {
+                      const selectedBt = allAvailableBatches?.find(b => b.id === e.target.value)
+                      setEditForm({
+                        ...editForm,
+                        batch_id: e.target.value,
+                        batch_name: selectedBt?.batch_name || editForm.batch_name
+                      })
+                      setBatchSelect(e.target.value)
+                    }}
+                    className={inputCls}
+                  >
+                    <option value="">-- Select Batch --</option>
+                    {allAvailableBatches?.map(b => (
+                      <option key={b.id} value={b.id}>{b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / 30 Days</option>
+                    ))}
+                    <option value="00000000-0000-0000-0000-000000000000" className="font-bold text-orange-600">
+                      ⚙️ Customize class (Build Custom Schedule)
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Preferred Time Slot</label>
+                  <select
+                    value={editForm.preferred_time_slot || 'Morning (9:00 AM - 12:00 PM)'}
+                    onChange={(e) => setEditForm({ ...editForm, preferred_time_slot: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="Morning (9:00 AM - 12:00 PM)">Morning</option>
+                    <option value="Afternoon (12:00 PM - 3:00 PM)">Afternoon</option>
+                    <option value="Evening (3:00 PM - 6:00 PM)">Evening</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Total Classes in Plan</label>
+                  <input
+                    type="number"
+                    value={editForm.classes_total !== undefined ? editForm.classes_total : 12}
+                    onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value) || 12 })}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Classes Consumed Already</label>
+                  <input
+                    type="number"
+                    value={editForm.classes_consumed !== undefined ? editForm.classes_consumed : 0}
+                    onChange={(e) => setEditForm({ ...editForm, classes_consumed: parseInt(e.target.value) || 0 })}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* Select Attendance Days Checkboxes */}
+              <div className="col-span-2 md:col-span-3 pt-1">
+                <label className={`block font-bold mb-1.5 ${textSecondary}`}>Select Attendance Days (Custom Plan):</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                    const isChecked = editForm.custom_days ? editForm.custom_days.split(', ').includes(day) : false
+                    return (
+                      <label key={day} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-green-600 rounded"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            let days = editForm.custom_days ? editForm.custom_days.split(', ') : []
+                            if (e.target.checked) days.push(day)
+                            else days = days.filter((d: string) => d !== day)
+                            const totalCls = days.length * 4
+                            setEditForm({
+                              ...editForm,
+                              custom_days: days.join(', '),
+                              classes_total: totalCls > 0 ? totalCls : 12
+                            })
+                          }}
+                        />
+                        <span>{day.slice(0,3)}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Program / Activity Interested Checkboxes */}
+              <div className="col-span-2 md:col-span-3 pt-1">
+                <label className={`block font-bold mb-1.5 ${textSecondary}`}>Program / Activity Interested In:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {['Playzone', 'Weekend Program', '3 Days Program', '5 Days Program', '6 Days Program', '7 Days Program', 'Mother Zumba'].map(prog => {
+                    const isChecked = editForm.program_interested ? editForm.program_interested.split(', ').includes(prog) : false
+                    return (
+                      <label key={prog} className="flex items-center gap-1.5 font-semibold cursor-pointer p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-green-600 rounded"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            let progs = editForm.program_interested ? editForm.program_interested.split(', ') : []
+                            if (e.target.checked) progs.push(prog)
+                            else progs = progs.filter((p: string) => p !== prog)
+                            setEditForm({
+                              ...editForm,
+                              program_interested: progs.join(', ')
+                            })
+                          }}
+                        />
+                        <span>{prog}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await handleUpdateStudent(student.id, editForm)
+                    if (ok) alert('✅ Program & Batch details updated successfully!')
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition cursor-pointer shadow-sm"
+                >
+                  💾 Save Program &amp; Batch Changes
+                </button>
+              </div>
+            </div>
+
             {/* Primary Batch change */}
             <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
               <h4 className="font-extrabold text-xs text-blue-600 uppercase tracking-wider pb-1 border-b">🔄 Switch Primary Batch</h4>
@@ -2041,6 +2300,105 @@ export default function StudentErpModal({
                 OK
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* INSTANT SAVED RECEIPT MODAL (Pops up right after saving fee) */}
+      {savedReceiptModal.isOpen && savedReceiptModal.student && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[99999] animate-fadeIn overflow-y-auto">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90vh] overflow-y-auto`}>
+            
+            {/* Header Notification */}
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✅</span>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider">Fee Transaction Saved Successfully!</p>
+                  <p className="text-[11px] font-mono font-bold">Receipt No: {savedReceiptModal.receiptNo}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSavedReceiptModal(prev => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Phulwari Branded Preview Card */}
+            <div className="p-5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 shadow-sm text-slate-800 dark:text-slate-100">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h4 className="text-sm font-black text-blue-600 dark:text-blue-400">🌸 Phulwari Mother &amp; Child Activity Centre</h4>
+                  <p className="text-[10px] text-slate-500 font-semibold">Where Growth Meets Wellness</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">Official Receipt</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-[10px] text-slate-400 font-bold uppercase block">Student Name</span><strong>{savedReceiptModal.student.full_name}</strong></div>
+                <div><span className="text-[10px] text-slate-400 font-bold uppercase block">Admission ID</span><strong className="font-mono text-blue-500">{savedReceiptModal.student.admission_id}</strong></div>
+                <div><span className="text-[10px] text-slate-400 font-bold uppercase block">Payment Date</span><strong>{savedReceiptModal.date}</strong></div>
+                <div><span className="text-[10px] text-slate-400 font-bold uppercase block">Payment Mode</span><strong>{savedReceiptModal.paymentMode}</strong></div>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl flex items-center justify-between text-xs font-bold border border-slate-200/60 dark:border-slate-800">
+                <span>Total Amount Paid:</span>
+                <span className="text-base font-black font-mono text-emerald-600">₹{savedReceiptModal.totalPaid.toLocaleString('en-IN')}</span>
+              </div>
+              {savedReceiptModal.totalDue > 0 && (
+                <div className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-600 rounded-xl text-xs font-bold flex items-center justify-between border border-rose-200">
+                  <span>Remaining Pending Due:</span>
+                  <span className="font-mono">₹{savedReceiptModal.totalDue.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Instant Actions (Print, Download, Share) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handlePrintTransactionReceipt(savedReceiptModal.receiptNo)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+              >
+                <span>🖨️ Print Receipt</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePrintTransactionReceipt(savedReceiptModal.receiptNo)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> Download PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const phone = (savedReceiptModal.student?.parent_phone || '').replace(/[^0-9]/g, '')
+                  const text = `Dear Parent,\nThank you for your payment to Phulwari Mother & Child Activity Centre!\n\nReceipt No: ${savedReceiptModal.receiptNo}\nStudent: ${savedReceiptModal.student?.full_name} (${savedReceiptModal.student?.admission_id})\nAmount Paid: Rs. ${savedReceiptModal.totalPaid}\nRemaining Balance: Rs. ${savedReceiptModal.totalDue}\n\nView Centre Details: https://phulwari.co.in`
+                  window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank')
+                }}
+                className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-green-600/20 cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" /> WhatsApp Share
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setSavedReceiptModal(prev => ({ ...prev, isOpen: false }))
+                  setErpModalTab('fee_history')
+                }}
+                className="px-5 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Done / View Ledger History
+              </button>
+            </div>
+
           </div>
         </div>
       )}
