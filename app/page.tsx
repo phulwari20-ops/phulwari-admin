@@ -1850,12 +1850,31 @@ Management Phulwari Mother and Child Activity Centre`
     })()
   }
 
+  // --- GALLERY REORDERING ---
+  const handleUpdateGalleryOrder = async (reorderedImages: any[]) => {
+    try {
+      setGalleryImages(reorderedImages)
+      const updates = reorderedImages.map(img => ({
+        id: img.id,
+        sort_order: img.sort_order
+      }))
+      const supabase = createClient()
+      const { error } = await supabase.from('gallery').upsert(updates, { onConflict: 'id' })
+      if (error) throw error
+      alert('Gallery display order updated successfully!')
+    } catch (err: any) {
+      console.error('Error updating gallery order:', err)
+      alert('Failed to update gallery order: ' + err.message)
+      fetchAdminGallery()
+    }
+  }
+
   const fetchAdminGallery = async () => {
     try {
       const supabaseUrl = getSupabaseUrl()
       const supabaseKey = getSupabaseKey()
       if (supabaseUrl && supabaseKey) {
-        const res = await fetch(`${supabaseUrl}/rest/v1/gallery?select=*&order=created_at.desc`, {
+        const res = await fetch(`${supabaseUrl}/rest/v1/gallery?select=*&order=sort_order.asc,created_at.desc`, {
           headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
         })
         if (res.ok) {
@@ -3857,6 +3876,7 @@ Management Phulwari Mother and Child Activity Centre`
             setSelectedAdminGalleryImg={setSelectedAdminGalleryImg}
             setDeletingGalleryImg={setDeletingGalleryImg}
             isUploadingGallery={isUploadingGallery}
+            handleUpdateGalleryOrder={handleUpdateGalleryOrder}
           />
         )}
 

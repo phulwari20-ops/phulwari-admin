@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image as ImageIcon, RefreshCw, Upload, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Image as ImageIcon, RefreshCw, Upload, Trash2, ChevronLeft, ChevronRight, GripVertical, Save } from 'lucide-react';
 
 interface GalleryTabProps {
   bgCard: string;
@@ -16,6 +16,7 @@ interface GalleryTabProps {
   setSelectedAdminGalleryImg: (img: any) => void;
   setDeletingGalleryImg: (img: any) => void;
   isUploadingGallery?: boolean;
+  handleUpdateGalleryOrder?: (reorderedImages: any[]) => void;
 }
 
 export default function GalleryTab({
@@ -32,8 +33,64 @@ export default function GalleryTab({
   fetchAdminGallery,
   setSelectedAdminGalleryImg,
   setDeletingGalleryImg,
-  isUploadingGallery = false
+  isUploadingGallery = false,
+  handleUpdateGalleryOrder
 }: GalleryTabProps) {
+  // Sort images by sort_order
+  const sortedImages = [...galleryImages].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  const [draggedImg, setDraggedImg] = useState<any>(null);
+  const [localOrder, setLocalOrder] = useState<any[]>(sortedImages);
+  const [hasOrderChanged, setHasOrderChanged] = useState(false);
+
+  // Sync localOrder when galleryImages change (e.g. from fetch)
+  React.useEffect(() => {
+    setLocalOrder([...galleryImages].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+    setHasOrderChanged(false);
+  }, [galleryImages]);
+
+  const handleDragStart = (e: React.DragEvent, img: any) => {
+    setDraggedImg(img);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+    setDraggedImg(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetImg: any) => {
+    e.preventDefault();
+    if (!draggedImg || draggedImg.id === targetImg.id) return;
+
+    const draggedIdx = localOrder.findIndex(img => img.id === draggedImg.id);
+    const targetIdx = localOrder.findIndex(img => img.id === targetImg.id);
+
+    const newOrder = [...localOrder];
+    newOrder.splice(draggedIdx, 1);
+    newOrder.splice(targetIdx, 0, draggedImg);
+
+    // Update sort_order explicitly based on new index
+    const updatedImages = newOrder.map((img, index) => ({
+      ...img,
+      sort_order: index + 1
+    }));
+
+    setLocalOrder(updatedImages);
+    setHasOrderChanged(true);
+  };
+
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -41,7 +98,7 @@ export default function GalleryTab({
           <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
             <ImageIcon className="w-5 h-5 text-blue-500" /> Dynamic Gallery Photo Manager ({galleryImages.length} Photos)
           </h3>
-          <p className={`text-xs ${textSecondary}`}>Upload photos directly from your device (computer or phone) to publish live!</p>
+          <p className={`text-xs ${textSecondary}`}>Upload photos, drag to reorder display sequence, and publish live!</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -53,6 +110,19 @@ export default function GalleryTab({
             id="device-photo-input"
             disabled={isUploadingGallery}
           />
+
+          {hasOrderChanged && handleUpdateGalleryOrder && (
+            <button
+              onClick={() => {
+                handleUpdateGalleryOrder(localOrder);
+                setHasOrderChanged(false);
+              }}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Display Order</span>
+            </button>
+          )}
 
           <button
             onClick={fetchAdminGallery}
@@ -74,30 +144,41 @@ export default function GalleryTab({
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition cursor-pointer"
             >
               <Upload className="w-4 h-4" />
-              <span>Choose Photo from Device</span>
+              <span>Choose Photo</span>
             </label>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {galleryImages
+        {localOrder
           .slice((galleryPage - 1) * galleryPerPage, galleryPage * galleryPerPage)
           .map((img) => (
             <div
               key={img.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, img)}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(e, img)}
               onClick={() => setSelectedAdminGalleryImg(img)}
-              className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2.5 ${bgSubCard} group cursor-pointer hover:border-blue-500/50 transition`}
+              className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2.5 ${bgSubCard} group cursor-grab active:cursor-grabbing hover:border-blue-500/50 transition`}
             >
               <div className="aspect-square rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 relative">
                 <img
                   src={img.url}
                   alt={img.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                  className="w-full h-full object-cover group-hover:scale-105 transition pointer-events-none"
                   onError={(e: any) => {
                     e.target.src = '/phulwari_logo.webp';
                   }}
                 />
+                <div className="absolute top-2 left-2 p-1.5 bg-slate-900/60 backdrop-blur-sm rounded-lg text-white opacity-0 group-hover:opacity-100 transition shadow-sm">
+                  <GripVertical className="w-4 h-4" />
+                </div>
+                <div className="absolute top-2 right-2 px-2 py-1 bg-blue-600 shadow-sm backdrop-blur-sm rounded-md text-white text-[10px] font-bold">
+                  #{img.sort_order || localOrder.findIndex(i => i.id === img.id) + 1}
+                </div>
               </div>
               <div>
                 <h4 className={`text-xs font-bold truncate ${textPrimary}`}>{img.title}</h4>
@@ -119,7 +200,7 @@ export default function GalleryTab({
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
         <span className={`text-xs font-semibold ${textSecondary}`}>
-          Showing photos {Math.min((galleryPage - 1) * galleryPerPage + 1, galleryImages.length)} - {Math.min(galleryPage * galleryPerPage, galleryImages.length)} of {galleryImages.length}
+          Showing photos {Math.min((galleryPage - 1) * galleryPerPage + 1, localOrder.length)} - {Math.min(galleryPage * galleryPerPage, localOrder.length)} of {localOrder.length}
         </span>
 
         <div className="flex items-center space-x-2">
@@ -135,14 +216,14 @@ export default function GalleryTab({
           </button>
 
           <span className={`text-xs font-mono font-bold px-3 py-1 border rounded-xl ${badgeClass}`}>
-            Page {galleryPage} of {Math.ceil(galleryImages.length / galleryPerPage) || 1}
+            Page {galleryPage} of {Math.ceil(localOrder.length / galleryPerPage) || 1}
           </span>
 
           <button
-            disabled={galleryPage >= Math.ceil(galleryImages.length / galleryPerPage)}
-            onClick={() => setGalleryPage(prev => Math.min(prev + 1, Math.ceil(galleryImages.length / galleryPerPage)))}
+            disabled={galleryPage >= Math.ceil(localOrder.length / galleryPerPage)}
+            onClick={() => setGalleryPage(prev => Math.min(prev + 1, Math.ceil(localOrder.length / galleryPerPage)))}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
-              galleryPage >= Math.ceil(galleryImages.length / galleryPerPage) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
+              galleryPage >= Math.ceil(localOrder.length / galleryPerPage) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
             }`}
           >
             <span>Next Page</span>
