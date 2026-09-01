@@ -25,8 +25,8 @@ import {
   Sun,
   Moon,
   ChevronLeft,
-  ChevronRight,
   IndianRupee,
+  DollarSign,
   Layers,
   CalendarDays,
   X,
@@ -95,6 +95,7 @@ import RenewalAlertsTab from '../components/RenewalAlertsTab'
 import FeeAlertsTab from '../components/FeeAlertsTab'
 import StaffTab from '../components/StaffTab'
 import BannersTab, { BannerItem } from '../components/BannersTab'
+import FinancialTab from '../components/FinancialTab'
 import AddStudentModal from '../components/AddStudentModal'
 import StudentErpModal from '../components/StudentErpModal'
 import BroadcastNoticeModal from '../components/BroadcastNoticeModal'
@@ -3301,6 +3302,7 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
               { id: 'calendar', label: 'Batch Attendance Calendar', icon: CalendarDays },
               { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
+              { id: 'financial', label: 'Financial ERP & P&L Dashboard', icon: DollarSign },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
               { id: 'birthday_page', label: 'Birthday Landing Page', icon: Sparkles },
@@ -3886,6 +3888,22 @@ Management Phulwari Mother and Child Activity Centre`
             batches={batches}
             feeHeads={feeHeads}
             setFeeHeads={setFeeHeads}
+            loadAllAdminData={loadAllAdminData}
+          />
+        )}
+
+        {/* TAB: FINANCIAL ERP & P&L DASHBOARD */}
+        {activeTab === 'financial' && (
+          <FinancialTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            students={students}
+            fees={fees}
+            teachers={teachers}
+            teacherPayments={teacherPayments}
             loadAllAdminData={loadAllAdminData}
           />
         )}

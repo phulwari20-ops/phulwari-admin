@@ -43,7 +43,7 @@ export default function PackagesTab({
     is_visible: true
   });
 
-  const livePageUrl = 'https://phulwari.co.in/kids-and-child-birthday-party';
+  const [livePageUrl, setLivePageUrl] = useState('http://localhost:3000/kids-and-child-birthday-party');
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>

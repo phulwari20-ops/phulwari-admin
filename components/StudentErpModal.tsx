@@ -522,14 +522,13 @@ export default function StudentErpModal({
       } catch(err) { console.error('Fee save failed:', err) }
     }
 
-    // Update student summary
+    // Update student validity date if provided
     try {
-      await supabase.from('students').update({
-        amount_paid: feeCalc.totalPaid,
-        total_fee: feeCalc.totalFee,
-        payment_mode: globalPaymentMode,
-        payment_for: feeRows.map(r => r.fee_head).join(', ')
-      }).eq('id', student.id)
+      if (planValidityEnd) {
+        await supabase.from('students').update({
+          validity_end_date: planValidityEnd
+        }).eq('id', student.id)
+      }
     } catch(_) {}
 
     await loadAllAdminData()

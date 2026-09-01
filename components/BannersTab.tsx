@@ -20,7 +20,9 @@ import {
   Layout,
   Smartphone,
   Monitor,
-  UploadCloud
+  UploadCloud,
+  Globe,
+  RefreshCw
 } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
@@ -74,8 +76,11 @@ export default function BannersTab({
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
   const [typeFilter, setTypeFilter] = useState<string>('All')
-  const [loading, setLoading] = useState(false)
+  const [showLivePreview, setShowLivePreview] = useState(true)
+  const [previewKey, setPreviewKey] = useState(0)
+  const [previewUrl, setPreviewUrl] = useState('https://phulwari.co.in/')
 
+  const [loading, setLoading] = useState(false)
   const [uploadingMain, setUploadingMain] = useState(false)
   const [uploadingMobile, setUploadingMobile] = useState(false)
 
@@ -292,8 +297,13 @@ export default function BannersTab({
         if (error) {
           alert(`Could not save banner to Supabase DB: ${error.message}`)
         } else if (data && data[0]) {
-          setBanners(prev => prev.map(b => b.id === editingBanner.id ? data[0] : b))
-          alert('✅ Banner updated successfully in Supabase DB!')
+          const updatedList = prev => prev.map(b => b.id === editingBanner.id ? data[0] : b)
+          setBanners(updatedList)
+          try {
+            localStorage.setItem('phulwari_admin_banners', JSON.stringify(banners.map(b => b.id === editingBanner.id ? data[0] : b)))
+            window.dispatchEvent(new Event('storage'))
+          } catch(_) {}
+          alert('✅ Banner updated successfully in Supabase DB & Live Website!')
           setIsModalOpen(false)
         }
       } else {
@@ -302,7 +312,11 @@ export default function BannersTab({
           alert(`Could not save banner to Supabase DB: ${error.message}`)
         } else if (data && data[0]) {
           setBanners(prev => [data[0], ...prev])
-          alert('✅ New Banner published successfully to Supabase DB!')
+          try {
+            localStorage.setItem('phulwari_admin_banners', JSON.stringify([data[0], ...banners]))
+            window.dispatchEvent(new Event('storage'))
+          } catch(_) {}
+          alert('✅ New Banner published successfully to Supabase DB & Live Website!')
           setIsModalOpen(false)
         }
       }
@@ -333,13 +347,33 @@ export default function BannersTab({
           </p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md shadow-pink-500/25 transition cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>➕ Add New Banner</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowLivePreview(prev => !prev)}
+            className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Eye className="w-4 h-4 text-purple-500" />
+            <span>{showLivePreview ? 'Hide Live Preview' : 'Show Live Preview'}</span>
+          </button>
+
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 bg-purple-500/10 text-purple-600 hover:bg-purple-600 hover:text-white border border-purple-300 dark:border-purple-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Open Live Page ↗</span>
+          </a>
+
+          <button
+            onClick={openCreateModal}
+            className="px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md shadow-pink-500/25 transition cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>➕ Add New Banner</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards Summary */}
@@ -379,6 +413,61 @@ export default function BannersTab({
           <MousePointerClick className="w-6 h-6 text-amber-500 opacity-80" />
         </div>
       </div>
+
+      {/* Live Screen Preview Snapshot Section */}
+      {showLivePreview && (
+        <div className="p-4 rounded-2xl border border-pink-200 dark:border-pink-900/40 bg-pink-50/20 dark:bg-pink-950/10 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h4 className="text-xs font-extrabold uppercase tracking-wide text-pink-600 dark:text-pink-400">
+                Live Website Snapshot Preview — {previewUrl}
+              </h4>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <select
+                value={previewUrl}
+                onChange={(e) => setPreviewUrl(e.target.value)}
+                className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+              >
+                <option value="http://localhost:3000/">🏠 Local Dev Home Page (http://localhost:3000)</option>
+                <option value="http://localhost:3000/kids-and-child-birthday-party">🎂 Local Birthday Landing Page</option>
+                <option value="http://localhost:3000/activities">🎨 Local Activities &amp; Sidebar Page</option>
+                <option value="https://phulwari.co.in/">🌐 Production Home Page (https://phulwari.co.in)</option>
+                <option value="https://phulwari.co.in/kids-and-child-birthday-party">🌐 Production Birthday Page</option>
+              </select>
+
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1 bg-purple-600 text-white rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-purple-700 cursor-pointer shadow-xs"
+              >
+                🌐 Open Live Page <ExternalLink className="w-3 h-3" />
+              </a>
+
+              <button
+                onClick={() => setPreviewKey(prev => prev + 1)}
+                className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 hover:text-pink-600 cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" /> Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Responsive Canvas Snapshot Container */}
+          <div className="w-full aspect-[16/9] max-h-[440px] rounded-xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-md bg-slate-950 relative flex flex-col">
+            <iframe
+              key={previewKey}
+              src={previewUrl}
+              title="Live Website Banner Preview"
+              className="w-full h-full border-0"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Filter & Search Bar */}
       <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${
@@ -539,6 +628,21 @@ export default function BannersTab({
                     </button>
 
                     <div className="flex items-center gap-1">
+                      <a
+                        href={
+                          (item.display_position || '').includes('Hero') ? 'https://phulwari.co.in/' :
+                          (item.display_position || '').includes('Header') ? 'https://phulwari.co.in/' :
+                          (item.display_position || '').includes('Sidebar') ? 'https://phulwari.co.in/activities' :
+                          (item.display_position || '').includes('Footer') ? 'https://phulwari.co.in/contact' :
+                          'https://phulwari.co.in/kids-and-child-birthday-party'
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-1 rounded-xl border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 transition cursor-pointer text-[10px] font-extrabold flex items-center gap-1"
+                        title="Open Live Website Placement Page"
+                      >
+                        <Globe className="w-3 h-3" /> Live
+                      </a>
                       <button
                         onClick={() => handleDuplicate(item)}
                         className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-500 hover:bg-blue-50 transition cursor-pointer"
@@ -714,15 +818,80 @@ export default function BannersTab({
                     </div>
                   </div>
 
-                  {/* Image Preview */}
-                  {form.image_url && (
-                    <div className="sm:col-span-2 space-y-1">
-                      <label className="block text-[10px] font-bold uppercase text-slate-400">Live Image Preview</label>
-                      <div className="aspect-[16/9] max-h-48 rounded-2xl bg-slate-950 overflow-hidden border border-slate-300 dark:border-slate-800">
-                        <img src={form.image_url} alt="Preview" className="w-full h-full object-contain mx-auto" />
-                      </div>
+                  {/* Live Interactive User Panel Banner UI Preview Box */}
+                  <div className="sm:col-span-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" /> Live User Panel Banner UI Component Preview
+                      </label>
+                      <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                        {form.display_position || 'Hero Section'}
+                      </span>
                     </div>
-                  )}
+
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-purple-400/40 bg-slate-950 shadow-xl transition-all">
+                      {form.image_url ? (
+                        <div className="relative aspect-[16/9] max-h-56 w-full flex items-center justify-center overflow-hidden">
+                          <img src={form.image_url} alt="Banner Preview" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex flex-col justify-end p-4 text-white">
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-purple-600/90 w-fit mb-1">
+                              {form.display_position || 'Hero Section'} · {form.banner_type || 'Promotional Banner'}
+                            </span>
+                            <h4 className="text-sm font-black drop-shadow-md">{form.title || 'Banner Title'}</h4>
+                            {form.subtitle && <p className="text-xs font-semibold text-purple-200 drop-shadow">{form.subtitle}</p>}
+                            {form.description && <p className="text-[11px] text-slate-300 line-clamp-2 mt-1">{form.description}</p>}
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="px-3 py-1 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
+                                {form.cta_text || 'Explore Now'} →
+                              </span>
+                              <a
+                                href={
+                                  (form.display_position || '').includes('Hero') ? 'https://phulwari.co.in/' :
+                                  (form.display_position || '').includes('Header') ? 'https://phulwari.co.in/' :
+                                  (form.display_position || '').includes('Sidebar') ? 'https://phulwari.co.in/activities' :
+                                  (form.display_position || '').includes('Footer') ? 'https://phulwari.co.in/contact' :
+                                  'https://phulwari.co.in/kids-and-child-birthday-party'
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white border border-white/40 rounded-lg text-xs font-extrabold flex items-center gap-1 transition shadow-sm"
+                              >
+                                🌐 Visit Live Placement URL <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center space-y-2 bg-gradient-to-br from-purple-950/60 via-slate-900 to-slate-950 text-white">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded bg-purple-600/80">
+                            {form.display_position || 'Hero Section'} · {form.banner_type || 'Promotional Banner'}
+                          </span>
+                          <h4 className="text-sm font-black">{form.title || 'Banner Title'}</h4>
+                          <p className="text-xs text-purple-200">{form.subtitle || 'Subtitle or Tagline'}</p>
+                          <p className="text-[11px] text-slate-400">{form.description || 'Upload banner image above to see full image backdrop.'}</p>
+                          <div className="pt-2 flex items-center justify-center gap-2">
+                            <span className="inline-flex px-3.5 py-1 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg text-xs font-bold shadow-md">
+                              {form.cta_text || 'Explore Now'} →
+                            </span>
+                            <a
+                              href={
+                                (form.display_position || '').includes('Hero') ? 'https://phulwari.co.in/' :
+                                (form.display_position || '').includes('Header') ? 'https://phulwari.co.in/' :
+                                (form.display_position || '').includes('Sidebar') ? 'https://phulwari.co.in/activities' :
+                                (form.display_position || '').includes('Footer') ? 'https://phulwari.co.in/contact' :
+                                'https://phulwari.co.in/kids-and-child-birthday-party'
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white border border-white/40 rounded-lg text-xs font-extrabold flex items-center gap-1 transition shadow-sm"
+                            >
+                              🌐 Visit Live Placement URL <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -779,14 +948,47 @@ export default function BannersTab({
                       onChange={(e) => setForm({ ...form, display_position: e.target.value as any })}
                       className={inputCls}
                     >
-                      <option value="Hero Section">Hero Section</option>
-                      <option value="Header Top">Header Top</option>
+                      <option value="Hero Section">Hero Section (Sliding Banner)</option>
+                      <option value="Header Top">Header Top Bar</option>
                       <option value="Top Announcement Bar">Top Announcement Bar</option>
-                      <option value="Sidebar">Sidebar</option>
-                      <option value="Pre-Footer">Pre-Footer</option>
-                      <option value="Footer">Footer</option>
-                      <option value="Popup Banner">Popup Banner</option>
+                      <option value="Sidebar">Sidebar Card Banner</option>
+                      <option value="Pre-Footer">Pre-Footer Banner</option>
+                      <option value="Footer">Footer Banner</option>
+                      <option value="Popup Banner">Popup Modal Banner</option>
                     </select>
+                  </div>
+
+                  {/* Live Screen Preview Snapshot iFrame Container in Modal */}
+                  <div className="sm:col-span-3 p-3 rounded-2xl border border-pink-200 dark:border-pink-900/40 bg-pink-50/20 dark:bg-pink-950/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase text-pink-600 dark:text-pink-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Interactive Live Page Snapshot Preview — {form.display_position || 'Hero Section'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewKey(prev => prev + 1)}
+                        className="px-2 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-[9px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 hover:text-pink-600 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Refresh iFrame
+                      </button>
+                    </div>
+
+                    <div className="w-full aspect-[16/9] max-h-56 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-md bg-white">
+                      <iframe
+                        key={previewKey}
+                        src={
+                          (form.display_position || '').includes('Hero') ? 'https://phulwari.co.in/' :
+                          (form.display_position || '').includes('Header') ? 'https://phulwari.co.in/' :
+                          (form.display_position || '').includes('Sidebar') ? 'https://phulwari.co.in/activities' :
+                          (form.display_position || '').includes('Footer') ? 'https://phulwari.co.in/contact' :
+                          'https://phulwari.co.in/kids-and-child-birthday-party'
+                        }
+                        title="Live Webpage Placement Snapshot"
+                        className="w-full h-full border-0"
+                        loading="lazy"
+                      />
+                    </div>
                   </div>
 
                   <div>
