@@ -86,34 +86,85 @@ const generateCandidateMonths = (): string[] => {
 
 const MONTHS_LIST = generateCandidateMonths()
 
-const getAvailableFeeMonths = (studentFees: any[] = []): string[] => {
-  const candidate = generateCandidateMonths()
+const getAvailableFeeMonths = (studentFees: any[] = [], studentObj: any = null): string[] => {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
   const now = new Date()
   const currentMonthIdx = now.getMonth()
   const currentYear = now.getFullYear()
 
-  // Filter out past/passed months
-  const nonPast = candidate.filter(mStr => {
-    const parts = mStr.split(' ')
-    const mName = parts[0]
-    const yNum = parseInt(parts[1], 10)
-    const mIdx = monthNames.indexOf(mName)
-    if (yNum < currentYear) return false
-    if (yNum === currentYear && mIdx < currentMonthIdx) return false
-    return true
+  // 1. Determine admission start threshold (month and year)
+  let admYear = currentYear
+  let admMonthIdx = currentMonthIdx
+
+  const admRaw = studentObj?.admission_date || studentObj?.created_at || studentObj?.plan_start_date
+  if (admRaw) {
+    let str = String(admRaw).trim()
+    if (str.includes('T')) str = str.split('T')[0]
+    if (str.includes(' ')) str = str.split(' ')[0]
+    
+    if (str.includes('/')) {
+      const parts = str.split('/')
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          admYear = parseInt(parts[0], 10)
+          admMonthIdx = Math.max(0, parseInt(parts[1], 10) - 1)
+        } else {
+          admYear = parseInt(parts[2], 10)
+          admMonthIdx = Math.max(0, parseInt(parts[1], 10) - 1)
+        }
+      }
+    } else if (str.includes('-')) {
+      const parts = str.split('-')
+      if (parts.length >= 3) {
+        if (parts[0].length === 4) {
+          admYear = parseInt(parts[0], 10)
+          admMonthIdx = Math.max(0, parseInt(parts[1], 10) - 1)
+        } else {
+          admYear = parseInt(parts[2], 10)
+          admMonthIdx = Math.max(0, parseInt(parts[1], 10) - 1)
+        }
+      }
+    } else {
+      const parsedD = new Date(admRaw)
+      if (!isNaN(parsedD.getTime())) {
+        admYear = parsedD.getFullYear()
+        admMonthIdx = parsedD.getMonth()
+      }
+    }
+  }
+
+  // 2. Generate candidate months starting from Admission Month/Year
+  const candidate: string[] = []
+  const maxYear = Math.max(currentYear + 1, admYear + 1)
+
+  for (let y = admYear; y <= maxYear; y++) {
+    const startM = (y === admYear) ? admMonthIdx : 0
+    for (let m = startM; m < 12; m++) {
+      candidate.push(`${monthNames[m]} ${y}`)
+    }
+  }
+
+  // 3. Identify all months paid/cleared for this specific student
+  const studentPaidMonths = new Set<string>()
+  ;(studentFees || []).forEach((f: any) => {
+    const isPaid = f.status === 'paid' || f.status === 'collected' || Number(f.paid_amount || 0) >= Number(f.total_fee || f.net_amount || 1)
+    if (isPaid) {
+      if (f.collected_for) studentPaidMonths.add(f.collected_for.trim())
+      if (f.month) studentPaidMonths.add(f.month.trim())
+      if (f.fee_month) studentPaidMonths.add(f.fee_month.trim())
+      if (f.title) {
+        const match = f.title.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}/i)
+        if (match) {
+          studentPaidMonths.add(match[0].trim())
+        }
+      }
+    }
   })
 
-  // Filter out already paid months for this student
-  const studentPaidMonths = new Set(
-    (studentFees || [])
-      .filter((f: any) => f.status === 'paid')
-      .map((f: any) => f.collected_for || f.month)
-      .filter(Boolean)
-  )
+  // 4. Filter out paid months
+  const available = candidate.filter(mStr => !studentPaidMonths.has(mStr))
 
-  const available = nonPast.filter(mStr => !studentPaidMonths.has(mStr))
-  return available.length > 0 ? available : nonPast
+  return available.length > 0 ? available : candidate
 }
 
 const generateUUID = (): string => {
@@ -194,8 +245,13 @@ export default function StudentErpModal({
   }
 
   const buildInitialRows = useCallback((): FeeRow[] => {
-    const studentPaidFees = (fees || []).filter(f => f.student_id === student?.id || f.students?.admission_id === student?.admission_id)
-    const availMonths = getAvailableFeeMonths(studentPaidFees)
+    const studentPaidFees = (fees || []).filter(f => 
+      f.student_id === student?.id || 
+      f.admission_id === student?.admission_id ||
+      f.students?.admission_id === student?.admission_id ||
+      (f.student_name && student?.full_name && String(f.student_name).toLowerCase() === String(student.full_name).toLowerCase())
+    )
+    const availMonths = getAvailableFeeMonths(studentPaidFees, student)
     const defaultUpcomingMonth = availMonths[0] || 'September 2026'
 
     const systemHeads = [
@@ -822,8 +878,13 @@ export default function StudentErpModal({
                           {row.fee_head === 'Monthly Fee'
                             ? <select value={row.collected_for} onChange={e=>updateFeeRow(row.id,'collected_for',e.target.value)} className={`${inputCls} w-28`}>
                                 {(() => {
-                                  const studentPaidFees = (fees || []).filter(f => f.student_id === student?.id || f.students?.admission_id === student?.admission_id)
-                                  const availMonths = getAvailableFeeMonths(studentPaidFees)
+                                  const studentPaidFees = (fees || []).filter(f => 
+                                    f.student_id === student?.id || 
+                                    f.admission_id === student?.admission_id ||
+                                    f.students?.admission_id === student?.admission_id ||
+                                    (f.student_name && student?.full_name && String(f.student_name).toLowerCase() === String(student.full_name).toLowerCase())
+                                  )
+                                  const availMonths = getAvailableFeeMonths(studentPaidFees, student)
                                   const optionsList = Array.from(new Set([row.collected_for, ...availMonths])).filter(Boolean)
                                   return optionsList.map(m=><option key={m}>{m}</option>)
                                 })()}
