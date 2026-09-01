@@ -2149,6 +2149,125 @@ export default function StudentErpModal({
                 </div>
               </div>
 
+              {/* Customized Batch Schedule Builder (Visible when Build Custom Schedule is selected) */}
+              {editForm.batch_id === '00000000-0000-0000-0000-000000000000' && (
+                <div className="col-span-2 md:col-span-3 p-3.5 bg-gradient-to-br from-orange-50 to-amber-50/60 dark:from-slate-900 dark:to-orange-950/20 border border-orange-200 dark:border-orange-900/60 rounded-2xl space-y-3 shadow-xs mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>⚙️</span> Customize Batch Schedule Builder
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-bold">Create &amp; Manage Custom Day &amp; Time Schedules</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Day of Week</label>
+                      <select
+                        value={erpManualSchDay}
+                        onChange={(e) => setErpManualSchDay(e.target.value)}
+                        className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:border-orange-500"
+                      >
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Class / Activity</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Gymnastics"
+                        value={erpManualSchClass}
+                        onChange={(e) => setErpManualSchClass(e.target.value)}
+                        className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 05:00 PM"
+                        value={erpManualSchStart}
+                        onChange={(e) => setErpManualSchStart(e.target.value)}
+                        className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white outline-none font-mono focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 06:00 PM"
+                        value={erpManualSchEnd}
+                        onChange={(e) => setErpManualSchEnd(e.target.value)}
+                        className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white outline-none font-mono focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!erpManualSchClass.trim()) return;
+                        const currentCustomSch = editForm.custom_schedules || [];
+                        const updated = [
+                          ...currentCustomSch,
+                          {
+                            day_of_week: erpManualSchDay,
+                            class_name: erpManualSchClass.trim(),
+                            start_time: erpManualSchStart.trim() || '05:00 PM',
+                            end_time: erpManualSchEnd.trim() || '06:00 PM'
+                          }
+                        ];
+                        const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                        setEditForm({
+                          ...editForm,
+                          custom_schedules: updated,
+                          custom_days: uniqueDays,
+                          classes_total: updated.length * 4
+                        });
+                      }}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition cursor-pointer"
+                    >
+                      <span>➕ Add Schedule Entry</span>
+                    </button>
+                  </div>
+
+                  {/* Display configured custom entries */}
+                  {(editForm.custom_schedules || []).length > 0 && (
+                    <div className="pt-2 border-t border-orange-200/80 dark:border-orange-900/40 space-y-1.5">
+                      <span className="text-[10px] font-extrabold uppercase text-orange-700 dark:text-orange-400 tracking-wider">Configured Custom Entries ({(editForm.custom_schedules || []).length})</span>
+                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                        {(editForm.custom_schedules || []).map((sch: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-900/60 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-xs">
+                            <span className="font-bold text-orange-600 dark:text-orange-400">📅 {sch.day_of_week}</span>
+                            <span>|</span>
+                            <span>{sch.class_name}</span>
+                            <span className="font-mono text-[10px] text-blue-500 dark:text-blue-400">({sch.start_time} - {sch.end_time})</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (editForm.custom_schedules || []).filter((_: any, i: number) => i !== idx);
+                                const uniqueDays = Array.from(new Set(updated.map((s: any) => s.day_of_week))).join(', ');
+                                setEditForm({
+                                  ...editForm,
+                                  custom_schedules: updated,
+                                  custom_days: uniqueDays,
+                                  classes_total: updated.length * 4
+                                });
+                              }}
+                              className="text-rose-500 hover:text-rose-700 font-bold ml-1 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Program / Activity Interested Checkboxes */}
               <div className="col-span-2 md:col-span-3 pt-1">
                 <label className={`block font-bold mb-1.5 ${textSecondary}`}>Program / Activity Interested In:</label>
