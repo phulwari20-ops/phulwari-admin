@@ -94,16 +94,32 @@ export default function DashboardTab({
 
       {/* Admission & Student Status KPI Breakdown */}
       {(() => {
+        const parseStudentDate = (str: any): Date | null => {
+          if (!str) return null
+          const s = String(str).trim()
+          if (s.includes('/')) {
+            const parts = s.split('/')
+            if (parts.length === 3) {
+              const [d, m, y] = parts.map(p => parseInt(p, 10))
+              if (y && m && d) return new Date(y, m - 1, d)
+            }
+          }
+          const d = new Date(s)
+          return isNaN(d.getTime()) ? null : d
+        }
+
         const activeCount = students.filter(st => st.status !== 'deactivated').length
         const deactivatedCount = students.filter(st => st.status === 'deactivated').length
         const newCount = students.filter(st => {
           if (st.status === 'deactivated') return false
           if (st.status === 'new' || st.status === 'New') return true
-          const dateStr = st.created_at || st.print_date
+          const dateStr = st.admission_date || st.created_at || st.print_date || st.plan_start_date
           if (dateStr) {
-            const d = new Date(dateStr)
+            const d = parseStudentDate(dateStr)
             const now = new Date()
-            return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+            if (d) {
+              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+            }
           }
           return false
         }).length

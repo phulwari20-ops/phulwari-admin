@@ -221,7 +221,7 @@ export default function TeacherProfileModal({
               </div>
               <div className="flex flex-wrap gap-2">
                 {ATT_STATES.map(s => (
-                  <button key={s} onClick={() => onMarkAttendance(teacher.id, attDate, s)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${attToday === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-400'}`}>{s}</button>
+                  <button key={s} onClick={() => onMarkAttendance(teacher.id, attDate, attToday === s ? 'unmarked' : s)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${attToday === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-400'}`}>{s}</button>
                 ))}
               </div>
             </div>

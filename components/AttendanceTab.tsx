@@ -272,84 +272,76 @@ export default function AttendanceTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50 self-start sm:self-auto">
+                <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 self-start sm:self-auto shadow-xs">
                   {/* P Button */}
                   <button
                     disabled={isHoliday}
                     onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'present' ? 'unmarked' : 'present', item.class_name, item.class_time)}
-                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                    className={`h-8 px-2.5 rounded-xl text-xs font-black transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 ${
                       currentStatus === 'present'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-emerald-605 hover:bg-emerald-500/10'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-105 border border-emerald-400 ring-2 ring-emerald-500/20'
+                        : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-transparent'
                     }`}
-                    title="Present"
-                  >P</button>
+                    title="Present - Click to toggle"
+                  >
+                    <span>✓</span> P
+                  </button>
 
                   {/* A Button */}
                   <button
                     disabled={isHoliday}
                     onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'absent' ? 'unmarked' : 'absent', item.class_name, item.class_time)}
-                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                    className={`h-8 px-2.5 rounded-xl text-xs font-black transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 ${
                       currentStatus === 'absent'
-                        ? 'bg-rose-600 text-white shadow-sm'
-                        : 'text-rose-605 hover:bg-rose-500/10'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 scale-105 border border-rose-400 ring-2 ring-rose-500/20'
+                        : 'text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-transparent'
                     }`}
-                    title="Absent"
-                  >A</button>
+                    title="Absent - Click to toggle"
+                  >
+                    <span>✕</span> A
+                  </button>
 
                   {/* HD Button */}
                   <button
                     disabled={isHoliday}
                     onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday', item.class_name, item.class_time)}
-                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                    className={`h-8 px-2 rounded-xl text-xs font-black transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 ${
                       currentStatus === 'halfday'
-                        ? 'bg-amber-500 text-white shadow-sm'
-                        : 'text-amber-505 hover:bg-amber-500/10'
+                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 scale-105 border border-amber-300 ring-2 ring-amber-500/20'
+                        : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-transparent'
                     }`}
-                    title="Half Day"
-                  >HD</button>
+                    title="Half Day - Click to toggle"
+                  >
+                    <span>½</span> HD
+                  </button>
 
                   {/* L Button */}
                   <button
                     disabled={isHoliday}
-                    onClick={() => {
-                      if (currentStatus === 'leave') {
-                        handleMarkAttendance(item.student.id, attendanceDate, 'unmarked', item.class_name, item.class_time)
-                      } else {
-                        const r = prompt("Enter Leave Reason (e.g. Sick Leave, Out of Town, Family Function):", "Sick Leave")
-                        if (r !== null) {
-                          handleMarkAttendance(item.student.id, attendanceDate, 'leave', item.class_name, item.class_time, r || 'Leave')
-                        }
-                      }
-                    }}
-                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'leave' ? 'unmarked' : 'leave', item.class_name, item.class_time, 'Leave')}
+                    className={`h-8 px-2.5 rounded-xl text-xs font-black transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 ${
                       currentStatus === 'leave'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-blue-605 hover:bg-blue-500/10'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-105 border border-blue-400 ring-2 ring-blue-500/20'
+                        : 'text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-transparent'
                     }`}
-                    title={currentStatus === 'leave' && currentAtt?.leave_reason ? `Leave: ${currentAtt.leave_reason}` : "Leave"}
-                  >L</button>
+                    title="Leave - Single click toggle"
+                  >
+                    <span>🌴</span> L
+                  </button>
 
                   {/* H Button */}
                   <button
                     disabled={isHoliday}
-                    onClick={() => {
-                      if (currentStatus === 'holiday') {
-                        handleMarkAttendance(item.student.id, attendanceDate, 'unmarked', item.class_name, item.class_time)
-                      } else {
-                        const r = prompt("Enter Student-specific Holiday Reason (e.g. Exam, Trip, Medical):", "School Trip")
-                        if (r !== null) {
-                          handleMarkAttendance(item.student.id, attendanceDate, 'holiday', item.class_name, item.class_time, r || 'Holiday')
-                        }
-                      }
-                    }}
-                    className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                    onClick={() => handleMarkAttendance(item.student.id, attendanceDate, currentStatus === 'holiday' ? 'unmarked' : 'holiday', item.class_name, item.class_time, 'Student Holiday')}
+                    className={`h-8 px-2.5 rounded-xl text-xs font-black transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 ${
                       currentStatus === 'holiday'
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'text-purple-605 hover:bg-purple-500/10'
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 scale-105 border border-purple-400 ring-2 ring-purple-500/20'
+                        : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-transparent'
                     }`}
-                    title={currentStatus === 'holiday' && currentAtt?.holiday_reason ? `Holiday: ${currentAtt.holiday_reason}` : "Student Holiday"}
-                  >H</button>
+                    title="Holiday - Single click toggle"
+                  >
+                    <span>🏖️</span> H
+                  </button>
                 </div>
               </div>
             );

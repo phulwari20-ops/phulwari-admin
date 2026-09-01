@@ -1,11 +1,13 @@
-import React from 'react';
-import { UserPlus, Edit3, Trash2, Plus, Wallet } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserPlus, Edit3, Trash2, Plus, Wallet, ShieldCheck } from 'lucide-react';
+import TeacherAccountModal from './TeacherAccountModal';
 
 interface TeachersTabProps {
   bgCard: string;
   bgSubCard: string;
   textPrimary: string;
   textSecondary: string;
+  isLight: boolean;
   teachers: any[];
   setEditingTeacher: (teacher: any) => void;
   setTeacherForm: (form: any) => void;
@@ -20,6 +22,7 @@ export default function TeachersTab({
   bgSubCard,
   textPrimary,
   textSecondary,
+  isLight,
   teachers,
   setEditingTeacher,
   setTeacherForm,
@@ -29,12 +32,25 @@ export default function TeachersTab({
   onViewProfile
 }: TeachersTabProps) {
   const [selectedBatchNameFilter, setSelectedBatchNameFilter] = React.useState<string>('All');
+  const [accountModalTeacher, setAccountModalTeacher] = useState<any>(null);
 
   // Extract all unique assigned batch names from teachers list
   const uniqueBatches = Array.from(new Set(teachers.map(t => t.assigned_batch).filter(Boolean)));
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
+      {accountModalTeacher && (
+        <TeacherAccountModal
+          teacher={accountModalTeacher}
+          isOpen={true}
+          onClose={() => setAccountModalTeacher(null)}
+          isLight={isLight}
+          bgCard={bgCard}
+          bgSubCard={bgSubCard}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
@@ -141,6 +157,16 @@ export default function TeachersTab({
                   className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-600 hover:text-white dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
                   <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
+            )}
+            {adminRole !== 'Staff' && (
+              <div className="pt-3 flex justify-center">
+                <button
+                  onClick={() => setAccountModalTeacher(tch)}
+                  className="w-full py-2.5 bg-slate-50 hover:bg-blue-600 hover:text-white dark:bg-slate-800/50 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-700 hover:border-transparent"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Account & Login Access
                 </button>
               </div>
             )}

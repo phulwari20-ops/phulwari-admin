@@ -42,11 +42,19 @@ interface StudentErpModalProps {
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '';
-  if (dateStr.includes('/')) return dateStr;
-  const parts = dateStr.split('-');
+  let str = String(dateStr).trim();
+  if (str.includes('T')) {
+    str = str.split('T')[0];
+  } else if (str.includes(' ')) {
+    str = str.split(' ')[0];
+  }
+  if (str.includes('/')) return str;
+  const parts = str.split('-');
   if (parts.length === 3) {
     const [y, m, d] = parts;
-    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    if (y.length === 4) {
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
   }
   return dateStr;
 };
@@ -63,11 +71,48 @@ const parseDateToDb = (displayStr: string): string => {
   return displayStr;
 };
 
-const MONTHS_LIST = [
-  'January 2026', 'February 2026', 'March 2026', 'April 2026', 'May 2026', 'June 2026',
-  'July 2026', 'August 2026', 'September 2026', 'October 2026', 'November 2026', 'December 2026',
-  'January 2027', 'February 2027', 'March 2027'
-]
+const generateCandidateMonths = (): string[] => {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const result: string[] = []
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  for (let y = currentYear; y <= currentYear + 1; y++) {
+    for (let m = 0; m < 12; m++) {
+      result.push(`${monthNames[m]} ${y}`)
+    }
+  }
+  return result
+}
+
+const getAvailableFeeMonths = (studentFees: any[] = []): string[] => {
+  const candidate = generateCandidateMonths()
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const now = new Date()
+  const currentMonthIdx = now.getMonth()
+  const currentYear = now.getFullYear()
+
+  // Filter out past/passed months
+  const nonPast = candidate.filter(mStr => {
+    const parts = mStr.split(' ')
+    const mName = parts[0]
+    const yNum = parseInt(parts[1], 10)
+    const mIdx = monthNames.indexOf(mName)
+    if (yNum < currentYear) return false
+    if (yNum === currentYear && mIdx < currentMonthIdx) return false
+    return true
+  })
+
+  // Filter out already paid months for this student
+  const studentPaidMonths = new Set(
+    (studentFees || [])
+      .filter((f: any) => f.status === 'paid')
+      .map((f: any) => f.collected_for || f.month)
+      .filter(Boolean)
+  )
+
+  const available = nonPast.filter(mStr => !studentPaidMonths.has(mStr))
+  return available.length > 0 ? available : nonPast
+}
 
 const generateUUID = (): string => {
   if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
@@ -147,6 +192,10 @@ export default function StudentErpModal({
   }
 
   const buildInitialRows = useCallback((): FeeRow[] => {
+    const studentPaidFees = (fees || []).filter(f => f.student_id === student?.id || f.students?.admission_id === student?.admission_id)
+    const availMonths = getAvailableFeeMonths(studentPaidFees)
+    const defaultUpcomingMonth = availMonths[0] || 'September 2026'
+
     const systemHeads = [
       { name: 'Registration Fee', default_amount: 1000 },
       { name: 'Monthly Fee',      default_amount: 3500 },
@@ -157,13 +206,13 @@ export default function StudentErpModal({
       const defaultAmt = isMonthly && batchObj?.fee_amount ? Number(batchObj.fee_amount) : Number(h.default_amount || 0)
       return computeRow({
         id: `row-init-${i}`, fee_head: h.name, custom_head_name: '', 
-        collected_for: isMonthly ? 'January 2027' : 'One Time',
+        collected_for: isMonthly ? defaultUpcomingMonth : 'One Time',
         total_fee: defaultAmt, discount: 0, paid_amount: 0, 
         collection_date: new Date().toISOString().split('T')[0],
         mode_of_payment: '', transaction_id: ''
       })
     })
-  }, [feeHeads, allAvailableBatches, student?.batch_id])
+  }, [feeHeads, allAvailableBatches, student?.batch_id, fees, student?.id])
 
   const [feeRows, setFeeRows] = useState<FeeRow[]>([])
   const [collectionType, setCollectionType] = useState('Multiple Fee Collection')
@@ -770,7 +819,12 @@ export default function StudentErpModal({
                         <td className="px-2 py-1.5">
                           {row.fee_head === 'Monthly Fee'
                             ? <select value={row.collected_for} onChange={e=>updateFeeRow(row.id,'collected_for',e.target.value)} className={`${inputCls} w-28`}>
-                                {MONTHS_LIST.map(m=><option key={m}>{m}</option>)}
+                                {(() => {
+                                  const studentPaidFees = (fees || []).filter(f => f.student_id === student?.id || f.students?.admission_id === student?.admission_id)
+                                  const availMonths = getAvailableFeeMonths(studentPaidFees)
+                                  const optionsList = Array.from(new Set([row.collected_for, ...availMonths])).filter(Boolean)
+                                  return optionsList.map(m=><option key={m}>{m}</option>)
+                                })()}
                               </select>
                             : <span className="text-slate-500 font-semibold">One Time</span>
                           }
@@ -1976,20 +2030,6 @@ export default function StudentErpModal({
                   <label className={`block font-bold mb-1 ${textSecondary}`}>Preferred Time Slot</label>
                   <select
                     value={editForm.preferred_time_slot || 'Morning (9:00 AM - 12:00 PM)'}
-                    onChange={(e) => setEditForm({ ...editForm, preferred_time_slot: e.target.value })}
-                    className={inputCls}
-                  >
-                    <option value="Morning (9:00 AM - 12:00 PM)">Morning</option>
-                    <option value="Afternoon (12:00 PM - 3:00 PM)">Afternoon</option>
-                    <option value="Evening (3:00 PM - 6:00 PM)">Evening</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={`block font-bold mb-1 ${textSecondary}`}>Total Classes in Plan</label>
-                  <input
-                    type="number"
-                    value={editForm.classes_total !== undefined ? editForm.classes_total : 12}
-                    onChange={(e) => setEditForm({ ...editForm, classes_total: parseInt(e.target.value) || 12 })}
                     className={inputCls}
                   />
                 </div>

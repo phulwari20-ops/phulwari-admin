@@ -94,6 +94,7 @@ import BirthdayAlertsTab from '../components/BirthdayAlertsTab'
 import RenewalAlertsTab from '../components/RenewalAlertsTab'
 import FeeAlertsTab from '../components/FeeAlertsTab'
 import StaffTab from '../components/StaffTab'
+import BannersTab, { BannerItem } from '../components/BannersTab'
 import AddStudentModal from '../components/AddStudentModal'
 import StudentErpModal from '../components/StudentErpModal'
 import BroadcastNoticeModal from '../components/BroadcastNoticeModal'
@@ -151,7 +152,8 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners'>('dashboard')
+  const [banners, setBanners] = useState<BannerItem[]>([])
   const [loading, setLoading] = useState(true)
 
   // PWA Support
@@ -1016,6 +1018,21 @@ export default function AdminDashboardPage() {
           const localCats = localStorage.getItem('phulwari_admin_categories')
           if (localCats) setCategories(JSON.parse(localCats))
         }
+
+        // Fetch Banners — Supabase DB Direct Connection
+        try {
+          const { data: dbBanners, error: bannerErr } = await supabase.from('banners').select('*').order('priority', { ascending: true })
+          if (!bannerErr && dbBanners) {
+            setBanners(dbBanners)
+            try { localStorage.setItem('phulwari_banners', JSON.stringify(dbBanners)) } catch (e) {}
+          } else {
+            const localBanners = localStorage.getItem('phulwari_banners')
+            if (localBanners) setBanners(JSON.parse(localBanners))
+          }
+        } catch (bErr) {
+          const localBanners = localStorage.getItem('phulwari_banners')
+          if (localBanners) setBanners(JSON.parse(localBanners))
+        }
       } catch (e) {
         console.error('❌ [SCHEDULES/HOLIDAYS/ATTENDANCE FETCH EXCEPTION]:', e)
       }
@@ -1583,6 +1600,31 @@ export default function AdminDashboardPage() {
     // 1. Separate custom_schedules from main students table updates
     const { custom_schedules, ...studentTableUpdates } = updates
 
+    // Define valid database column names for the 'students' table in Supabase
+    const VALID_STUDENT_COLUMNS = new Set([
+      'id', 'admission_id', 'password', 'full_name', 'dob', 'gender', 'blood_group', 'photo_url', 
+      'batch_id', 'parent_name', 'parent_phone', 'parent_email', 'address', 'status', 'created_at', 
+      'city', 'state', 'pin_code', 'parent_relationship', 'parent_occupation', 'parent_address_same', 
+      'parent_alt_phone', 'emergency_contact_name', 'emergency_relationship', 'emergency_phone', 
+      'emergency_alt_phone', 'program_interested', 'preferred_time_slot', 'has_medical_condition', 
+      'medical_condition_details', 'regular_medication', 'doctor_name', 'doctor_phone', 
+      'hospital_preference', 'consent_accepted', 'age', 'occupation', 'alternate_phone', 
+      'classes_assigned', 'category', 'custom_days', 'classes_total', 'classes_consumed', 
+      'validity_end_date', 'additional_batches', 'batch_history', 'admission_date', 'valid_until', 
+      'plan_start_date'
+    ]);
+
+    const dbPayload: Record<string, any> = {};
+    Object.keys(studentTableUpdates).forEach(key => {
+      if (VALID_STUDENT_COLUMNS.has(key)) {
+        dbPayload[key] = studentTableUpdates[key];
+      }
+    });
+
+    if (studentTableUpdates.print_date && !dbPayload.admission_date) {
+      dbPayload.admission_date = studentTableUpdates.print_date;
+    }
+
     // Optimistic local update + persist
     setStudents(prev => {
       const next = prev.map(s => (s.id === studentId ? { ...s, ...studentTableUpdates } : s))
@@ -1593,7 +1635,7 @@ export default function AdminDashboardPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.from('students').update(studentTableUpdates).eq('id', studentId)
+      const { error } = await supabase.from('students').update(dbPayload).eq('id', studentId)
       if (error) {
         console.error('❌ [STUDENT UPDATE ERROR]:', error)
         alert(`Could not save to database: ${error.message}`)
@@ -1632,7 +1674,7 @@ export default function AdminDashboardPage() {
       alert(`Network error while saving: ${err.message || err}`)
       return false
     }
-    alert('✅ Student details updated successfully!')
+    await loadAllAdminData()
     return true
   }
 
@@ -2284,6 +2326,11 @@ Management Phulwari Mother and Child Activity Centre`
   const handleMarkTeacherAttendance = (teacherId: string, date: string, status: string) => {
     setTeacherAttendance(prev => {
       const filtered = prev.filter(a => !(a.teacher_id === teacherId && a.date === date))
+      if (status === 'unmarked') {
+        try { localStorage.setItem('phulwari_teacher_attendance', JSON.stringify(filtered)) } catch (e) {}
+        ;(async () => { try { await createClient().from('teacher_attendance').delete().match({ teacher_id: teacherId, date }) } catch (e) {} })()
+        return filtered
+      }
       const record = { id: `tatt-${teacherId}-${date}`, teacher_id: teacherId, date, status }
       const updated = [record, ...filtered]
       try { localStorage.setItem('phulwari_teacher_attendance', JSON.stringify(updated)) } catch (e) {}
@@ -3221,6 +3268,7 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'birthdays', label: 'Birthday Alerts', icon: Cake, count: birthdayAlertsCount },
               { id: 'renewals', label: 'Renewal Alerts', icon: RefreshCw, count: renewalAlertsCount },
               { id: 'fee_alerts', label: 'Fee Alerts', icon: IndianRupee, count: feeAlertsCount },
+              { id: 'banners', label: 'Banners & Posters Manager', icon: ImageIcon, count: banners.length },
               { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
               ...(!isStaffAccount ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
             ].filter(item => {
@@ -3325,6 +3373,7 @@ Management Phulwari Mother and Child Activity Centre`
         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
           <div>
             <h2 className={`text-xl font-bold ${textPrimary} flex items-center gap-2`}>
+              {activeTab === 'banners' && 'Banner & Poster Management System'}
               {activeTab === 'enquiries' && 'Lead & Enquiry Follow-up Manager'}
               {activeTab === 'deactivated' && 'Deactivated Students & Discontinued Logs'}
               {activeTab === 'students' && 'Student Management & Admissions'}
@@ -3513,7 +3562,7 @@ Management Phulwari Mother and Child Activity Centre`
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            students={activeStudents}
+            students={students}
             batches={batches}
             totalPaidFees={totalPaidFees}
             totalPendingFees={totalPendingFees}
@@ -3658,6 +3707,20 @@ Management Phulwari Mother and Child Activity Centre`
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
             setFeeForm={setFeeForm}
+            loadAllAdminData={loadAllAdminData}
+          />
+        )}
+
+        {/* TAB: BANNERS & POSTERS MANAGER */}
+        {activeTab === 'banners' && (
+          <BannersTab
+            bgCard={bgCard}
+            bgSubCard={bgSubCard}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+            isLight={isLight}
+            banners={banners}
+            setBanners={setBanners}
             loadAllAdminData={loadAllAdminData}
           />
         )}

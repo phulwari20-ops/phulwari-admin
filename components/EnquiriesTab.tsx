@@ -3,17 +3,17 @@ import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, 
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '—';
-  if (dateStr.includes('/')) return dateStr;
-  const parts = dateStr.split('-');
+  let str = String(dateStr).trim();
+  if (str.includes('T')) {
+    str = str.split('T')[0];
+  } else if (str.includes(' ')) {
+    str = str.split(' ')[0];
+  }
+  if (str.includes('/')) return str;
+  const parts = str.split('-');
   if (parts.length === 3) {
     const [y, m, d] = parts;
-    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
-  }
-  if (dateStr.includes('T')) {
-    const dateOnly = dateStr.split('T')[0];
-    const partsT = dateOnly.split('-');
-    if (partsT.length === 3) {
-      const [y, m, d] = partsT;
+    if (y.length === 4) {
       return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
     }
   }
