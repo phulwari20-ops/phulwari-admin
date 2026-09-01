@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { X, ShieldCheck, UserCheck, Lock, Eye, EyeOff } from 'lucide-react'
+import { X, ShieldCheck, UserCheck, Lock, Eye, EyeOff, Trash2, Power, Edit3 } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
 interface TeacherAccountModalProps {
@@ -59,7 +59,6 @@ export default function TeacherAccountModal({
         .order('created_at', { ascending: false })
 
       if (data) {
-        // Find by linked_teacher_id in notes or matching email
         const existing = data.find(r => {
           try {
             const notes = JSON.parse(r.notes || '{}')
@@ -77,6 +76,9 @@ export default function TeacherAccountModal({
             setPassword(notes.password || '')
             if (notes.permissions) setSelectedPermissions(notes.permissions)
           } catch(e) {}
+        } else {
+          setAccountId(null)
+          setPassword('')
         }
       }
     } catch (err: any) {
@@ -150,7 +152,50 @@ export default function TeacherAccountModal({
     setLoading(false)
   }
 
+  const handleToggleStatus = async () => {
+    if (!accountId) return
+    const nextStatus = status === 'active' ? 'deactivated' : 'active'
+    setErrorMsg('')
+    setSuccessMsg('')
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: nextStatus })
+        .eq('id', accountId)
+      if (error) throw error
+      setStatus(nextStatus)
+      setSuccessMsg(`Account status changed to ${nextStatus.toUpperCase()}`)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update status.')
+    }
+    setLoading(false)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!accountId) return
+    if (!confirm(`Are you sure you want to delete login credentials for ${teacher.name}?`)) return
+    setErrorMsg('')
+    setSuccessMsg('')
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .delete()
+        .eq('id', accountId)
+      if (error) throw error
+      setAccountId(null)
+      setPassword('')
+      setSuccessMsg('Account credentials permanently deleted.')
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to delete account.')
+    }
+    setLoading(false)
+  }
+
   if (!isOpen || !teacher) return null
+
+  const inputCls = "w-full px-4 py-2.5 rounded-xl border outline-none font-semibold text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors placeholder:text-slate-400"
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
@@ -165,6 +210,40 @@ export default function TeacherAccountModal({
           <button onClick={onClose} type="button" className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-6 h-6" /></button>
         </div>
 
+        {/* Existing Account Status & Quick Actions Bar */}
+        {accountId && (
+          <div className="mt-4 p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <span className="text-slate-600 dark:text-slate-300">Credentials Active:</span>
+              <span className={`px-2.5 py-0.5 rounded-full font-extrabold uppercase text-[10px] ${status === 'active' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                {status}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleStatus}
+                disabled={loading}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  status === 'active' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>{status === 'active' ? 'Deactivate' : 'Activate'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={loading}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSaveAccount} className="space-y-6 mt-4">
           {errorMsg && <div className="p-3 bg-rose-500/10 text-rose-600 text-xs font-bold rounded-xl">{errorMsg}</div>}
           {successMsg && <div className="p-3 bg-emerald-500/10 text-emerald-600 text-xs font-bold rounded-xl">{successMsg}</div>}
@@ -172,15 +251,25 @@ export default function TeacherAccountModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className={`block text-xs font-bold mb-1.5 ${textSecondary}`}>Login Email (Username)</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none font-semibold text-sm ${isLight ? 'bg-slate-100 border-slate-300 focus:border-indigo-500' : 'bg-slate-950 border-slate-800 focus:border-indigo-500'}`}
+              <input 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                required
+                placeholder="teacher@phulwari.co.in"
+                className={inputCls}
               />
             </div>
             <div>
               <label className={`block text-xs font-bold mb-1.5 ${textSecondary}`}>Password</label>
               <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
-                  className={`w-full px-4 py-2.5 rounded-xl border outline-none font-mono text-sm ${isLight ? 'bg-slate-100 border-slate-300 focus:border-indigo-500' : 'bg-slate-950 border-slate-800 focus:border-indigo-500'}`}
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required
+                  placeholder="••••••••"
+                  className={inputCls}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-indigo-500 cursor-pointer">
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -189,16 +278,22 @@ export default function TeacherAccountModal({
             </div>
             <div>
               <label className={`block text-xs font-bold mb-1.5 ${textSecondary}`}>Account Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value as any)}
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none font-semibold text-sm ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800'}`}>
+              <select 
+                value={status} 
+                onChange={(e) => setStatus(e.target.value as any)}
+                className={inputCls}
+              >
                 <option value="active">Active (Can Login)</option>
                 <option value="deactivated">Deactivated (Login Blocked)</option>
               </select>
             </div>
             <div>
               <label className={`block text-xs font-bold mb-1.5 ${textSecondary}`}>Role</label>
-              <input type="text" value="Teacher / Faculty" disabled
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none font-semibold text-sm opacity-60 ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800'}`}
+              <input 
+                type="text" 
+                value="Teacher / Faculty" 
+                disabled
+                className={`${inputCls} opacity-70 bg-slate-100 dark:bg-slate-800 cursor-not-allowed`}
               />
             </div>
           </div>
@@ -217,11 +312,20 @@ export default function TeacherAccountModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">Cancel</button>
-            <button type="submit" disabled={loading} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md disabled:opacity-50 flex items-center gap-2 cursor-pointer">
-              <ShieldCheck className="w-4 h-4" /> {accountId ? 'Update Account' : 'Create Account'}
-            </button>
+          <div className="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-800">
+            <div>
+              {accountId && (
+                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  ✓ Account configured (Click Update to save changes)
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">Cancel</button>
+              <button type="submit" disabled={loading} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md disabled:opacity-50 flex items-center gap-2 cursor-pointer">
+                <ShieldCheck className="w-4 h-4" /> {accountId ? 'Update Account' : 'Create Account'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

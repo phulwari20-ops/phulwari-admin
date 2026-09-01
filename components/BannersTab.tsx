@@ -19,7 +19,8 @@ import {
   Clock,
   Layout,
   Smartphone,
-  Monitor
+  Monitor,
+  UploadCloud
 } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
 
@@ -74,6 +75,9 @@ export default function BannersTab({
   const [statusFilter, setStatusFilter] = useState<string>('All')
   const [typeFilter, setTypeFilter] = useState<string>('All')
   const [loading, setLoading] = useState(false)
+
+  const [uploadingMain, setUploadingMain] = useState(false)
+  const [uploadingMobile, setUploadingMobile] = useState(false)
 
   // Form State
   const [form, setForm] = useState<Partial<BannerItem>>({
@@ -133,6 +137,55 @@ export default function BannersTab({
     setEditingBanner(item)
     setForm({ ...item })
     setIsModalOpen(true)
+  }
+
+  const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'main' | 'mobile') => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (target === 'main') setUploadingMain(true)
+    else setUploadingMobile(true)
+
+    try {
+      const supabase = createClient()
+      const fileExt = file.name.split('.').pop()
+      const fileName = `banner_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
+      const filePath = `banners/${fileName}`
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('gallery').upload(filePath, file, {
+        contentType: file.type || 'image/png',
+        upsert: true
+      })
+      if (!uploadErr && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from('gallery').getPublicUrl(filePath)
+        if (publicUrlData?.publicUrl) {
+          if (target === 'main') {
+            setForm(prev => ({ ...prev, image_url: publicUrlData.publicUrl }))
+          } else {
+            setForm(prev => ({ ...prev, mobile_image_url: publicUrlData.publicUrl }))
+          }
+          return
+        }
+      }
+
+      // Fallback to base64 data URL if storage upload policy restricts
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const result = event.target?.result as string
+        if (target === 'main') {
+          setForm(prev => ({ ...prev, image_url: result }))
+        } else {
+          setForm(prev => ({ ...prev, mobile_image_url: result }))
+        }
+      }
+      reader.readAsDataURL(file)
+    } catch (err: any) {
+      console.error(err)
+      alert(`Local file upload error: ${err.message}`)
+    } finally {
+      if (target === 'main') setUploadingMain(false)
+      else setUploadingMobile(false)
+    }
   }
 
   const handleDuplicate = async (item: BannerItem) => {
@@ -208,6 +261,9 @@ export default function BannersTab({
     }
 
     setLoading(true)
+    const startDateClean = form.start_date && String(form.start_date).trim() !== '' ? String(form.start_date).trim() : null
+    const endDateClean = form.end_date && String(form.end_date).trim() !== '' ? String(form.end_date).trim() : null
+
     const payload = {
       title: form.title || 'Untitled Banner',
       subtitle: form.subtitle || '',
@@ -222,8 +278,8 @@ export default function BannersTab({
       display_position: form.display_position || 'Hero Section',
       priority: Number(form.priority || 1),
       status: form.status || 'active',
-      start_date: form.start_date || new Date().toISOString().split('T')[0],
-      end_date: form.end_date || '',
+      start_date: startDateClean,
+      end_date: endDateClean,
       device_target: form.device_target || 'All Devices',
       impressions: editingBanner ? (editingBanner.impressions || 0) : 0,
       clicks: editingBanner ? (editingBanner.clicks || 0) : 0
@@ -382,7 +438,7 @@ export default function BannersTab({
           <p className="text-sm font-extrabold text-slate-400">No Banners Found</p>
           <button
             onClick={openCreateModal}
-            className="px-4 py-2 bg-pink-600 text-white rounded-xl text-xs font-bold shadow-md shadow-pink-600/20"
+            className="px-4 py-2 bg-pink-600 text-white rounded-xl text-xs font-bold shadow-md shadow-pink-600/20 cursor-pointer"
           >
             Create Your First Banner
           </button>
@@ -611,27 +667,51 @@ export default function BannersTab({
                     </select>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 space-y-1">
                     <label className={`block font-bold mb-1 ${textSecondary}`}>Main Banner Image URL *</label>
-                    <input
-                      type="url"
-                      required
-                      placeholder="https://example.com/banner-image.jpg or Supabase Public URL"
-                      value={form.image_url || ''}
-                      onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                      className={inputCls}
-                    />
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="https://example.com/banner-image.jpg or Supabase Public URL"
+                        value={form.image_url || ''}
+                        onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                        className={inputCls}
+                      />
+                      <label className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-sm transition whitespace-nowrap">
+                        <UploadCloud className="w-4 h-4" />
+                        <span>{uploadingMain ? 'Uploading...' : '📁 Upload Local Image'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleLocalImageUpload(e, 'main')}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 space-y-1">
                     <label className={`block font-bold mb-1 ${textSecondary}`}>Mobile Banner Image URL (Optional)</label>
-                    <input
-                      type="url"
-                      placeholder="https://example.com/mobile-banner.jpg (If different for small screens)"
-                      value={form.mobile_image_url || ''}
-                      onChange={(e) => setForm({ ...form, mobile_image_url: e.target.value })}
-                      className={inputCls}
-                    />
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://example.com/mobile-banner.jpg (If different for small screens)"
+                        value={form.mobile_image_url || ''}
+                        onChange={(e) => setForm({ ...form, mobile_image_url: e.target.value })}
+                        className={inputCls}
+                      />
+                      <label className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition whitespace-nowrap">
+                        <UploadCloud className="w-4 h-4" />
+                        <span>{uploadingMobile ? 'Uploading...' : '📁 Upload Mobile Image'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleLocalImageUpload(e, 'mobile')}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   {/* Image Preview */}
@@ -776,7 +856,7 @@ export default function BannersTab({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>

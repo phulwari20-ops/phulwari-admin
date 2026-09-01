@@ -28,6 +28,7 @@ interface StudentListTabProps {
   tableHeaderBg: string;
   badgeClass: string;
   filteredStudents: any[];
+  students?: any[];
   batches: any[];
   setIsExportModalOpen: (v: boolean) => void;
 }
@@ -57,7 +58,7 @@ function compareAdmissionId(a: string, b: string): number {
 
 export default function StudentListTab({
   bgCard, textPrimary, textSecondary, isLight, tableHeaderBg,
-  badgeClass, filteredStudents, batches, setIsExportModalOpen
+  badgeClass, filteredStudents, students, batches, setIsExportModalOpen
 }: StudentListTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>('default');
 
@@ -108,12 +109,13 @@ export default function StudentListTab({
 
       {/* ── Admission & Student Status KPI Cards ── */}
       {(() => {
-        const activeCount = filteredStudents.filter(s => s.status !== 'deactivated').length
-        const deactivatedCount = filteredStudents.filter(s => s.status === 'deactivated').length
-        const newCount = filteredStudents.filter(st => {
-          if (st.status === 'deactivated') return false
+        const masterList = (students && students.length > 0) ? students : filteredStudents
+        const activeCount = masterList.filter(s => s.status !== 'deactivated' && s.status !== 'left' && s.status !== 'inactive').length
+        const deactivatedCount = masterList.filter(s => s.status === 'deactivated' || s.status === 'left' || s.status === 'inactive').length
+        const newCount = masterList.filter(st => {
+          if (st.status === 'deactivated' || st.status === 'left' || st.status === 'inactive') return false
           if (st.status === 'new' || st.status === 'New') return true
-          const dateStr = st.created_at || st.print_date
+          const dateStr = st.admission_date || st.created_at || st.print_date || st.plan_start_date
           if (dateStr) {
             const d = new Date(dateStr)
             const now = new Date()

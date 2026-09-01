@@ -33,6 +33,7 @@ interface AddStudentModalProps {
   newStudentForm: any
   setNewStudentForm: (val: any) => void
   allAvailableBatches: any[]
+  setBatches?: React.Dispatch<React.SetStateAction<any[]>>
   handleAddStudentSubmit: (e: React.FormEvent) => void
   batchSchedules: any[]
   categories: any[]
@@ -62,6 +63,7 @@ export default function AddStudentModal({
   newStudentForm,
   setNewStudentForm,
   allAvailableBatches,
+  setBatches,
   handleAddStudentSubmit,
   batchSchedules,
   categories,
@@ -76,6 +78,85 @@ export default function AddStudentModal({
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const [editingCatName, setEditingCatName] = useState('')
   const [editingCatEmoji, setEditingCatEmoji] = useState('🧸')
+
+  // Quick Add Batch Modal state
+  const [isQuickAddBatchOpen, setIsQuickAddBatchOpen] = useState(false)
+  const [quickBatchName, setQuickBatchName] = useState('')
+  const [quickBatchTime, setQuickBatchTime] = useState('10:30 AM - 11:30 AM')
+  const [quickBatchFee, setQuickBatchFee] = useState<number | string>(3500)
+  const [quickBatchClasses, setQuickBatchClasses] = useState<number | string>(12)
+  const [quickBatchValidity, setQuickBatchValidity] = useState<number | string>(30)
+  const [quickBatchCategory, setQuickBatchCategory] = useState('')
+  const [quickBatchLoading, setQuickBatchLoading] = useState(false)
+
+  const handleQuickAddBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickBatchName.trim()) return
+    setQuickBatchLoading(true)
+
+    const generateUuid = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+      return 'b' + Date.now().toString(16).padStart(12, '0') + '-4000-8000-000000000000'
+    }
+
+    const newId = generateUuid()
+    const feeNum = Number(quickBatchFee) || 3500
+    const catName = quickBatchCategory || newStudentForm.category || 'Child Activity'
+    const newBatchObj = {
+      id: newId,
+      batch_name: quickBatchName.trim(),
+      batch_time: quickBatchTime.trim() || '10:30 AM',
+      fee_amount: feeNum,
+      classes_total: Number(quickBatchClasses) || 12,
+      validity_days: Number(quickBatchValidity) || 30,
+      days: 'Mon - Sat',
+      days_schedule: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      status: 'active',
+      category: catName,
+      location: 'Kidwaipuri Main Branch'
+    }
+
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.from('batches').insert([newBatchObj]).select()
+      const insertedObj = (data && data.length > 0) ? data[0] : newBatchObj
+
+      if (setBatches) {
+        setBatches((prev: any[]) => [...prev, insertedObj])
+      }
+      if (allAvailableBatches && !allAvailableBatches.some(b => b.id === insertedObj.id)) {
+        allAvailableBatches.push(insertedObj)
+      }
+
+      const updatedItems = (newStudentForm.payment_items || [
+        { id: '1', fee_head: 'Registration Fee', month: '', custom_head_name: '', amount: 1000, discount: 0 },
+        { id: '2', fee_head: 'Monthly Fee', month: 'January 2027', custom_head_name: '', amount: feeNum, discount: 0 }
+      ]).map((it: any) => {
+        if (it.fee_head === 'Monthly Fee') {
+          return { ...it, amount: feeNum };
+        }
+        return it;
+      });
+
+      setNewStudentForm({
+        ...newStudentForm,
+        category: catName,
+        batch_id: newId,
+        classes_total: Number(quickBatchClasses) || 12,
+        custom_days: 'Mon - Sat',
+        payment_items: updatedItems,
+        total_fee: updatedItems.reduce((sum: number, it: any) => sum + Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)), 0)
+      })
+
+      setIsQuickAddBatchOpen(false)
+      setQuickBatchName('')
+    } catch (err: any) {
+      console.error('Quick add batch error:', err)
+      alert(`❌ Could not create batch: ${err.message || 'Error'}`)
+    } finally {
+      setQuickBatchLoading(false)
+    }
+  }
 
   // Manual Schedule Entry Builder state
   const [manualSchDay, setManualSchDay] = useState('Monday')
@@ -540,7 +621,20 @@ export default function AddStudentModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Select Student Batch</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-slate-700 text-xs">Select Student Batch</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickBatchCategory(newStudentForm.category || 'Child Activity')
+                          setIsQuickAddBatchOpen(true)
+                        }}
+                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-0.5 cursor-pointer bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded shadow-xs"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>+ Quick Add Batch</span>
+                      </button>
+                    </div>
                     <select 
                       value={newStudentForm.batch_id} 
                       onChange={(e) => {
@@ -1107,6 +1201,116 @@ export default function AddStudentModal({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK ADD BATCH MODAL */}
+      {isQuickAddBatchOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative border border-orange-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-orange-600" /> Quick Add New Batch
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsQuickAddBatchOpen(false)} 
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAddBatchSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Batch Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Morning Explorers (10:30 AM)"
+                  value={quickBatchName}
+                  onChange={(e) => setQuickBatchName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Registration Category</label>
+                  <select
+                    value={quickBatchCategory || newStudentForm.category || 'Child Activity'}
+                    onChange={(e) => setQuickBatchCategory(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold text-slate-900 cursor-pointer"
+                  >
+                    {categories.map((c: any) => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Time Slot</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10:30 AM - 11:30 AM"
+                    value={quickBatchTime}
+                    onChange={(e) => setQuickBatchTime(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Monthly Fee (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={quickBatchFee}
+                    onChange={(e) => setQuickBatchFee(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-bold text-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Total Classes</label>
+                  <input
+                    type="number"
+                    required
+                    value={quickBatchClasses}
+                    onChange={(e) => setQuickBatchClasses(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-bold text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Validity (Days)</label>
+                  <input
+                    type="number"
+                    required
+                    value={quickBatchValidity}
+                    onChange={(e) => setQuickBatchValidity(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAddBatchOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickBatchLoading}
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{quickBatchLoading ? 'Saving Batch...' : 'Save & Select Batch'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Award, Calendar, Users, Cake, Phone, MessageSquare, Trash2, ShieldCheck, Heart, Sparkles } from 'lucide-react'
+import { Award, Calendar, Users, Cake, Phone, MessageSquare, Trash2, Edit3, X, Save, ShieldCheck } from 'lucide-react'
+import { createClient } from '../lib/supabase/client'
 
 interface BookingsTabProps {
   bgCard: string
@@ -14,6 +15,7 @@ interface BookingsTabProps {
   handleDeleteBooking: (id: string) => void
   partyPackages: any[]
   isLight: boolean
+  loadAllAdminData?: () => Promise<void>
 }
 
 export default function BookingsTab({
@@ -26,10 +28,26 @@ export default function BookingsTab({
   handleUpdateBookingStatus,
   handleDeleteBooking,
   partyPackages = [],
-  isLight
+  isLight,
+  loadAllAdminData
 }: BookingsTabProps) {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('All')
   const [selectedPackageFilter, setSelectedPackageFilter] = useState<string>('All')
+
+  // Edit Modal State
+  const [editingBooking, setEditingBooking] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState<any>({
+    parent_name: '',
+    phone: '',
+    email: '',
+    event_date: '',
+    child_age: '',
+    status: 'New',
+    package_selection: 'None',
+    guests: '',
+    requirements: ''
+  })
+  const [saveLoading, setSaveLoading] = useState(false)
 
   // Available Booking Types
   const uniqueTypes = Array.from(new Set(bookings.map(b => b.booking_type).filter(Boolean)))
@@ -48,10 +66,8 @@ export default function BookingsTab({
 
   // Filter Bookings List
   const filteredBookings = bookings.filter(b => {
-    // 1. Booking Type Filter
     if (selectedTypeFilter !== 'All' && b.booking_type !== selectedTypeFilter) return false
 
-    // 2. Package Filter
     if (selectedPackageFilter !== 'All') {
       try {
         const notesObj = JSON.parse(b.notes || '{}')
@@ -67,6 +83,79 @@ export default function BookingsTab({
   const handleWhatsAppFollowUp = (bk: any, pkgName: string) => {
     const text = `Hi ${bk.parent_name}! 🎈\nThis is Phulwari Centre Support. We received your booking inquiry for the *${pkgName}* birthday party celebration scheduled on *${bk.event_date || 'your selected date'}.*\n\nIs it a good time to connect and finalize your arrangements?`
     window.open(`https://wa.me/${bk.phone.replace(/[^0-9]/g, '') || '916207368839'}?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  const openEditModal = (bk: any) => {
+    let notesObj: any = {}
+    try {
+      notesObj = JSON.parse(bk.notes || '{}')
+    } catch (_) {}
+
+    setEditingBooking(bk)
+    setEditForm({
+      parent_name: bk.parent_name || '',
+      phone: bk.phone || '',
+      email: bk.email || '',
+      event_date: bk.event_date || '',
+      child_age: bk.child_age !== null && bk.child_age !== undefined ? String(bk.child_age) : '',
+      status: bk.status || 'New',
+      package_selection: notesObj.package_selection || 'None',
+      guests: notesObj.guests || '',
+      requirements: notesObj.requirements || ''
+    })
+  }
+
+  const handleSaveBookingEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingBooking) return
+    setSaveLoading(true)
+
+    try {
+      let notesObj: any = {}
+      try {
+        notesObj = JSON.parse(editingBooking.notes || '{}')
+      } catch (_) {}
+
+      notesObj.package_selection = editForm.package_selection
+      notesObj.guests = editForm.guests
+      notesObj.requirements = editForm.requirements
+
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          parent_name: editForm.parent_name.trim(),
+          phone: editForm.phone.trim(),
+          email: editForm.email.trim(),
+          event_date: editForm.event_date || null,
+          child_age: editForm.child_age !== '' ? Number(editForm.child_age) : null,
+          status: editForm.status,
+          notes: JSON.stringify(notesObj)
+        })
+        .eq('id', editingBooking.id)
+
+      if (error) throw error
+
+      if (loadAllAdminData) {
+        await loadAllAdminData()
+      } else {
+        editingBooking.parent_name = editForm.parent_name.trim()
+        editingBooking.phone = editForm.phone.trim()
+        editingBooking.email = editForm.email.trim()
+        editingBooking.event_date = editForm.event_date
+        editingBooking.child_age = editForm.child_age !== '' ? Number(editForm.child_age) : null
+        editingBooking.status = editForm.status
+        editingBooking.notes = JSON.stringify(notesObj)
+      }
+
+      setEditingBooking(null)
+      alert('✅ Booking record updated successfully!')
+    } catch (err: any) {
+      console.error(err)
+      alert(`❌ Failed to update booking: ${err.message || 'Error'}`)
+    } finally {
+      setSaveLoading(false)
+    }
   }
 
   return (
@@ -132,7 +221,6 @@ export default function BookingsTab({
 
           const isBirthdayLead = bk.booking_type?.toLowerCase().includes('birthday')
 
-          // Dynamic colors per package selection
           const isPremium = pkgSelection.toLowerCase().includes('premium')
           const isBasic = pkgSelection.toLowerCase().includes('basic')
           const pkgBadgeClass = isPremium 
@@ -152,13 +240,24 @@ export default function BookingsTab({
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteBooking(bk.id)}
-                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg opacity-80 md:opacity-0 md:group-hover:opacity-100 transition shrink-0 cursor-pointer"
-                    title="Delete Booking Record"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(bk)}
+                      className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition shrink-0 cursor-pointer"
+                      title="Edit Booking Record"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBooking(bk.id)}
+                      className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition shrink-0 cursor-pointer"
+                      title="Delete Booking Record"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Details Section */}
@@ -205,8 +304,8 @@ export default function BookingsTab({
               </div>
 
               {/* Status and Action Buttons */}
-              <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 mt-2">
-                <div className="flex items-center space-x-2 text-[10px]">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 mt-2">
+                <div className="flex items-center space-x-1.5 text-[10px]">
                   <span className="font-extrabold text-slate-400">Status:</span>
                   <select
                     value={bk.status || 'New'}
@@ -228,13 +327,40 @@ export default function BookingsTab({
                   </select>
                 </div>
 
-                <button
-                  onClick={() => handleWhatsAppFollowUp(bk, pkgSelection)}
-                  className="px-3.5 py-1.5 bg-[#34B36B] hover:bg-[#2e9e5e] text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-md shadow-[#34B36B]/20 transition cursor-pointer"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>WhatsApp Lead</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <a
+                    href={`tel:${bk.phone?.replace(/[^0-9+]/g, '')}`}
+                    className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-sm transition cursor-pointer"
+                    title="Call Lead"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>Call</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(bk)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWhatsAppFollowUp(bk, pkgSelection)}
+                    className="px-3 py-1.5 bg-[#34B36B] hover:bg-[#2e9e5e] text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-sm transition cursor-pointer"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBooking(bk.id)}
+                    className="px-2 py-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Delete Lead"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           )
@@ -246,6 +372,134 @@ export default function BookingsTab({
           </div>
         )}
       </div>
+
+      {/* EDIT BOOKING MODAL */}
+      {editingBooking && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative border border-purple-200 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-purple-600" /> Edit Registration Record
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setEditingBooking(null)} 
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBookingEdit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Parent / Contact Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.parent_name}
+                  onChange={(e) => setEditForm({ ...editForm, parent_name: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-semibold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phone No.</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-mono font-semibold text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-semibold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Event Date</label>
+                  <input
+                    type="date"
+                    value={editForm.event_date}
+                    onChange={(e) => setEditForm({ ...editForm, event_date: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-semibold text-slate-900 dark:text-white text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Child Age</label>
+                  <input
+                    type="number"
+                    value={editForm.child_age}
+                    onChange={(e) => setEditForm({ ...editForm, child_age: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-2 py-2 outline-none font-bold text-slate-900 dark:text-white cursor-pointer"
+                  >
+                    <option value="New">New</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Package Selection</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Premium Birthday Celebration"
+                  value={editForm.package_selection}
+                  onChange={(e) => setEditForm({ ...editForm, package_selection: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-semibold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Requirements / Remarks</label>
+                <textarea
+                  rows={2}
+                  value={editForm.requirements}
+                  onChange={(e) => setEditForm({ ...editForm, requirements: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 outline-none font-semibold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingBooking(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveLoading}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{saveLoading ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

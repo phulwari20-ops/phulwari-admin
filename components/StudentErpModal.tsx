@@ -84,6 +84,8 @@ const generateCandidateMonths = (): string[] => {
   return result
 }
 
+const MONTHS_LIST = generateCandidateMonths()
+
 const getAvailableFeeMonths = (studentFees: any[] = []): string[] => {
   const candidate = generateCandidateMonths()
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -1103,13 +1105,13 @@ export default function StudentErpModal({
               <span className="block font-black text-[10px] uppercase text-slate-400 tracking-wider mb-2">Month-Wise Fee Status</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {MONTHS_LIST.map(mName => {
-                  const matchFees = fees.filter(f => 
-                    (f.student_id === student.id || f.students?.admission_id === student.admission_id) && 
-                    (f.month === mName || f.title?.includes(mName))
+                  const matchFees = (fees || []).filter(f => 
+                    (f.student_id === student?.id || f.admission_id === student?.admission_id || f.students?.admission_id === student?.admission_id || (f.student_name && student?.full_name && String(f.student_name).toLowerCase() === String(student.full_name).toLowerCase())) && 
+                    (f.month === mName || f.collected_for === mName || f.fee_month === mName || (f.title && f.title.includes(mName)))
                   )
 
-                  const isPaid = matchFees.length > 0 && matchFees.every(f => f.status === 'paid')
-                  const isPartial = matchFees.length > 0 && !isPaid && matchFees.some(f => f.status === 'paid' || f.status === 'partial')
+                  const isPaid = matchFees.length > 0 && matchFees.every(f => f.status === 'paid' || f.status === 'collected' || Number(f.paid_amount || 0) >= Number(f.total_fee || f.net_amount || 1))
+                  const isPartial = matchFees.length > 0 && !isPaid && matchFees.some(f => f.status === 'paid' || f.status === 'partial' || Number(f.paid_amount || 0) > 0)
 
                   return (
                     <div
@@ -1137,7 +1139,12 @@ export default function StudentErpModal({
               <span className="block font-black text-[10px] uppercase text-slate-400 tracking-wider mb-2">Ledger Transaction Audit Trail</span>
               
               {(() => {
-                const studentFees = fees.filter(f => f.student_id === student.id || f.students?.admission_id === student.admission_id)
+                const studentFees = (fees || []).filter(f => 
+                  f.student_id === student?.id || 
+                  f.admission_id === student?.admission_id ||
+                  f.students?.admission_id === student?.admission_id ||
+                  (f.student_name && student?.full_name && String(f.student_name).toLowerCase() === String(student.full_name).toLowerCase())
+                )
                 if (studentFees.length === 0) {
                   return (
                     <div className="p-8 text-center text-slate-400 font-bold border border-dashed rounded-2xl">
@@ -2030,8 +2037,14 @@ export default function StudentErpModal({
                   <label className={`block font-bold mb-1 ${textSecondary}`}>Preferred Time Slot</label>
                   <select
                     value={editForm.preferred_time_slot || 'Morning (9:00 AM - 12:00 PM)'}
+                    onChange={(e) => setEditForm({ ...editForm, preferred_time_slot: e.target.value })}
                     className={inputCls}
-                  />
+                  >
+                    <option value="Morning (9:00 AM - 12:00 PM)">Morning (9:00 AM - 12:00 PM)</option>
+                    <option value="Afternoon (12:00 PM - 3:00 PM)">Afternoon (12:00 PM - 3:00 PM)</option>
+                    <option value="Evening (3:00 PM - 6:00 PM)">Evening (3:00 PM - 6:00 PM)</option>
+                    <option value="Full Day (Morning - Evening)">Full Day (Morning - Evening)</option>
+                  </select>
                 </div>
                 <div>
                   <label className={`block font-bold mb-1 ${textSecondary}`}>Classes Consumed Already</label>

@@ -53,7 +53,12 @@ export default function FeesTab({
   })
 
   const openLedgerViewForm = (st: any, studentFees: any[], month: string) => {
-    const studentFeeRecords = studentFees.length > 0 ? studentFees : fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+    const studentFeeRecords = studentFees.length > 0 ? studentFees : fees.filter((f: any) => 
+      f.student_id === st?.id || 
+      f.admission_id === st?.admission_id ||
+      f.students?.admission_id === st?.admission_id ||
+      (f.student_name && st?.full_name && String(f.student_name).toLowerCase() === String(st.full_name).toLowerCase())
+    )
     setViewLedgerModal({
       isOpen: true,
       student: st,

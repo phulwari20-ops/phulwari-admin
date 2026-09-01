@@ -1625,6 +1625,30 @@ export default function AdminDashboardPage() {
       dbPayload.admission_date = studentTableUpdates.print_date;
     }
 
+    // Sanitize all date fields in dbPayload to ensure empty strings become null and formatted strings are converted to YYYY-MM-DD
+    const DATE_COLUMNS = new Set(['dob', 'validity_end_date', 'admission_date', 'valid_until', 'plan_start_date', 'created_at']);
+    Object.keys(dbPayload).forEach(col => {
+      if (DATE_COLUMNS.has(col)) {
+        let val = dbPayload[col];
+        if (val === '' || val === 'null' || val === 'undefined' || val === undefined || val === null) {
+          dbPayload[col] = null;
+        } else if (typeof val === 'string') {
+          let trimmed = val.trim();
+          if (trimmed === '' || trimmed.toLowerCase() === 'n/a') {
+            dbPayload[col] = null;
+          } else if (trimmed.includes('/')) {
+            const parts = trimmed.split('/');
+            if (parts.length === 3) {
+              const [d, m, y] = parts;
+              if (y && y.length === 4) {
+                dbPayload[col] = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+              }
+            }
+          }
+        }
+      }
+    });
+
     // Optimistic local update + persist
     setStudents(prev => {
       const next = prev.map(s => (s.id === studentId ? { ...s, ...studentTableUpdates } : s))
@@ -3318,9 +3342,13 @@ Management Phulwari Mother and Child Activity Centre`
                     <Icon className="w-4 h-4 shrink-0" />
                     {!isSidebarCollapsed && <span className="truncate text-left">{item.label}</span>}
                   </div>
-                  {!isSidebarCollapsed && item.count !== undefined && item.count > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold shrink-0 ml-1 ${
-                      active ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600 border border-blue-200'
+                  {item.count !== undefined && item.count > 0 && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-extrabold shrink-0 ml-auto shadow-xs border transition-colors ${
+                      active
+                        ? 'bg-white text-blue-700 font-black border-white/40'
+                        : isLight
+                        ? 'bg-blue-100/90 text-blue-800 border-blue-200 hover:bg-blue-200'
+                        : 'bg-blue-950/80 text-blue-300 border-blue-800'
                     }`}>
                       {item.count}
                     </span>
@@ -3787,6 +3815,7 @@ Management Phulwari Mother and Child Activity Centre`
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
             filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
+            students={students}
             batches={batches}
             setIsExportModalOpen={setIsExportModalOpen}
           />
@@ -4573,6 +4602,7 @@ Management Phulwari Mother and Child Activity Centre`
         newStudentForm={newStudentForm}
         setNewStudentForm={setNewStudentForm}
         allAvailableBatches={allAvailableBatches}
+        setBatches={setBatches}
         handleAddStudentSubmit={handleAddStudentSubmit}
         batchSchedules={batchSchedules}
         categories={categories}
