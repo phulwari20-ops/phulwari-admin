@@ -3481,17 +3481,19 @@ Management Phulwari Mother and Child Activity Centre`
                     <p className="text-[10px] text-blue-500 font-mono truncate max-w-[130px]">{adminUser.email}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setIsChangePasswordOpen(true)}
-                  className={`p-2 rounded-xl border flex items-center justify-center transition cursor-pointer ${
-                    isLight 
-                      ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-600' 
-                      : 'bg-slate-900 hover:bg-slate-850 border-slate-850 text-amber-400'
-                  }`}
-                  title="Change Admin Password"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                </button>
+                {adminRole === 'Admin' && (
+                  <button
+                    onClick={() => setIsChangePasswordOpen(true)}
+                    className={`p-2 rounded-xl border flex items-center justify-center transition cursor-pointer ${
+                      isLight 
+                        ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-600' 
+                        : 'bg-slate-900 hover:bg-slate-850 border-slate-850 text-amber-400'
+                    }`}
+                    title="Change Admin Password"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
 
@@ -5342,7 +5344,7 @@ Management Phulwari Mother and Child Activity Centre`
       />
 
       {/* MODAL: CHANGE ADMIN PASSWORD */}
-      {isChangePasswordOpen && (
+      {isChangePasswordOpen && adminRole === 'Admin' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] text-xs">
           <div className={`p-6 max-w-md w-full rounded-3xl space-y-4 shadow-2xl ${isLight ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100 border border-slate-800'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
@@ -5357,6 +5359,11 @@ Management Phulwari Mother and Child Activity Centre`
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (adminRole !== 'Admin') {
+                  alert('❌ Access Denied: Only Super Admin role can change admin password.');
+                  setIsChangePasswordOpen(false);
+                  return;
+                }
                 const currentPw = e.currentTarget.currentPassword.value.trim();
                 const newPw = e.currentTarget.newPassword.value.trim();
                 const confirmPw = e.currentTarget.confirmPassword.value.trim();
