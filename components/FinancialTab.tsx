@@ -36,6 +36,7 @@ interface FinancialTabProps {
   isLight: boolean
   students: any[]
   fees: any[]
+  batches?: any[]
   teachers: any[]
   teacherPayments: any[]
   loadAllAdminData: () => Promise<void>
@@ -49,6 +50,7 @@ export default function FinancialTab({
   isLight,
   students,
   fees,
+  batches = [],
   teachers,
   teacherPayments,
   loadAllAdminData
@@ -103,9 +105,17 @@ export default function FinancialTab({
           return
         }
 
-        const [incRes, expRes] = await Promise.all([
-          supabase.from('incomes').select('*').order('date', { ascending: false }),
-          supabase.from('expenses').select('*').order('date', { ascending: false })
+        const toSafePromise = (builder: any) => new Promise(res => {
+          try {
+            if (builder && typeof builder.then === 'function') {
+              builder.then((r: any) => res(r?.error ? { data: null } : r), () => res({ data: null }))
+            } else res({ data: null })
+          } catch (e) { res({ data: null }) }
+        })
+
+        const [incRes, expRes]: any[] = await Promise.all([
+          toSafePromise(supabase.from('incomes').select('*').order('date', { ascending: false })),
+          toSafePromise(supabase.from('expenses').select('*').order('date', { ascending: false }))
         ])
         if (incRes?.data && incRes.data.length > 0) {
           setManualIncomes(incRes.data.map((i: any) => ({ ...i, type: 'Income', is_auto: false })))
@@ -155,6 +165,35 @@ export default function FinancialTab({
   const num = (v: any) => Number(v) || 0
   const inr = (v: any) => `₹${num(v).toLocaleString('en-IN')}`
 
+  // Calculate accurate pending dues for any student (consistently matching FeesTab logic)
+  const getStudentPendingDue = (st: any, feesArr: any[], batchesArr: any[] = []) => {
+    const stFees = (feesArr || []).filter(f => 
+      f.student_id === st.id || 
+      f.students?.admission_id === st.admission_id || 
+      f.admission_id === st.admission_id ||
+      (f.student_name && st.full_name && String(f.student_name).toLowerCase().trim() === String(st.full_name).toLowerCase().trim())
+    )
+
+    let due = stFees.reduce((dSum, f) => dSum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
+
+    if (st.pending_dues && num(st.pending_dues) > 0 && due === 0) {
+      due = num(st.pending_dues)
+    }
+
+    const hasPaidFee = stFees.some(f => f.status === 'paid')
+    if (due === 0 && (!stFees.length || !hasPaidFee) && st.status !== 'inactive' && st.status !== 'deactivated') {
+      const batchObj = (batchesArr || []).find(b => 
+        b.id === st.batch_id || 
+        (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim())
+      )
+      const expectedTotal = st.total_fee ? num(st.total_fee) : (batchObj ? num(batchObj.fee_amount) : 3500)
+      const paid = num(st.amount_paid || 0)
+      due = Math.max(0, expectedTotal - paid)
+    }
+
+    return due
+  }
+
   // Combined Fee Collections + Manual Incomes
   const feeIncomeEntries = useMemo(() => {
     return (fees || []).map(f => ({
@@ -199,11 +238,10 @@ export default function FinancialTab({
 
   const pendingReceivables = useMemo(() => {
     return (students || []).reduce((sum, st) => {
-      const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id)
-      const due = stFees.reduce((dSum, f) => dSum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
+      const due = getStudentPendingDue(st, fees, batches)
       return sum + Math.max(0, due)
     }, 0)
-  }, [students, fees])
+  }, [students, fees, batches])
 
   const todayStr = new Date().toISOString().split('T')[0]
   const todayCollection = useMemo(() => {
@@ -664,6 +702,7 @@ export default function FinancialTab({
                   <th className="p-3">Student Name</th>
                   <th className="p-3">Batch / Class</th>
                   <th className="p-3">Parent Phone</th>
+                  <th className="p-3">Pending Month(s)</th>
                   <th className="p-3 text-right">Fee Due Amount</th>
                   <th className="p-3 text-center">Status</th>
                   <th className="p-3 text-right">Actions</th>
@@ -671,9 +710,16 @@ export default function FinancialTab({
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
                 {students.map(st => {
-                  const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id)
-                  const dueAmount = stFees.reduce((sum, f) => sum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
+                  const dueAmount = getStudentPendingDue(st, fees, batches)
                   if (dueAmount <= 0) return null
+
+                  const stFees = (fees || []).filter(f => 
+                    (f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id) &&
+                    f.status !== 'paid' && f.month
+                  )
+                  const pendingMonths = stFees.length > 0 
+                    ? Array.from(new Set(stFees.map(f => f.month))).join(', ') 
+                    : 'August 2026'
 
                   return (
                     <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
@@ -681,6 +727,7 @@ export default function FinancialTab({
                       <td className="p-3 font-bold text-slate-800 dark:text-slate-100">{st.full_name}</td>
                       <td className="p-3">{st.batch_name || st.program_interested || 'Regular Batch'}</td>
                       <td className="p-3 font-mono">{st.parent_phone}</td>
+                      <td className="p-3 font-mono text-[11px] font-bold text-purple-600 dark:text-purple-400">{pendingMonths}</td>
                       <td className="p-3 text-right font-mono font-black text-amber-600 dark:text-amber-400">{inr(dueAmount)}</td>
                       <td className="p-3 text-center">
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300">
@@ -690,7 +737,7 @@ export default function FinancialTab({
                       <td className="p-3 text-right space-x-2">
                         <button
                           onClick={() => {
-                            const msg = `Dear ${st.parent_name || 'Parent'}, reminder from Phulwari Centre: Pending fee due for ${st.full_name} is ${inr(dueAmount)}. Please clear dues.`
+                            const msg = `Dear ${st.parent_name || 'Parent'}, reminder from Phulwari Centre: Pending fee due for ${st.full_name} for ${pendingMonths} is ${inr(dueAmount)}. Please clear dues.`
                             window.open(`https://wa.me/${String(st.parent_phone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
                           }}
                           className="px-2.5 py-1 bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
@@ -701,12 +748,9 @@ export default function FinancialTab({
                     </tr>
                   )
                 }).filter(Boolean)}
-                {students.every(st => {
-                  const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
-                  return stFees.reduce((sum, f) => sum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0) <= 0
-                }) && (
+                {students.every(st => getStudentPendingDue(st, fees, batches) <= 0) && (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-400">
+                    <td colSpan={8} className="p-6 text-center text-slate-400">
                       🎉 No pending dues receivable found! All student fees are up to date.
                     </td>
                   </tr>

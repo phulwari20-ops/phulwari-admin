@@ -91,6 +91,41 @@ export default function GalleryTab({
     setHasOrderChanged(true);
   };
 
+  const totalPages = Math.ceil(localOrder.length / galleryPerPage) || 1;
+
+  const handlePositionChange = (imgId: string, newPosStr: string) => {
+    const targetPos = parseInt(newPosStr, 10);
+    if (isNaN(targetPos) || targetPos < 1 || targetPos > localOrder.length) return;
+
+    const currIdx = localOrder.findIndex(img => img.id === imgId);
+    if (currIdx === -1 || currIdx === targetPos - 1) return;
+
+    const newOrder = [...localOrder];
+    const [movedImg] = newOrder.splice(currIdx, 1);
+    newOrder.splice(targetPos - 1, 0, movedImg);
+
+    const updatedImages = newOrder.map((img, idx) => ({ ...img, sort_order: idx + 1 }));
+    setLocalOrder(updatedImages);
+    setHasOrderChanged(true);
+    if (handleUpdateGalleryOrder) handleUpdateGalleryOrder(updatedImages);
+  };
+
+  const handleMoveToPage = (imgId: string, targetPage: number) => {
+    if (targetPage < 1 || targetPage > totalPages) return;
+    const targetIdx = (targetPage - 1) * galleryPerPage;
+    const currIdx = localOrder.findIndex(img => img.id === imgId);
+    if (currIdx === -1) return;
+
+    const newOrder = [...localOrder];
+    const [movedImg] = newOrder.splice(currIdx, 1);
+    newOrder.splice(targetIdx, 0, movedImg);
+
+    const updatedImages = newOrder.map((img, idx) => ({ ...img, sort_order: idx + 1 }));
+    setLocalOrder(updatedImages);
+    setHasOrderChanged(true);
+    if (handleUpdateGalleryOrder) handleUpdateGalleryOrder(updatedImages);
+  };
+
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -98,7 +133,7 @@ export default function GalleryTab({
           <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
             <ImageIcon className="w-5 h-5 text-blue-500" /> Dynamic Gallery Photo Manager ({galleryImages.length} Photos)
           </h3>
-          <p className={`text-xs ${textSecondary}`}>Upload photos, drag to reorder display sequence, and publish live!</p>
+          <p className={`text-xs ${textSecondary}`}>Upload photos, drag across cards/pages or enter serial numbers to reorder sequence live!</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -153,49 +188,81 @@ export default function GalleryTab({
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {localOrder
           .slice((galleryPage - 1) * galleryPerPage, galleryPage * galleryPerPage)
-          .map((img) => (
-            <div
-              key={img.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, img)}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              onDrop={(e) => handleDrop(e, img)}
-              onClick={() => setSelectedAdminGalleryImg(img)}
-              className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2.5 ${bgSubCard} group cursor-grab active:cursor-grabbing hover:border-blue-500/50 transition`}
-            >
-              <div className="aspect-square rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 relative">
-                <img
-                  src={img.url}
-                  alt={img.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition pointer-events-none"
-                  onError={(e: any) => {
-                    e.target.src = '/phulwari_logo.webp';
-                  }}
-                />
-                <div className="absolute top-2 left-2 p-1.5 bg-slate-900/60 backdrop-blur-sm rounded-lg text-white opacity-0 group-hover:opacity-100 transition shadow-sm">
-                  <GripVertical className="w-4 h-4" />
-                </div>
-                <div className="absolute top-2 right-2 px-2 py-1 bg-blue-600 shadow-sm backdrop-blur-sm rounded-md text-white text-[10px] font-bold">
-                  #{img.sort_order || localOrder.findIndex(i => i.id === img.id) + 1}
-                </div>
-              </div>
-              <div>
-                <h4 className={`text-xs font-bold truncate ${textPrimary}`}>{img.title}</h4>
-                <p className={`text-[10px] font-mono ${textSecondary} truncate`}>{img.url.startsWith('data:') ? 'Device Base64 Image' : img.url}</p>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeletingGalleryImg(img);
-                }}
-                className="w-full py-1.5 bg-rose-600/10 text-rose-500 border border-rose-500/20 hover:bg-rose-600 hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+          .map((img) => {
+            const currentPosition = localOrder.findIndex(i => i.id === img.id) + 1;
+            return (
+              <div
+                key={img.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, img)}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(e, img)}
+                onClick={() => setSelectedAdminGalleryImg(img)}
+                className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2.5 ${bgSubCard} group cursor-grab active:cursor-grabbing hover:border-blue-500/50 transition`}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
-            </div>
-          ))}
+                <div className="aspect-square rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 relative">
+                  <img
+                    src={img.url}
+                    alt={img.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition pointer-events-none"
+                    onError={(e: any) => {
+                      e.target.src = '/phulwari_logo.webp';
+                    }}
+                  />
+                  <div className="absolute top-2 left-2 p-1.5 bg-slate-900/60 backdrop-blur-sm rounded-lg text-white opacity-0 group-hover:opacity-100 transition shadow-sm">
+                    <GripVertical className="w-4 h-4" />
+                  </div>
+
+                  {/* Serial Number Direct Edit Input */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1 bg-slate-900/80 backdrop-blur-sm border border-slate-700 px-1.5 py-0.5 rounded-lg text-white text-[10px] font-bold shadow-md" onClick={(e) => e.stopPropagation()}>
+                    <span>#</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={localOrder.length}
+                      value={currentPosition}
+                      onChange={(e) => handlePositionChange(img.id, e.target.value)}
+                      className="w-8 text-center bg-blue-600 text-white font-mono font-extrabold rounded text-[10px] outline-none focus:ring-1 focus:ring-blue-300"
+                      title="Enter serial number to move photo position instantly"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className={`text-xs font-bold truncate ${textPrimary}`}>{img.title}</h4>
+                  <p className={`text-[10px] font-mono ${textSecondary} truncate`}>{img.url.startsWith('data:') ? 'Device Base64 Image' : img.url}</p>
+                </div>
+
+                {/* Move to Page Direct Selector */}
+                <div className="flex items-center justify-between text-[10px] bg-slate-100 dark:bg-slate-800/60 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
+                  <span className="font-bold text-slate-500">Page:</span>
+                  <select
+                    value={Math.ceil(currentPosition / galleryPerPage)}
+                    onChange={(e) => handleMoveToPage(img.id, parseInt(e.target.value, 10))}
+                    className="bg-transparent font-extrabold text-blue-600 dark:text-blue-400 outline-none cursor-pointer"
+                  >
+                    {Array.from({ length: totalPages }, (_, idx) => (
+                      <option key={idx + 1} value={idx + 1} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                        Page {idx + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingGalleryImg(img);
+                  }}
+                  className="w-full py-1.5 bg-rose-600/10 text-rose-500 border border-rose-500/20 hover:bg-rose-600 hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            );
+          })}
       </div>
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -206,6 +273,14 @@ export default function GalleryTab({
         <div className="flex items-center space-x-2">
           <button
             disabled={galleryPage === 1}
+            onDragOver={handleDragOver}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (draggedImg && galleryPage > 1) {
+                handleMoveToPage(draggedImg.id, galleryPage - 1);
+                setGalleryPage(prev => Math.max(prev - 1, 1));
+              }
+            }}
             onClick={() => setGalleryPage(prev => Math.max(prev - 1, 1))}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
               galleryPage === 1 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
@@ -216,14 +291,22 @@ export default function GalleryTab({
           </button>
 
           <span className={`text-xs font-mono font-bold px-3 py-1 border rounded-xl ${badgeClass}`}>
-            Page {galleryPage} of {Math.ceil(localOrder.length / galleryPerPage) || 1}
+            Page {galleryPage} of {totalPages}
           </span>
 
           <button
-            disabled={galleryPage >= Math.ceil(localOrder.length / galleryPerPage)}
-            onClick={() => setGalleryPage(prev => Math.min(prev + 1, Math.ceil(localOrder.length / galleryPerPage)))}
+            disabled={galleryPage >= totalPages}
+            onDragOver={handleDragOver}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (draggedImg && galleryPage < totalPages) {
+                handleMoveToPage(draggedImg.id, galleryPage + 1);
+                setGalleryPage(prev => Math.min(prev + 1, totalPages));
+              }
+            }}
+            onClick={() => setGalleryPage(prev => Math.min(prev + 1, totalPages))}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
-              galleryPage >= Math.ceil(localOrder.length / galleryPerPage) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
+              galleryPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-600 hover:text-white'
             }`}
           >
             <span>Next Page</span>

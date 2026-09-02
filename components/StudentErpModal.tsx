@@ -226,6 +226,16 @@ export default function StudentErpModal({
   const [calMonth, setCalMonth] = useState(new Date().getMonth())
   const [calYear, setCalYear] = useState(new Date().getFullYear())
 
+  // ─── Split Payment Modal State ──────────────────────────────────────────
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false)
+  const [splitBreakdown, setSplitBreakdown] = useState({
+    cash: 0,
+    upi: 0,
+    card: 0,
+    cheque: 0,
+    credit: 0
+  })
+
   // ─── Image Upload State ───────────────────────────────────────────────────
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
@@ -1028,11 +1038,14 @@ export default function StudentErpModal({
               <div className="flex flex-wrap gap-4">
                 <label className="font-bold text-[10px] text-slate-600 mb-1 block">Mode of Payment *</label>
                 <div className="flex flex-wrap gap-3">
-                  {['Cash','UPI','Bank Transfer','Cheque','Other'].map(m=>(
+                  {['Cash','UPI','Bank Transfer','Cheque','Card','Split Payment','Other'].map(m=>(
                     <label key={m} className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold">
                       <input type="radio" name="globalMode" value={m} checked={globalPaymentMode===m}
-                        onChange={()=>setGlobalPaymentMode(m)} className="accent-emerald-600" />
-                      {m}
+                        onChange={()=>{
+                          setGlobalPaymentMode(m)
+                          if (m === 'Split Payment') setIsSplitModalOpen(true)
+                        }} className="accent-emerald-600" />
+                      {m === 'Split Payment' ? '✂️ Split Payment' : m}
                     </label>
                   ))}
                 </div>
@@ -2636,6 +2649,94 @@ export default function StudentErpModal({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── SPLIT PAYMENT DIALOG MODAL (Image #5) ── */}
+      {isSplitModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[99]">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xs w-full space-y-4 text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-extrabold flex items-center gap-2">
+                <span>✂️</span> Split Payment
+              </h3>
+              <button type="button" onClick={() => setIsSplitModalOpen(false)} className="text-slate-400 hover:text-white font-bold cursor-pointer text-sm">✕</button>
+            </div>
+
+            <div className="text-xs font-mono font-bold text-slate-400">
+              Total: ₹{(feeCalc?.totalPaid || 0).toLocaleString('en-IN')}
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <label className="font-bold">Cash</label>
+                <input
+                  type="number"
+                  value={splitBreakdown.cash || ''}
+                  placeholder="0"
+                  onChange={(e) => setSplitBreakdown({ ...splitBreakdown, cash: parseFloat(e.target.value) || 0 })}
+                  className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-white text-right outline-none focus:border-blue-500 font-bold"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="font-bold">UPI</label>
+                <input
+                  type="number"
+                  value={splitBreakdown.upi || ''}
+                  placeholder="0"
+                  onChange={(e) => setSplitBreakdown({ ...splitBreakdown, upi: parseFloat(e.target.value) || 0 })}
+                  className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-white text-right outline-none focus:border-blue-500 font-bold"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="font-bold">Card</label>
+                <input
+                  type="number"
+                  value={splitBreakdown.card || ''}
+                  placeholder="0"
+                  onChange={(e) => setSplitBreakdown({ ...splitBreakdown, card: parseFloat(e.target.value) || 0 })}
+                  className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-white text-right outline-none focus:border-blue-500 font-bold"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="font-bold">Cheque / Bank</label>
+                <input
+                  type="number"
+                  value={splitBreakdown.cheque || ''}
+                  placeholder="0"
+                  onChange={(e) => setSplitBreakdown({ ...splitBreakdown, cheque: parseFloat(e.target.value) || 0 })}
+                  className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-white text-right outline-none focus:border-blue-500 font-bold"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="font-bold">Credit</label>
+                <input
+                  type="number"
+                  value={splitBreakdown.credit || ''}
+                  placeholder="0"
+                  onChange={(e) => setSplitBreakdown({ ...splitBreakdown, credit: parseFloat(e.target.value) || 0 })}
+                  className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-white text-right outline-none focus:border-blue-500 font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
+              <span className="font-extrabold text-amber-400">Sum: ₹{(splitBreakdown.cash + splitBreakdown.upi + splitBreakdown.card + splitBreakdown.cheque + splitBreakdown.credit).toLocaleString('en-IN')}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const totalSplit = splitBreakdown.cash + splitBreakdown.upi + splitBreakdown.card + splitBreakdown.cheque + splitBreakdown.credit;
+                setGlobalPaymentMode('Split Payment');
+                setGlobalTransactionId(`Split (Cash: ₹${splitBreakdown.cash}, UPI: ₹${splitBreakdown.upi}, Card: ₹${splitBreakdown.card}, Cheque: ₹${splitBreakdown.cheque})`);
+                setIsSplitModalOpen(false);
+              }}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold shadow-lg transition cursor-pointer"
+            >
+              SAVE SPLIT
+            </button>
           </div>
         </div>
       )}

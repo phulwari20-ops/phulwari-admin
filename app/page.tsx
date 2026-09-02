@@ -293,7 +293,11 @@ export default function AdminDashboardPage() {
   // ERP upgrades & enhancements state
   const [enquiries, setEnquiries] = useState<any[]>([])
   const [adminRole, setAdminRole] = useState<'Admin' | 'Staff'>('Admin')
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<'Child Activity' | 'Zumba & Yoga'>('Child Activity')
+  const [categories, setCategories] = useState<any[]>(() => [
+    { id: 'cat-1', name: 'Child Activity', emoji: '🧸' },
+    { id: 'cat-2', name: 'Zumba & Yoga', emoji: '🧘' }
+  ])
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All')
   const [waReminderModal, setWaReminderModal] = useState({ isOpen: false, phone: '', message: '' })
   const [leadAlert, setLeadAlert] = useState<{ name: string; phone: string; service: string; id: string } | null>(null)
 
@@ -314,6 +318,35 @@ export default function AdminDashboardPage() {
     const merged = fromDb.length > 0 ? [...fromDb, 'Other'] : DEFAULT_CLASS_NAMES
     return Array.from(new Set(merged))
   }, [classes])
+
+  // Dynamic category list combining DB categories + registered student categories + batch categories
+  const dynamicCategoriesList = useMemo(() => {
+    const fromStudents = students.map((s: any) => s.category).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
+    const fromBatches = batches.map((b: any) => b.category).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
+    const fromDb = (categories || []).map((c: any) => (typeof c === 'string' ? c : c?.name)).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
+    
+    const merged = Array.from(new Set(['Child Activity', 'Zumba & Yoga', ...fromDb, ...fromStudents, ...fromBatches]))
+    return merged
+  }, [students, batches, categories])
+
+  const handleCreateCategory = async (rawCatName: string) => {
+    if (!rawCatName || !rawCatName.trim()) return
+    const catName = rawCatName.trim()
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.from('categories').insert([{ name: catName, emoji: '🏷️' }]).select()
+      if (data && data.length > 0) {
+        setCategories(prev => [...prev.filter((c: any) => (typeof c === 'string' ? c : c.name).toLowerCase() !== catName.toLowerCase()), data[0]])
+      }
+    } catch (err) {
+      console.error('Failed to save category to DB:', err)
+    }
+    setCategories(prev => {
+      const exists = prev.some((c: any) => (typeof c === 'string' ? c : c.name).toLowerCase() === catName.toLowerCase())
+      if (exists) return prev
+      return [...prev, { name: catName, emoji: '🏷️' }]
+    })
+  }
   const [incomeCategories, setIncomeCategories] = useState<any[]>([])
   const [expenseCategories, setExpenseCategories] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])
@@ -495,10 +528,7 @@ export default function AdminDashboardPage() {
   })
 
 
-  const [categories, setCategories] = useState<Array<{ id?: string; name: string; emoji: string }>>([
-    { name: 'Child Activity', emoji: '🧸' },
-    { name: 'Zumba & Yoga', emoji: '🧘' }
-  ])
+
 
   // Export Choice Modal State (PDF vs CSV)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
@@ -1464,7 +1494,9 @@ export default function AdminDashboardPage() {
         const responseData = await res.json()
         const inserted = responseData[0] || newStudentObj
         const enriched = {
+          ...newStudentObj,
           ...inserted,
+          category: newStudentObj.category || inserted.category || 'Child Activity',
           batch_name: selectedBatchObj?.batch_name || inserted.batch_name
         }
 
@@ -2379,15 +2411,15 @@ Management Phulwari Mother and Child Activity Centre`
   }
 
   // --- Teacher attendance: mark/replace a day's status ---
-  const handleMarkTeacherAttendance = (teacherId: string, date: string, status: string) => {
+  const handleMarkTeacherAttendance = (teacherId: string, date: string, status: string, reason?: string) => {
     setTeacherAttendance(prev => {
       const filtered = prev.filter(a => !(a.teacher_id === teacherId && a.date === date))
-      if (status === 'unmarked') {
+      if (status === 'unmarked' || !status) {
         try { localStorage.setItem('phulwari_teacher_attendance', JSON.stringify(filtered)) } catch (e) {}
         ;(async () => { try { await createClient().from('teacher_attendance').delete().match({ teacher_id: teacherId, date }) } catch (e) {} })()
         return filtered
       }
-      const record = { id: `tatt-${teacherId}-${date}`, teacher_id: teacherId, date, status }
+      const record = { id: `tatt-${teacherId}-${date}`, teacher_id: teacherId, date, status, reason: reason || null }
       const updated = [record, ...filtered]
       try { localStorage.setItem('phulwari_teacher_attendance', JSON.stringify(updated)) } catch (e) {}
       ;(async () => { try { await createClient().from('teacher_attendance').upsert([record], { onConflict: 'id' }) } catch (e) {} })()
@@ -3741,9 +3773,15 @@ Management Phulwari Mother and Child Activity Centre`
 
         {/* TAB 1: STUDENT MANAGEMENT */}
         {(activeTab === 'students' || activeTab === 'student_list') && (
-          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 flex-wrap gap-1 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
             <span className={`font-semibold px-2 ${textSecondary}`}>Category Filter:</span>
-            {(['Child Activity', 'Zumba & Yoga'] as const).map(cat => (
+            <button
+              onClick={() => setSelectedCategoryFilter('All')}
+              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                selectedCategoryFilter === 'All' ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
+              }`}
+            >All Categories</button>
+            {dynamicCategoriesList.map(cat => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategoryFilter(cat)}
@@ -3765,7 +3803,10 @@ Management Phulwari Mother and Child Activity Centre`
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
             badgePassword={badgePassword}
-            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
+            filteredStudents={filteredStudents.filter(s => {
+              if (selectedCategoryFilter === 'All') return true;
+              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
+            })}
             batches={batches}
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
@@ -3830,7 +3871,10 @@ Management Phulwari Mother and Child Activity Centre`
             isLight={isLight}
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
-            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
+            filteredStudents={filteredStudents.filter(s => {
+              if (selectedCategoryFilter === 'All') return true;
+              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
+            })}
             students={students}
             batches={batches}
             setIsExportModalOpen={setIsExportModalOpen}
@@ -3920,6 +3964,7 @@ Management Phulwari Mother and Child Activity Centre`
             isLight={isLight}
             students={students}
             fees={fees}
+            batches={batches}
             teachers={teachers}
             teacherPayments={teacherPayments}
             loadAllAdminData={loadAllAdminData}

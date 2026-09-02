@@ -301,8 +301,8 @@ export default function FeesTab({
     filteredStudents.forEach(st => {
       // Find fee entries matching this student and selected month
       const monthFees = fees.filter(f => 
-        (f.student_id === st.id || f.students?.admission_id === st.admission_id) &&
-        (f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
+        (f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id) &&
+        (f.month === feeSelectedMonth || f.collected_for === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
       )
 
       if (monthFees.length > 0) {
@@ -315,17 +315,12 @@ export default function FeesTab({
             studentsWithDue.add(st.id)
           }
         })
-      } else {
-        // Fallback to student defaults if no ledger entry exists
-        const paid = Number(st.amount_paid || 0)
+      } else if (st.status !== 'inactive' && st.status !== 'deactivated') {
+        // Active student with no fee record yet for selected month -> full batch fee is due for this month
         const batchObj = batches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim()))
         const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
-        const diff = Math.max(0, total - paid)
-        collected += paid
-        pending += diff
-        if (diff > 0) {
-          studentsWithDue.add(st.id)
-        }
+        pending += total
+        studentsWithDue.add(st.id)
       }
     })
 

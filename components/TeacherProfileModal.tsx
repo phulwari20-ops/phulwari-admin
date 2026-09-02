@@ -16,7 +16,7 @@ interface TeacherProfileModalProps {
   teacherAttendance: any[]
   onAddPayment: (payment: any) => void
   onDeletePayment: (id: string) => void
-  onMarkAttendance: (teacherId: string, date: string, status: string) => void
+  onMarkAttendance: (teacherId: string, date: string, status: string, reason?: string) => void
 }
 
 const ATT_STATES = ['Present', 'Absent', 'Half Day', 'Paid Leave', 'Unpaid Leave', 'Late', 'Holiday']
@@ -91,7 +91,14 @@ export default function TeacherProfileModal({
     working: monthAtt.filter(a => a.status !== 'Holiday').length,
   }
 
-  const attToday = myAttendance.find(a => a.date === attDate)?.status || ''
+  const attTodayRecord = myAttendance.find(a => a.date === attDate)
+  const attToday = attTodayRecord?.status || ''
+
+  const [attReason, setAttReason] = useState(attTodayRecord?.reason || '')
+
+  useEffect(() => {
+    setAttReason(attTodayRecord?.reason || '')
+  }, [attDate, attTodayRecord?.reason])
 
   const generateSalarySlip = (p: any) => {
     const win = window.open('', '_blank', 'width=850,height=1100')
@@ -235,28 +242,68 @@ export default function TeacherProfileModal({
         {/* ATTENDANCE TAB */}
         {tab === 'attendance' && (
           <div className="space-y-4 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40">
-              <div>
-                <span className="font-bold text-slate-700 dark:text-slate-200">Mark Attendance for Today ({attDate})</span>
+            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">
+                    Mark Attendance for Today ({attDate})
+                  </span>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Single-click to select status, click again to deselect.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ATT_STATES.map(st => {
+                    const isSelected = attToday === st
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            // Single-click deselect
+                            onMarkAttendance(teacher.id, attDate, 'unmarked', '')
+                          } else {
+                            // Single-click select
+                            const currentReason = ['Paid Leave', 'Unpaid Leave', 'Late', 'Holiday'].includes(st) ? attReason : ''
+                            onMarkAttendance(teacher.id, attDate, st, currentReason)
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold border transition-all cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/30 scale-105 ring-2 ring-indigo-400/40'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/50'
+                        }`}
+                      >
+                        {isSelected && <span className="font-black text-white">✓</span>}
+                        <span>{st}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {ATT_STATES.map(st => (
-                  <button
-                    key={st}
-                    onClick={() => onMarkAttendance(teacher.id, attDate, st)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
-                      attToday === st
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-400'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
+
+              {/* Interactive Reason / Remarks Input for Paid Leave, Unpaid Leave, Late, Holiday */}
+              {['Paid Leave', 'Unpaid Leave', 'Late', 'Holiday'].includes(attToday) && (
+                <div className="pt-3 border-t border-indigo-200/60 dark:border-indigo-900/40 flex flex-col sm:flex-row sm:items-center gap-2 animate-fadeIn">
+                  <label className="font-extrabold text-indigo-700 dark:text-indigo-300 text-[11px] shrink-0 flex items-center gap-1">
+                    <span>✏️</span> Reason / Remarks for {attToday}:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={`Enter reason for ${attToday} (e.g. Sick Leave, Medical, Traffic, Festival)...`}
+                    value={attReason}
+                    onChange={(e) => {
+                      setAttReason(e.target.value)
+                      onMarkAttendance(teacher.id, attDate, attToday, e.target.value)
+                    }}
+                    className="flex-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded-xl px-3 py-1.5 font-semibold text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-600 dark:text-slate-400">Monthly Attendance Breakdown</span>
                 <select
@@ -289,6 +336,40 @@ export default function TeacherProfileModal({
                   </div>
                 ))}
               </div>
+
+              {/* List of Marked Days in Summary Month */}
+              {monthAtt.length > 0 && (
+                <div className="space-y-1.5 pt-2">
+                  <span className="font-bold text-slate-600 dark:text-slate-400 text-[11px]">
+                    Marked Attendance Log ({summaryMonth})
+                  </span>
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                    {monthAtt.map(a => (
+                      <div key={a.id || a.date} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] shadow-xs">
+                        <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{a.date}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] ${
+                            a.status === 'Present' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+                            a.status === 'Absent' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' :
+                            a.status === 'Half Day' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
+                            a.status === 'Paid Leave' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' :
+                            a.status === 'Unpaid Leave' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' :
+                            a.status === 'Late' ? 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' :
+                            'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
+                          }`}>
+                            {a.status}
+                          </span>
+                          {a.reason && (
+                            <span className="text-[10px] text-slate-500 font-medium italic truncate max-w-[150px]">
+                              Reason: "{a.reason}"
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

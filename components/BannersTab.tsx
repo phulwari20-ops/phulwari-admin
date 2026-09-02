@@ -831,7 +831,17 @@ export default function BannersTab({
 
                     <div className="relative rounded-2xl overflow-hidden border-2 border-purple-400/40 bg-slate-950 shadow-xl transition-all">
                       {form.image_url ? (
-                        <div className="relative aspect-[16/9] max-h-56 w-full flex items-center justify-center overflow-hidden">
+                        <div 
+                          className="relative w-full flex items-center justify-center overflow-hidden transition-all duration-300 mx-auto"
+                          style={{
+                            aspectRatio: form.aspect_ratio === '1:1' ? '1 / 1' :
+                                         form.aspect_ratio === '4:3' ? '4 / 3' :
+                                         form.aspect_ratio === '3:4' ? '3 / 4' :
+                                         form.aspect_ratio === '9:16' ? '9 / 16' :
+                                         form.aspect_ratio === '21:9' ? '21 / 9' : '16 / 9',
+                            maxHeight: form.aspect_ratio === '9:16' || form.aspect_ratio === '1:1' ? '280px' : '220px'
+                          }}
+                        >
                           <img src={form.image_url} alt="Banner Preview" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex flex-col justify-end p-4 text-white">
                             <span className="text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-purple-600/90 w-fit mb-1">

@@ -36,6 +36,8 @@ export default function DashboardTab({
   ];
   const batchColors = ['bg-pink-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500', 'bg-teal-500'];
 
+  const todayAttendanceRate = '94.2%';
+
   // Low Classes alerts (<= 3 classes left)
   const lowClassStudents = students.filter(st => {
     const remaining = (st.classes_total || 12) - (st.classes_consumed || 0);
@@ -201,7 +203,7 @@ export default function DashboardTab({
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><UserCheck className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 6.2%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">92.4%</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">{todayAttendanceRate}</p></div>
         </div>
       </div>
 
@@ -264,7 +266,7 @@ export default function DashboardTab({
           <div className="flex items-center justify-between">
             <div>
               <h3 className={`text-base font-bold ${textPrimary}`}>Attendance Overview</h3>
-              <p className="text-xl font-extrabold text-blue-600">92.4% <span className="text-xs text-emerald-500 font-bold">↑ 6.2% from last week</span></p>
+              <p className="text-xl font-extrabold text-blue-600">{todayAttendanceRate} <span className="text-xs text-emerald-500 font-bold">↑ 6.2% from last week</span></p>
             </div>
             <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}><option>This Week</option></select>
           </div>
