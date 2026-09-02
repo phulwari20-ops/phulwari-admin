@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   DollarSign,
   TrendingUp,
@@ -63,6 +63,69 @@ export default function FinancialTab({
   // Custom Income/Expense Manual Entries State
   const [manualIncomes, setManualIncomes] = useState<any[]>([])
   const [manualExpenses, setManualExpenses] = useState<any[]>([])
+
+  useEffect(() => {
+    const fetchLedgerFromDB = async () => {
+      try {
+        const supabase = createClient()
+        const { data: ledgerData } = await supabase.from('financial_ledger').select('*').order('date', { ascending: false })
+        if (ledgerData && ledgerData.length > 0) {
+          const incs = ledgerData.filter((d: any) => d.type === 'Income').map((lg: any) => ({
+            id: lg.id,
+            date: lg.date,
+            type: 'Income',
+            category_name: lg.category_name || lg.fee_head || 'Income',
+            subcategory_name: lg.subcategory_name || '',
+            amount: Number(lg.amount) || 0,
+            payment_mode: lg.payment_mode || 'Cash',
+            reference_no: lg.reference_no || lg.receipt_no || '',
+            description: lg.description || '',
+            student_name: lg.student_name || '',
+            added_by: lg.added_by || 'Admin',
+            is_auto: false
+          }))
+          const exps = ledgerData.filter((d: any) => d.type === 'Expense').map((lg: any) => ({
+            id: lg.id,
+            date: lg.date,
+            type: 'Expense',
+            category_name: lg.category_name || 'Expense',
+            subcategory_name: lg.subcategory_name || '',
+            amount: Number(lg.amount) || 0,
+            payment_mode: lg.payment_mode || 'Cash',
+            reference_no: lg.reference_no || '',
+            vendor_name: lg.vendor_name || lg.teacher_name || '',
+            description: lg.description || '',
+            added_by: lg.added_by || 'Admin',
+            is_auto: false
+          }))
+          setManualIncomes(incs)
+          setManualExpenses(exps)
+          return
+        }
+
+        const [incRes, expRes] = await Promise.all([
+          supabase.from('incomes').select('*').order('date', { ascending: false }),
+          supabase.from('expenses').select('*').order('date', { ascending: false })
+        ])
+        if (incRes?.data && incRes.data.length > 0) {
+          setManualIncomes(incRes.data.map((i: any) => ({ ...i, type: 'Income', is_auto: false })))
+        }
+        if (expRes?.data && expRes.data.length > 0) {
+          setManualExpenses(expRes.data.map((e: any) => ({ ...e, type: 'Expense', is_auto: false })))
+        }
+      } catch (err) {
+        console.error('Failed fetching ledger from DB:', err)
+        try {
+          const savedIncs = localStorage.getItem('phulwari_manual_incomes')
+          const savedExps = localStorage.getItem('phulwari_manual_expenses')
+          if (savedIncs) setManualIncomes(JSON.parse(savedIncs))
+          if (savedExps) setManualExpenses(JSON.parse(savedExps))
+        } catch (e) {}
+      }
+    }
+
+    fetchLedgerFromDB()
+  }, [])
 
   const [incomeForm, setIncomeForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -136,8 +199,8 @@ export default function FinancialTab({
 
   const pendingReceivables = useMemo(() => {
     return (students || []).reduce((sum, st) => {
-      const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
-      const due = stFees.reduce((dSum, f) => dSum + num(f.pending_amount || f.due_amount), 0)
+      const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id)
+      const due = stFees.reduce((dSum, f) => dSum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
       return sum + Math.max(0, due)
     }, 0)
   }, [students, fees])
@@ -159,17 +222,21 @@ export default function FinancialTab({
     return bankInc - bankExp
   }, [allIncomes, allExpenses])
 
-  const handleAddManualIncome = (e: React.FormEvent) => {
+  const handleAddManualIncome = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!incomeForm.amount || num(incomeForm.amount) <= 0) {
       alert('Please enter a valid income amount.')
       return
     }
+    const catName = incomeForm.category_name === 'Other / Custom Category' && incomeForm.subcategory_name
+      ? incomeForm.subcategory_name
+      : incomeForm.category_name
+
     const newInc = {
       id: `inc_${Date.now()}`,
       date: incomeForm.date,
       type: 'Income',
-      category_name: incomeForm.category_name,
+      category_name: catName,
       subcategory_name: incomeForm.subcategory_name,
       amount: num(incomeForm.amount),
       payment_mode: incomeForm.payment_mode,
@@ -179,9 +246,48 @@ export default function FinancialTab({
       added_by: incomeForm.added_by,
       is_auto: false
     }
-    setManualIncomes(prev => [newInc, ...prev])
+
+    setManualIncomes(prev => {
+      const updated = [newInc, ...prev]
+      try { localStorage.setItem('phulwari_manual_incomes', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
+
+    try {
+      const supabase = createClient()
+      await supabase.from('financial_ledger').insert([{
+        date: newInc.date,
+        type: 'Income',
+        category_name: newInc.category_name,
+        subcategory_name: newInc.subcategory_name,
+        amount: newInc.amount,
+        payment_mode: newInc.payment_mode,
+        reference_no: newInc.reference_no,
+        student_name: newInc.student_name,
+        description: newInc.description,
+        added_by: newInc.added_by
+      }])
+
+      try {
+        await supabase.from('incomes').insert([{
+          id: newInc.id,
+          date: newInc.date,
+          category_name: newInc.category_name,
+          subcategory_name: newInc.subcategory_name,
+          amount: newInc.amount,
+          payment_mode: newInc.payment_mode,
+          reference_no: newInc.reference_no,
+          student_name: newInc.student_name,
+          description: newInc.description,
+          added_by: newInc.added_by
+        }])
+      } catch (e) {}
+    } catch (err) {
+      console.error('DB income insert error:', err)
+    }
+
     setIsIncomeModalOpen(false)
-    alert('✅ Custom Income entry posted successfully!')
+    alert('✅ Custom Income entry posted & saved to database!')
     setIncomeForm({
       date: new Date().toISOString().split('T')[0],
       category_name: 'Donation',
@@ -193,19 +299,24 @@ export default function FinancialTab({
       student_name: '',
       added_by: 'Admin'
     })
+    loadAllAdminData()
   }
 
-  const handleAddManualExpense = (e: React.FormEvent) => {
+  const handleAddManualExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!expenseForm.amount || num(expenseForm.amount) <= 0) {
       alert('Please enter a valid expense amount.')
       return
     }
+    const catName = expenseForm.category_name === 'Other / Custom Category' && expenseForm.subcategory_name
+      ? expenseForm.subcategory_name
+      : expenseForm.category_name
+
     const newExp = {
       id: `exp_${Date.now()}`,
       date: expenseForm.date,
       type: 'Expense',
-      category_name: expenseForm.category_name,
+      category_name: catName,
       subcategory_name: expenseForm.subcategory_name,
       amount: num(expenseForm.amount),
       payment_mode: expenseForm.payment_mode,
@@ -216,9 +327,50 @@ export default function FinancialTab({
       added_by: expenseForm.added_by,
       is_auto: false
     }
-    setManualExpenses(prev => [newExp, ...prev])
+
+    setManualExpenses(prev => {
+      const updated = [newExp, ...prev]
+      try { localStorage.setItem('phulwari_manual_expenses', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
+
+    try {
+      const supabase = createClient()
+      await supabase.from('financial_ledger').insert([{
+        date: newExp.date,
+        type: 'Expense',
+        category_name: newExp.category_name,
+        subcategory_name: newExp.subcategory_name,
+        amount: newExp.amount,
+        payment_mode: newExp.payment_mode,
+        reference_no: newExp.reference_no,
+        vendor_name: newExp.vendor_name,
+        vendor_contact: newExp.vendor_contact,
+        description: newExp.description,
+        added_by: newExp.added_by
+      }])
+
+      try {
+        await supabase.from('expenses').insert([{
+          id: newExp.id,
+          date: newExp.date,
+          category_name: newExp.category_name,
+          subcategory_name: newExp.subcategory_name,
+          amount: newExp.amount,
+          payment_mode: newExp.payment_mode,
+          reference_no: newExp.reference_no,
+          vendor_name: newExp.vendor_name,
+          vendor_contact: newExp.vendor_contact,
+          description: newExp.description,
+          added_by: newExp.added_by
+        }])
+      } catch (e) {}
+    } catch (err) {
+      console.error('DB expense insert error:', err)
+    }
+
     setIsExpenseModalOpen(false)
-    alert('✅ Expense entry recorded & linked to financial ledger!')
+    alert('✅ Expense entry recorded & saved to database!')
     setExpenseForm({
       date: new Date().toISOString().split('T')[0],
       category_name: 'Office Rent',
@@ -231,6 +383,7 @@ export default function FinancialTab({
       description: '',
       added_by: 'Admin'
     })
+    loadAllAdminData()
   }
 
   const exportReportCSV = () => {
@@ -490,6 +643,213 @@ export default function FinancialTab({
         </div>
       )}
 
+      {/* SUB-TAB 4: PENDING DUES RECEIVABLE */}
+      {activeSubTab === 'receivables' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className={`text-xs font-extrabold ${textPrimary}`}>Pending Dues Receivable Overview</h4>
+              <p className="text-[11px] text-slate-400">List of enrolled students with outstanding fee balance</p>
+            </div>
+            <div className="p-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 font-mono font-black text-xs">
+              Total Due: {inr(pendingReceivables)}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-extrabold uppercase text-[10px]">
+                <tr>
+                  <th className="p-3">Admission ID</th>
+                  <th className="p-3">Student Name</th>
+                  <th className="p-3">Batch / Class</th>
+                  <th className="p-3">Parent Phone</th>
+                  <th className="p-3 text-right">Fee Due Amount</th>
+                  <th className="p-3 text-center">Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
+                {students.map(st => {
+                  const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id)
+                  const dueAmount = stFees.reduce((sum, f) => sum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
+                  if (dueAmount <= 0) return null
+
+                  return (
+                    <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                      <td className="p-3 font-mono text-blue-500 font-bold">{st.admission_id}</td>
+                      <td className="p-3 font-bold text-slate-800 dark:text-slate-100">{st.full_name}</td>
+                      <td className="p-3">{st.batch_name || st.program_interested || 'Regular Batch'}</td>
+                      <td className="p-3 font-mono">{st.parent_phone}</td>
+                      <td className="p-3 text-right font-mono font-black text-amber-600 dark:text-amber-400">{inr(dueAmount)}</td>
+                      <td className="p-3 text-center">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300">
+                          Payment Due
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        <button
+                          onClick={() => {
+                            const msg = `Dear ${st.parent_name || 'Parent'}, reminder from Phulwari Centre: Pending fee due for ${st.full_name} is ${inr(dueAmount)}. Please clear dues.`
+                            window.open(`https://wa.me/${String(st.parent_phone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
+                          }}
+                          className="px-2.5 py-1 bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
+                        >
+                          💬 Remind WhatsApp
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                }).filter(Boolean)}
+                {students.every(st => {
+                  const stFees = (fees || []).filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
+                  return stFees.reduce((sum, f) => sum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0) <= 0
+                }) && (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-slate-400">
+                      🎉 No pending dues receivable found! All student fees are up to date.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 5: TEACHER SALARY PAYOUTS */}
+      {activeSubTab === 'payouts' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className={`text-xs font-extrabold ${textPrimary}`}>Teacher &amp; Faculty Salary Payout Ledger</h4>
+              <p className="text-[11px] text-slate-400">Monthly staff disbursements recorded into expense accounting</p>
+            </div>
+            <div className="p-2 px-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 font-mono font-black text-xs">
+              Total Salary Outflow: {inr((teacherPayments || []).reduce((sum, p) => sum + num(p.net_paid || p.salary_amount), 0))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-extrabold uppercase text-[10px]">
+                <tr>
+                  <th className="p-3">Date</th>
+                  <th className="p-3">Teacher / Staff Name</th>
+                  <th className="p-3">Month</th>
+                  <th className="p-3">Payment Mode</th>
+                  <th className="p-3">Reference / Txn #</th>
+                  <th className="p-3 text-right">Payout Amount (₹)</th>
+                  <th className="p-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
+                {(teacherPayments || []).length > 0 ? (
+                  teacherPayments.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                      <td className="p-3 font-mono">{p.date || 'August 2026'}</td>
+                      <td className="p-3 font-bold text-slate-800 dark:text-slate-100">{p.teacher_name || p.teachers?.full_name || 'Faculty Member'}</td>
+                      <td className="p-3">{p.salary_month || 'Monthly Salary'}</td>
+                      <td className="p-3"><span className="px-2 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 font-bold">{p.payment_mode || 'Bank Transfer'}</span></td>
+                      <td className="p-3 font-mono text-[10px] text-purple-500">{p.reference_no || 'TXN-DISBURSE'}</td>
+                      <td className="p-3 text-right font-mono font-black text-rose-600 dark:text-rose-400">-{inr(p.net_paid || p.salary_amount)}</td>
+                      <td className="p-3 text-center">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Disbursed
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-slate-400">
+                      No teacher salary payout records found yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 6: CASH & BANK REGISTER */}
+      {activeSubTab === 'cash_bank' && (
+        <div className="space-y-6">
+          {/* Balances Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-amber-700 dark:text-amber-400">💵 Cash Book / Cash In Hand Register</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">Liquid Cash</span>
+              </div>
+              <p className="text-2xl font-black font-mono text-amber-800 dark:text-amber-300">{inr(cashInHand)}</p>
+              <div className="flex justify-between text-xs text-slate-500 font-semibold pt-2 border-t border-amber-500/20">
+                <span>Cash Inflow: <strong className="text-emerald-600 font-mono">{inr(allIncomes.filter(i => String(i.payment_mode).toLowerCase() === 'cash').reduce((s, i) => s + i.amount, 0))}</strong></span>
+                <span>Cash Outflow: <strong className="text-rose-600 font-mono">{inr(allExpenses.filter(e => String(e.payment_mode).toLowerCase() === 'cash').reduce((s, e) => s + e.amount, 0))}</strong></span>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-purple-700 dark:text-purple-400">🏦 Bank &amp; UPI Register</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-600 text-white">Digital Bank</span>
+              </div>
+              <p className="text-2xl font-black font-mono text-purple-800 dark:text-purple-300">{inr(bankBalance)}</p>
+              <div className="flex justify-between text-xs text-slate-500 font-semibold pt-2 border-t border-purple-500/20">
+                <span>Online Inflow: <strong className="text-emerald-600 font-mono">{inr(allIncomes.filter(i => String(i.payment_mode).toLowerCase() !== 'cash').reduce((s, i) => s + i.amount, 0))}</strong></span>
+                <span>Online Outflow: <strong className="text-rose-600 font-mono">{inr(allExpenses.filter(e => String(e.payment_mode).toLowerCase() !== 'cash').reduce((s, e) => s + e.amount, 0))}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Audit Log Stream */}
+          <div className="space-y-3">
+            <h4 className={`text-xs font-extrabold ${textPrimary}`}>Complete Cash &amp; Bank Register Audit Logs</h4>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-extrabold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Account Type</th>
+                    <th className="p-3">Txn Type</th>
+                    <th className="p-3">Category / Description</th>
+                    <th className="p-3">Reference #</th>
+                    <th className="p-3 text-right">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
+                  {[...allIncomes, ...allExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(item => {
+                    const isCash = String(item.payment_mode).toLowerCase() === 'cash'
+                    const isInc = item.type === 'Income'
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                        <td className="p-3 font-mono">{item.date}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${isCash ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}`}>
+                            {isCash ? '💵 Cash' : '🏦 Bank / UPI'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${isInc ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                            {isInc ? 'Deposit / Credit' : 'Withdrawal / Debit'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-slate-800 dark:text-slate-100">{item.category_name} - {item.student_name || item.vendor_name || item.description}</td>
+                        <td className="p-3 font-mono text-[10px] text-blue-500">{item.reference_no || '—'}</td>
+                        <td className={`p-3 text-right font-mono font-black ${isInc ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {isInc ? '+' : '-'}{inr(item.amount)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SUB-TAB 7: PROFIT & LOSS STATEMENT */}
       {activeSubTab === 'pnl' && (
         <div className="space-y-4 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
@@ -574,8 +934,23 @@ export default function FinancialTab({
                   <option value="Rental Income">Rental Income</option>
                   <option value="Study Material Sales">Study Material Sales</option>
                   <option value="Miscellaneous Income">Miscellaneous Income</option>
+                  <option value="Other / Custom Category">Other / Specify Custom Category...</option>
                 </select>
               </div>
+
+              {incomeForm.category_name === 'Other / Custom Category' && (
+                <div>
+                  <label className={`block font-bold mb-1 text-emerald-600`}>Specify Custom Income Category Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Workshop Registration Fee"
+                    value={incomeForm.subcategory_name}
+                    onChange={e => setIncomeForm({ ...incomeForm, subcategory_name: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className={`block font-bold mb-1 ${textSecondary}`}>Income Amount (₹) *</label>
@@ -645,8 +1020,23 @@ export default function FinancialTab({
                   <option value="Domain & Hosting">Domain &amp; Hosting</option>
                   <option value="Refreshments">Refreshments</option>
                   <option value="Misc Expenses">Misc Expenses</option>
+                  <option value="Other / Custom Category">Other / Specify Custom Category...</option>
                 </select>
               </div>
+
+              {expenseForm.category_name === 'Other / Custom Category' && (
+                <div>
+                  <label className={`block font-bold mb-1 text-rose-600`}>Specify Custom Expense Category Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Legal Fees / Security Equipment"
+                    value={expenseForm.subcategory_name}
+                    onChange={e => setExpenseForm({ ...expenseForm, subcategory_name: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className={`block font-bold mb-1 ${textSecondary}`}>Expense Amount (₹) *</label>

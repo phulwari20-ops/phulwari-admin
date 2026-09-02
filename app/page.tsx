@@ -314,6 +314,8 @@ export default function AdminDashboardPage() {
     const merged = fromDb.length > 0 ? [...fromDb, 'Other'] : DEFAULT_CLASS_NAMES
     return Array.from(new Set(merged))
   }, [classes])
+  const [incomeCategories, setIncomeCategories] = useState<any[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])
   const [feeHeads, setFeeHeads] = useState<any[]>(() => {
     return [
@@ -1005,7 +1007,7 @@ export default function AdminDashboardPage() {
         const { data: dbAttendance } = await supabase.from('attendance').select('*')
         if (dbAttendance) setAttendance(dbAttendance)
 
-        // Fetch categories
+        // Fetch categories (income_categories & expense_categories)
         try {
           const { data: dbCategories, error: catError } = await supabase.from('categories').select('*')
           if (!catError && dbCategories && dbCategories.length > 0) {
@@ -1014,6 +1016,16 @@ export default function AdminDashboardPage() {
           } else {
             const localCats = localStorage.getItem('phulwari_admin_categories')
             if (localCats) setCategories(JSON.parse(localCats))
+          }
+
+          const { data: dbIncomeCats } = await supabase.from('income_categories').select('*').order('name', { ascending: true })
+          if (dbIncomeCats && dbIncomeCats.length > 0) {
+            setIncomeCategories(dbIncomeCats)
+          }
+
+          const { data: dbExpenseCats } = await supabase.from('expense_categories').select('*').order('name', { ascending: true })
+          if (dbExpenseCats && dbExpenseCats.length > 0) {
+            setExpenseCategories(dbExpenseCats)
           }
         } catch (catErr) {
           const localCats = localStorage.getItem('phulwari_admin_categories')
@@ -3822,6 +3834,10 @@ Management Phulwari Mother and Child Activity Centre`
             students={students}
             batches={batches}
             setIsExportModalOpen={setIsExportModalOpen}
+            onSelectStudent={(st: any) => {
+              setSelectedERPStudent(st)
+              setErpModalTab('collect_fee')
+            }}
           />
         )}
 
@@ -3889,6 +3905,8 @@ Management Phulwari Mother and Child Activity Centre`
             feeHeads={feeHeads}
             setFeeHeads={setFeeHeads}
             loadAllAdminData={loadAllAdminData}
+            incomeCategories={incomeCategories}
+            expenseCategories={expenseCategories}
           />
         )}
 

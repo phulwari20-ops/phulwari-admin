@@ -31,6 +31,7 @@ interface StudentListTabProps {
   students?: any[];
   batches: any[];
   setIsExportModalOpen: (v: boolean) => void;
+  onSelectStudent?: (st: any) => void;
 }
 
 type SortKey = 'admission_date_desc' | 'admission_date_asc' | 'admission_id_asc' | 'admission_id_desc' | 'default';
@@ -58,7 +59,7 @@ function compareAdmissionId(a: string, b: string): number {
 
 export default function StudentListTab({
   bgCard, textPrimary, textSecondary, isLight, tableHeaderBg,
-  badgeClass, filteredStudents, students, batches, setIsExportModalOpen
+  badgeClass, filteredStudents, students, batches, setIsExportModalOpen, onSelectStudent
 }: StudentListTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>('default');
 
@@ -308,6 +309,7 @@ export default function StudentListTab({
                 </button>
               </th>
               <th className="py-3.5 px-4">Status</th>
+              <th className="py-3.5 px-4 text-center">Action</th>
             </tr>
           </thead>
           <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
@@ -319,9 +321,13 @@ export default function StudentListTab({
                   : '—';
 
               return (
-                <tr key={st.id} className={`hover:bg-blue-50/50 dark:hover:bg-blue-950/10 transition`}>
+                <tr 
+                  key={st.id} 
+                  onClick={() => onSelectStudent && onSelectStudent(st)}
+                  className={`hover:bg-blue-50/70 dark:hover:bg-blue-950/20 transition cursor-pointer group`}
+                >
                   <td className={`py-3.5 px-4 font-bold text-[11px] ${textSecondary}`}>{idx + 1}</td>
-                  <td className="py-3.5 px-4 font-mono text-blue-500 font-bold">{st.admission_id}</td>
+                  <td className="py-3.5 px-4 font-mono text-blue-500 font-bold group-hover:underline">{st.admission_id}</td>
                   <td className="py-3.5 px-4 font-bold">{st.full_name}</td>
                   <td className="py-3.5 px-4 font-semibold">
                     <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border ${badgeClass}`}>
@@ -344,12 +350,24 @@ export default function StudentListTab({
                       Active
                     </span>
                   </td>
+                  <td className="py-3.5 px-4 text-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectStudent) onSelectStudent(st);
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px] transition shadow-sm cursor-pointer"
+                    >
+                      View ERP Details
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {sortedStudents.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 font-semibold text-sm">
+                <td colSpan={9} className="py-12 text-center text-slate-400 font-semibold text-sm">
                   No students found.
                 </td>
               </tr>

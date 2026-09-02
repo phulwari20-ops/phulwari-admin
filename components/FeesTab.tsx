@@ -23,6 +23,8 @@ interface FeesTabProps {
   feeHeads: any[]
   setFeeHeads: (heads: any[]) => void
   loadAllAdminData: () => Promise<void>
+  incomeCategories?: any[]
+  expenseCategories?: any[]
 }
 
 export default function FeesTab({
@@ -30,7 +32,8 @@ export default function FeesTab({
   filteredStudents, fees, feeSelectedMonth, setFeeSelectedMonth,
   feeStatusFilter, setFeeStatusFilter,
   setSelectedERPStudent, setErpModalTab, handleSendWhatsAppFeeReminder,
-  batches, feeHeads, setFeeHeads, loadAllAdminData
+  batches, feeHeads, setFeeHeads, loadAllAdminData,
+  incomeCategories = [], expenseCategories = []
 }: FeesTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = useState<string>('All')
@@ -449,62 +452,69 @@ export default function FeesTab({
 
       {/* ── Main Panel ── */}
       <div className={`${bgCard} rounded-3xl p-6 space-y-5 shadow-sm border border-slate-200/50 dark:border-slate-800/50`}>
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-          <div>
-            <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-              <CreditCard className="w-5 h-5 text-blue-500" /> Class &amp; Monthly Fee Management Dashboard
-            </h3>
-            <p className={`text-xs ${textSecondary}`}>Track pending dues, collected fees, discounts, and fee status for all students by month.</p>
+        <div className="flex flex-col gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className={`text-base sm:text-lg font-extrabold ${textPrimary} flex items-center gap-2`}>
+                <CreditCard className="w-5 h-5 text-blue-500 shrink-0" />
+                <span>Class &amp; Monthly Fee Management Dashboard</span>
+              </h3>
+              <p className={`text-xs ${textSecondary} mt-0.5`}>Track pending dues, collected fees, discounts, and fee status for all students by month.</p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => { setSettingsTab('heads'); setIsSettingsModalOpen(true); }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border ${
+                  isLight ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100' : 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5 text-blue-500" />
+                <span className="whitespace-nowrap">Manage Fee Heads</span>
+              </button>
+
+              <button
+                onClick={() => { setSettingsTab('batches'); setIsSettingsModalOpen(true); }}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer whitespace-nowrap"
+              >
+                <IndianRupee className="w-3.5 h-3.5" />
+                <span>View Class Fees</span>
+              </button>
+            </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Dynamic settings */}
-            <button
-              onClick={() => { setSettingsTab('heads'); setIsSettingsModalOpen(true); }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border ${
-                isLight ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100' : 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              <Settings className="w-4 h-4 text-blue-500" />
-              <span>⚙️ Manage Fee Heads</span>
-            </button>
-
-            <button
-              onClick={() => { setSettingsTab('batches'); setIsSettingsModalOpen(true); }}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer whitespace-nowrap"
-            >
-              <IndianRupee className="w-4 h-4" />
-              <span>View Class Fees</span>
-            </button>
-
-            <select
-              value={selectedBatchIdFilter}
-              onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
-              className={`text-xs px-3.5 py-2 rounded-xl border outline-none font-bold shrink-0 ${
-                isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
-              }`}
-            >
-              <option value="All">All Batches</option>
-              {batches.map(b => (
-                <option key={b.id} value={b.id}>{b.batch_name}</option>
-              ))}
-            </select>
-            
-            <select
-              value={feeSelectedMonth}
-              onChange={(e) => setFeeSelectedMonth(e.target.value)}
-              className={`text-xs px-3.5 py-2 rounded-xl border outline-none font-bold shrink-0 ${
-                isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
-              }`}
-            >
-              <option value="January 2027">January 2027</option>
-              <option value="February 2027">February 2027</option>
-              <option value="March 2027">March 2027</option>
-              <option value="August 2026">August 2026</option>
-              <option value="September 2026">September 2026</option>
-              <option value="July 2026">July 2026</option>
-              <option value="June 2026">June 2026</option>
-            </select>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100 dark:border-slate-800/60">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedBatchIdFilter}
+                onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
+                className={`text-xs px-3 py-2 rounded-xl border outline-none font-bold shrink-0 ${
+                  isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+                }`}
+              >
+                <option value="All">All Batches</option>
+                {batches.map(b => (
+                  <option key={b.id} value={b.id}>{b.batch_name}</option>
+                ))}
+              </select>
+              
+              <select
+                value={feeSelectedMonth}
+                onChange={(e) => setFeeSelectedMonth(e.target.value)}
+                className={`text-xs px-3 py-2 rounded-xl border outline-none font-bold shrink-0 ${
+                  isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+                }`}
+              >
+                <option value="August 2026">August 2026</option>
+                <option value="September 2026">September 2026</option>
+                <option value="October 2026">October 2026</option>
+                <option value="November 2026">November 2026</option>
+                <option value="December 2026">December 2026</option>
+                <option value="January 2027">January 2027</option>
+                <option value="February 2027">February 2027</option>
+                <option value="March 2027">March 2027</option>
+              </select>
+            </div>
 
             <div className={`flex items-center space-x-1 border rounded-xl p-1 shrink-0 ${isLight ? 'bg-slate-100' : 'bg-slate-950'}`}>
               {(['All', 'PAID', 'PENDING'] as const).map(st => (
