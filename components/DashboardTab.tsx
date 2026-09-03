@@ -20,6 +20,7 @@ interface DashboardTabProps {
   studentsByBatchDistribution: any[];
   fees: any[];
   attendance?: any[];
+  teachers?: any[];
   setActiveTab: (tab: any) => void;
   setIsAddStudentOpen: (v: boolean) => void;
   galleryImages: any[];
@@ -29,7 +30,7 @@ export default function DashboardTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight,
   students, batches, totalPaidFees, totalPendingFees,
   paidRatioPercentage, pendingRatioPercentage, totalRevenueCombined,
-  studentsByBatchDistribution, fees, attendance = [], setActiveTab, setIsAddStudentOpen, galleryImages
+  studentsByBatchDistribution, fees, attendance = [], teachers = [], setActiveTab, setIsAddStudentOpen, galleryImages
 }: DashboardTabProps) {
   const batchColors = ['bg-pink-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500', 'bg-teal-500'];
 
@@ -252,42 +253,42 @@ export default function DashboardTab({
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><Users className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 12.5%</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">Live Enrolled</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p><p className={`text-xl font-bold ${textPrimary}`}>{students.length}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center"><Layers className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 4.3%</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">Active Batches</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Batches</p><p className={`text-xl font-bold ${textPrimary}`}>{batches.length}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center"><TrendingUp className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 18.6%</span>
+            <span className="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full">Combined</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p><p className={`text-xl font-bold ${textPrimary}`}>₹{(totalPaidFees + totalPendingFees).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center"><IndianRupee className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 20.1%</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">{paidRatioPercentage}% Paid</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Fees Collected</p><p className="text-xl font-bold text-emerald-500">₹{(totalPaidFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center"><CreditCard className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">↓ 8.7%</span>
+            <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">{pendingRatioPercentage}% Due</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Pending Fees</p><p className="text-xl font-bold text-rose-500">₹{(totalPendingFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><UserCheck className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 6.2%</span>
+            <span className="text-[10px] font-bold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full">Live Tracker</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">{todayAttendanceRate}</p></div>
         </div>
@@ -301,7 +302,7 @@ export default function DashboardTab({
             <div>
               <h3 className={`text-base font-bold ${textPrimary}`}>Fee Collection Overview</h3>
               <p suppressHydrationWarning className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 0).toLocaleString('en-IN')}</p>
-              <span className="text-xs text-emerald-500 font-bold">↑ 20.1% from last month</span>
+              <span className="text-xs text-emerald-500 font-bold">Live DB Sync ({fees.length} collections recorded)</span>
             </div>
             <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}>
               <option>This Month</option><option>Last Month</option>
@@ -399,11 +400,11 @@ export default function DashboardTab({
               <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800'}`}>
                 {fees.slice(0, 5).map((f: any) => (
                   <tr key={f.id} className="hover:bg-blue-50/40 transition">
-                    <td className="py-3 px-3 font-mono font-bold text-blue-500">{f.receipt_no || 'RCPT-2026-101'}</td>
-                    <td className={`py-3 px-3 font-bold ${textPrimary}`}>{f.students?.full_name || 'Aarav Sharma'}</td>
-                    <td className="py-3 px-3 font-semibold">{f.students?.batch_name || 'Mother & Toddler'}</td>
+                    <td className="py-3 px-3 font-mono font-bold text-blue-500">{f.receipt_no || f.id || 'N/A'}</td>
+                    <td className={`py-3 px-3 font-bold ${textPrimary}`}>{f.students?.full_name || f.student_name || 'N/A'}</td>
+                    <td className="py-3 px-3 font-semibold">{f.students?.batch_name || f.batch_name || 'General'}</td>
                     <td className="py-3 px-3 font-bold text-emerald-500">₹{f.amount}</td>
-                    <td className={`py-3 px-3 ${textSecondary}`}>{f.date || '2026-08-01'}</td>
+                    <td className={`py-3 px-3 ${textSecondary}`}>{f.date || f.created_at?.split('T')[0] || 'N/A'}</td>
                     <td className="py-3 px-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Success</span></td>
                   </tr>
                 ))}
@@ -422,14 +423,22 @@ export default function DashboardTab({
         </div>
       </div>
 
-      {/* Footer Metrics */}
-      <div className={`${bgCard} p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-slate-500`}>
-        <div className="flex items-center gap-2"><span>Total Teachers:</span> <span className={textPrimary}>48 Active</span></div>
-        <div className="flex items-center gap-2"><span>Total Programs:</span> <span className={textPrimary}>36 Active</span></div>
-        <div className="flex items-center gap-2"><span>Activity Halls:</span> <span className={textPrimary}>18 Halls</span></div>
-        <div className="flex items-center gap-2"><span>Gallery Photos:</span> <span className={textPrimary}>{galleryImages.length} Photos</span></div>
-        <div className="flex items-center gap-2"><span>System Status:</span> <span className="text-emerald-500 font-extrabold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Online</span></div>
-      </div>
+      {/* Footer Metrics — 100% Dynamic Real Data Sync */}
+      {(() => {
+        const activeTeachersCount = (teachers || []).filter((t: any) => t.status !== 'Inactive' && t.status !== 'deactivated').length;
+        const totalBatchesCount = (batches || []).length;
+        const uniqueHallsCount = Array.from(new Set((batches || []).map((b: any) => b.location).filter(Boolean))).length || ((batches || []).length > 0 ? 1 : 0);
+
+        return (
+          <div className={`${bgCard} p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-slate-500`}>
+            <div className="flex items-center gap-2"><span>Total Teachers:</span> <span className={textPrimary}>{activeTeachersCount} Active</span></div>
+            <div className="flex items-center gap-2"><span>Total Programs:</span> <span className={textPrimary}>{totalBatchesCount} Active</span></div>
+            <div className="flex items-center gap-2"><span>Activity Halls &amp; Centers:</span> <span className={textPrimary}>{uniqueHallsCount} Center{uniqueHallsCount !== 1 ? 's' : ''}</span></div>
+            <div className="flex items-center gap-2"><span>Gallery Photos:</span> <span className={textPrimary}>{(galleryImages || []).length} Photos</span></div>
+            <div className="flex items-center gap-2"><span>System Status:</span> <span className="text-emerald-500 font-extrabold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Online (Live DB)</span></div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

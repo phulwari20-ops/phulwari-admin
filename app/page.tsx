@@ -3668,6 +3668,7 @@ Management Phulwari Mother and Child Activity Centre`
             isLight={isLight}
             students={students}
             batches={batches}
+            teachers={teachers}
             totalPaidFees={totalPaidFees}
             totalPendingFees={totalPendingFees}
             paidRatioPercentage={paidRatioPercentage}
