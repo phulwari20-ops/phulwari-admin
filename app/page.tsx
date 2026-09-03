@@ -371,22 +371,14 @@ export default function AdminDashboardPage() {
   const [isUploadingGallery, setIsUploadingGallery] = useState<boolean>(false)
   const [deletingGalleryImg, setDeletingGalleryImg] = useState<any>(null)
 
-  // Dynamic Party Packages State (Matching Image 1 UI)
-  const [partyPackages, setPartyPackages] = useState<any[]>([
-    { id: 'p1', name: 'Basic Birthday Package', tagline: 'Perfect for small and cozy celebrations.', price: '₹4,999', includes: 'Celebration Space, Basic Decoration, Music & Entertainment, Fun Activities, Birthday Setup' },
-    { id: 'p2', name: 'Premium Birthday Package', tagline: 'Designed for a more memorable and exciting experience.', price: '₹9,999', includes: 'Theme-Based Decoration, Enhanced Activity Setup, Interactive Games, Photo-Friendly Setup' },
-    { id: 'p3', name: 'Customized Birthday Package', tagline: 'A fully customized birthday experience, tailored to you.', price: 'Custom Pricing', includes: 'Custom Themes, Personalized Decoration, Special Activities, Flexible Planning Options' }
-  ])
+  // Dynamic Party Packages State
+  const [partyPackages, setPartyPackages] = useState<any[]>([])
   // Class fee states moved to FeesTab
   const [pkgSaveStatus, setPkgSaveStatus] = useState<string>('')
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
 
-  // Teacher Management State
-  const [teachers, setTeachers] = useState<any[]>([
-    { id: 'tch-101', name: 'Ananya Sen', email: 'ananya.sen@phulwari.co.in', phone: '+91 98765 12345', specialization: 'Early Childhood Education', assigned_batch: 'Little Explorers (Morning)', status: 'Active', join_date: '2024-04-10' },
-    { id: 'tch-102', name: 'Rohan Deshmukh', email: 'rohan.d@phulwari.co.in', phone: '+91 98111 54321', specialization: 'Activity & Fitness Lead', assigned_batch: 'Junior Champions (Afternoon)', status: 'Active', join_date: '2024-06-15' },
-    { id: 'tch-103', name: 'Meera Kapur', email: 'meera.k@phulwari.co.in', phone: '+91 99887 11223', specialization: 'Art & Creative Crafts', assigned_batch: 'Phulwari Core', status: 'Active', join_date: '2025-01-08' }
-  ])
+  // Teacher Management State — Initialized empty; populated strictly from Supabase DB / user actions
+  const [teachers, setTeachers] = useState<any[]>([])
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState<boolean>(false)
   const [editingTeacher, setEditingTeacher] = useState<any | null>(null)
   const [teacherForm, setTeacherForm] = useState({
@@ -910,21 +902,36 @@ export default function AdminDashboardPage() {
         if (savedHeads) setFeeHeads(JSON.parse(savedHeads))
       }
 
-      // 4. Teachers — prefer Supabase, fall back to localStorage
+      // 4. Teachers — prefer Supabase, fall back to sanitized localStorage
       try {
         const { data: dbTeachers } = await supabase.from('teachers').select('*')
-        if (dbTeachers && dbTeachers.length > 0) {
-          setTeachers(dbTeachers)
-          try { localStorage.setItem('phulwari_teachers', JSON.stringify(dbTeachers)) } catch (_) {}
+        if (dbTeachers) {
+          const cleanTeachers = dbTeachers.filter((t: any) => !['tch-101', 'tch-102', 'tch-103'].includes(t.id) && t.name !== 'Ananya Sen' && t.name !== 'Rohan Deshmukh' && t.name !== 'Meera Kapur')
+          setTeachers(cleanTeachers)
+          try { localStorage.setItem('phulwari_teachers', JSON.stringify(cleanTeachers)) } catch (_) {}
         } else {
           const localT = localStorage.getItem('phulwari_teachers')
-          if (localT) setTeachers(JSON.parse(localT))
+          if (localT) {
+            try {
+              const parsed = JSON.parse(localT)
+              const cleanLocal = parsed.filter((t: any) => !['tch-101', 'tch-102', 'tch-103'].includes(t.id) && t.name !== 'Ananya Sen' && t.name !== 'Rohan Deshmukh' && t.name !== 'Meera Kapur')
+              setTeachers(cleanLocal)
+            } catch (e) { setTeachers([]) }
+          } else {
+            setTeachers([])
+          }
         }
       } catch (_) {
-        try {
-          const localT = localStorage.getItem('phulwari_teachers')
-          if (localT) setTeachers(JSON.parse(localT))
-        } catch (__) {}
+        const localT = localStorage.getItem('phulwari_teachers')
+        if (localT) {
+          try {
+            const parsed = JSON.parse(localT)
+            const cleanLocal = parsed.filter((t: any) => !['tch-101', 'tch-102', 'tch-103'].includes(t.id) && t.name !== 'Ananya Sen' && t.name !== 'Rohan Deshmukh' && t.name !== 'Meera Kapur')
+            setTeachers(cleanLocal)
+          } catch (e) { setTeachers([]) }
+        } else {
+          setTeachers([])
+        }
       }
 
       // 4b. Teacher payroll & attendance — Supabase with localStorage fallback
@@ -1923,14 +1930,15 @@ Management Phulwari Mother and Child Activity Centre`
   const handleUpdateGalleryOrder = async (reorderedImages: any[]) => {
     try {
       setGalleryImages(reorderedImages)
-      const updates = reorderedImages.map(img => ({
-        id: img.id,
-        sort_order: img.sort_order
-      }))
       const supabase = createClient()
-      const { error } = await supabase.from('gallery').upsert(updates, { onConflict: 'id' })
-      if (error) throw error
-      alert('Gallery display order updated successfully!')
+      const updatePromises = reorderedImages.map((img, idx) => {
+        const newOrder = img.sort_order ?? (idx + 1)
+        return supabase.from('gallery').update({ sort_order: newOrder }).eq('id', img.id)
+      })
+      const results = await Promise.all(updatePromises)
+      const firstErr = results.find(r => r.error)?.error
+      if (firstErr) throw firstErr
+      console.log('✅ Gallery display order updated successfully!')
     } catch (err: any) {
       console.error('Error updating gallery order:', err)
       alert('Failed to update gallery order: ' + err.message)
@@ -2358,7 +2366,8 @@ Management Phulwari Mother and Child Activity Centre`
     }
 
     setTeachers(prev => {
-      const updated = editingTeacher ? prev.map(t => t.id === editingTeacher.id ? newTeacher : t) : [newTeacher, ...prev]
+      const cleanPrev = prev.filter(t => !['tch-101', 'tch-102', 'tch-103'].includes(t.id) && t.name !== 'Ananya Sen' && t.name !== 'Rohan Deshmukh' && t.name !== 'Meera Kapur')
+      const updated = editingTeacher ? cleanPrev.map(t => t.id === editingTeacher.id ? newTeacher : t) : [newTeacher, ...cleanPrev]
       try { localStorage.setItem('phulwari_teachers', JSON.stringify(updated)) } catch (e) {}
       return updated
     })
@@ -3666,6 +3675,7 @@ Management Phulwari Mother and Child Activity Centre`
             totalRevenueCombined={totalRevenueCombined}
             studentsByBatchDistribution={studentsByBatchDistribution}
             fees={fees}
+            attendance={attendance}
             setActiveTab={setActiveTab}
             setIsAddStudentOpen={setIsAddStudentOpen}
             galleryImages={galleryImages}
@@ -3893,7 +3903,10 @@ Management Phulwari Mother and Child Activity Centre`
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
+            filteredStudents={filteredStudents.filter(s => {
+              if (selectedCategoryFilter === 'All') return true;
+              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
+            })}
             attendance={attendance}
             attendanceDate={attendanceDate}
             setAttendanceDate={setAttendanceDate}
@@ -3935,7 +3948,10 @@ Management Phulwari Mother and Child Activity Centre`
             textSecondary={textSecondary}
             isLight={isLight}
             badgeStatus={badgeStatus}
-            filteredStudents={filteredStudents.filter(s => (s.category || 'Child Activity') === selectedCategoryFilter)}
+            filteredStudents={filteredStudents.filter(s => {
+              if (selectedCategoryFilter === 'All') return true;
+              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
+            })}
             fees={fees}
             feeSelectedMonth={feeSelectedMonth}
             setFeeSelectedMonth={setFeeSelectedMonth}
@@ -4815,16 +4831,7 @@ Management Phulwari Mother and Child Activity Centre`
 
                         {/* L Button */}
                         <button
-                          onClick={() => {
-                            if (currentStatus === 'leave') {
-                              handleMarkAttendance(st.id, selectedCalendarDate, 'unmarked')
-                            } else {
-                              const r = prompt("Enter Leave Reason:", "Sick Leave")
-                              if (r !== null) {
-                                handleMarkAttendance(st.id, selectedCalendarDate, 'leave', 'General', 'General', r || 'Leave')
-                              }
-                            }
-                          }}
+                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, currentStatus === 'leave' ? 'unmarked' : 'leave', 'General', 'General', 'Leave')}
                           className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
                             currentStatus === 'leave' ? 'bg-blue-600 text-white' : 'text-blue-605 hover:bg-blue-500/10'
                           }`}
@@ -4833,16 +4840,7 @@ Management Phulwari Mother and Child Activity Centre`
 
                         {/* H Button */}
                         <button
-                          onClick={() => {
-                            if (currentStatus === 'holiday') {
-                              handleMarkAttendance(st.id, selectedCalendarDate, 'unmarked')
-                            } else {
-                              const r = prompt("Enter Holiday Reason:", "School Trip")
-                              if (r !== null) {
-                                handleMarkAttendance(st.id, selectedCalendarDate, 'holiday', 'General', 'General', r || 'Holiday')
-                              }
-                            }
-                          }}
+                          onClick={() => handleMarkAttendance(st.id, selectedCalendarDate, currentStatus === 'holiday' ? 'unmarked' : 'holiday', 'General', 'General', 'Holiday')}
                           className={`w-7 h-7 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center ${
                             currentStatus === 'holiday' ? 'bg-purple-600 text-white' : 'text-purple-655 hover:bg-purple-500/10'
                           }`}

@@ -466,20 +466,11 @@ export default function AttendanceTab({
                       {/* L Button */}
                       <button
                         disabled={isHoliday}
-                        onClick={() => {
-                          if (currentStatus === 'leave') {
-                            handleMarkAttendance(st.id, attendanceDate, 'unmarked', defaultClass, defaultTime)
-                          } else {
-                            const r = prompt("Enter Leave Reason:", "Unscheduled Leave")
-                            if (r !== null) {
-                              handleMarkAttendance(st.id, attendanceDate, 'leave', defaultClass, defaultTime, r || 'Leave')
-                            }
-                          }
-                        }}
+                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'leave' ? 'unmarked' : 'leave', defaultClass, defaultTime, 'Leave')}
                         className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
                           currentStatus === 'leave' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-600 hover:bg-blue-500/10'
                         }`}
-                        title="Leave"
+                        title="Leave - Single click toggle"
                       >L</button>
                     </div>
                   </div>

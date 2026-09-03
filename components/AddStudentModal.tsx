@@ -62,13 +62,13 @@ export default function AddStudentModal({
   onClose,
   newStudentForm,
   setNewStudentForm,
-  allAvailableBatches,
+  allAvailableBatches = [],
   setBatches,
   handleAddStudentSubmit,
-  batchSchedules,
-  categories,
+  batchSchedules = [],
+  categories = [],
   setCategories,
-  feeHeads
+  feeHeads = []
 }: AddStudentModalProps) {
   const [dobInput, setDobInput] = useState('');
 

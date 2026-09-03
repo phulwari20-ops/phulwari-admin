@@ -19,6 +19,7 @@ interface DashboardTabProps {
   totalRevenueCombined: number;
   studentsByBatchDistribution: any[];
   fees: any[];
+  attendance?: any[];
   setActiveTab: (tab: any) => void;
   setIsAddStudentOpen: (v: boolean) => void;
   galleryImages: any[];
@@ -28,15 +29,100 @@ export default function DashboardTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight,
   students, batches, totalPaidFees, totalPendingFees,
   paidRatioPercentage, pendingRatioPercentage, totalRevenueCombined,
-  studentsByBatchDistribution, fees, setActiveTab, setIsAddStudentOpen, galleryImages
+  studentsByBatchDistribution, fees, attendance = [], setActiveTab, setIsAddStudentOpen, galleryImages
 }: DashboardTabProps) {
-  const barDays = [
-    { day: 'Mon', p: 100 }, { day: 'Tue', p: 95 }, { day: 'Wed', p: 89 },
-    { day: 'Thu', p: 93 }, { day: 'Fri', p: 91 }, { day: 'Sat', p: 94 }
-  ];
   const batchColors = ['bg-pink-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500', 'bg-teal-500'];
 
-  const todayAttendanceRate = '94.2%';
+  // Dynamic Attendance Calculation from Supabase `attendance` data
+  const { barDays, todayAttendanceRate, attendanceTrendText } = React.useMemo(() => {
+    const attList = attendance || [];
+    
+    // 1. Get dates for current week (Mon - Sat)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ...
+    const distToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const mondayThisWeek = new Date(now);
+    mondayThisWeek.setDate(now.getDate() + distToMon);
+
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    let thisWeekPresentCount = 0;
+    let thisWeekTotalCount = 0;
+
+    const days = dayLabels.map((dayName, idx) => {
+      const d = new Date(mondayThisWeek);
+      d.setDate(mondayThisWeek.getDate() + idx);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      const recordsForDay = attList.filter((a: any) => a.date === dateStr);
+      const presentForDay = recordsForDay.filter((a: any) => a.status === 'present' || a.status === 'halfday').length;
+      
+      thisWeekPresentCount += presentForDay;
+      thisWeekTotalCount += recordsForDay.length;
+
+      const p = recordsForDay.length > 0 ? Math.round((presentForDay / recordsForDay.length) * 100) : 0;
+
+      return { day: dayName, dateStr, p, total: recordsForDay.length, present: presentForDay };
+    });
+
+    // 2. Calculate Last Week's Attendance for trend comparison
+    const mondayLastWeek = new Date(mondayThisWeek);
+    mondayLastWeek.setDate(mondayThisWeek.getDate() - 7);
+
+    let lastWeekPresentCount = 0;
+    let lastWeekTotalCount = 0;
+
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(mondayLastWeek);
+      d.setDate(mondayLastWeek.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      const records = attList.filter((a: any) => a.date === dateStr);
+      const present = records.filter((a: any) => a.status === 'present' || a.status === 'halfday').length;
+
+      lastWeekPresentCount += present;
+      lastWeekTotalCount += records.length;
+    }
+
+    const thisWeekRate = thisWeekTotalCount > 0 ? (thisWeekPresentCount / thisWeekTotalCount) * 100 : 0;
+    const lastWeekRate = lastWeekTotalCount > 0 ? (lastWeekPresentCount / lastWeekTotalCount) * 100 : 0;
+
+    let trendText = 'Live Supabase Sync';
+    if (lastWeekTotalCount > 0 && thisWeekTotalCount > 0) {
+      const diff = thisWeekRate - lastWeekRate;
+      if (diff >= 0) {
+        trendText = `↑ ${diff.toFixed(1)}% from last week`;
+      } else {
+        trendText = `↓ ${Math.abs(diff).toFixed(1)}% from last week`;
+      }
+    } else if (thisWeekTotalCount > 0) {
+      trendText = `Live (${thisWeekPresentCount}/${thisWeekTotalCount} Present)`;
+    }
+
+    // 3. Today's Attendance Rate
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayRecords = attList.filter((a: any) => a.date === todayStr);
+    const todayPresent = todayRecords.filter((a: any) => a.status === 'present' || a.status === 'halfday').length;
+
+    let todayRateStr = '0%';
+    if (todayRecords.length > 0) {
+      const rate = Math.round((todayPresent / todayRecords.length) * 100);
+      todayRateStr = `${rate}%`;
+    } else if (thisWeekTotalCount > 0) {
+      todayRateStr = `${Math.round(thisWeekRate)}%`;
+    } else if (attList.length > 0) {
+      const totalP = attList.filter((a: any) => a.status === 'present' || a.status === 'halfday').length;
+      todayRateStr = `${Math.round((totalP / attList.length) * 100)}%`;
+    }
+
+    return { barDays: days, todayAttendanceRate: todayRateStr, attendanceTrendText: trendText };
+  }, [attendance]);
 
   // Low Classes alerts (<= 3 classes left)
   const lowClassStudents = students.filter(st => {
@@ -168,35 +254,35 @@ export default function DashboardTab({
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><Users className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 12.5%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p><p className={`text-xl font-bold ${textPrimary}`}>{students.length || 6}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p><p className={`text-xl font-bold ${textPrimary}`}>{students.length}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center"><Layers className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 4.3%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Batches</p><p className={`text-xl font-bold ${textPrimary}`}>{batches.length || 3}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Batches</p><p className={`text-xl font-bold ${textPrimary}`}>{batches.length}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center"><TrendingUp className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 18.6%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p><p className={`text-xl font-bold ${textPrimary}`}>₹{(totalPaidFees + totalPendingFees) || 485750}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p><p className={`text-xl font-bold ${textPrimary}`}>₹{(totalPaidFees + totalPendingFees).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center"><IndianRupee className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">↑ 20.1%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Fees Collected</p><p className="text-xl font-bold text-emerald-500">₹{totalPaidFees || 352400}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Fees Collected</p><p className="text-xl font-bold text-emerald-500">₹{(totalPaidFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center"><CreditCard className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">↓ 8.7%</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Pending Fees</p><p className="text-xl font-bold text-rose-500">₹{totalPendingFees || 133350}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Pending Fees</p><p className="text-xl font-bold text-rose-500">₹{(totalPendingFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
@@ -214,7 +300,7 @@ export default function DashboardTab({
           <div className="flex items-center justify-between">
             <div>
               <h3 className={`text-base font-bold ${textPrimary}`}>Fee Collection Overview</h3>
-              <p suppressHydrationWarning className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 352400).toLocaleString()}</p>
+              <p suppressHydrationWarning className="text-2xl font-extrabold text-blue-600">₹{(totalPaidFees || 0).toLocaleString('en-IN')}</p>
               <span className="text-xs text-emerald-500 font-bold">↑ 20.1% from last month</span>
             </div>
             <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}>
@@ -266,7 +352,7 @@ export default function DashboardTab({
           <div className="flex items-center justify-between">
             <div>
               <h3 className={`text-base font-bold ${textPrimary}`}>Attendance Overview</h3>
-              <p className="text-xl font-extrabold text-blue-600">{todayAttendanceRate} <span className="text-xs text-emerald-500 font-bold">↑ 6.2% from last week</span></p>
+              <p className="text-xl font-extrabold text-blue-600">{todayAttendanceRate} <span className="text-xs text-emerald-500 font-bold ml-2">{attendanceTrendText}</span></p>
             </div>
             <select className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'}`}><option>This Week</option></select>
           </div>

@@ -57,6 +57,7 @@ export default function FinancialTab({
 }: FinancialTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'income' | 'expenses' | 'receivables' | 'payouts' | 'cash_bank' | 'pnl'>('overview')
   const [dateFilter, setDateFilter] = useState<'this_month' | 'today' | 'all' | 'custom'>('this_month')
+  const [receivablesMonth, setReceivablesMonth] = useState<string>('August 2026')
   const [searchQuery, setSearchQuery] = useState('')
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false)
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
@@ -166,7 +167,21 @@ export default function FinancialTab({
   const inr = (v: any) => `₹${num(v).toLocaleString('en-IN')}`
 
   // Calculate accurate pending dues for any student (consistently matching FeesTab logic)
-  const getStudentPendingDue = (st: any, feesArr: any[], batchesArr: any[] = []) => {
+  const getStudentPendingDueInfo = (st: any, feesArr: any[], batchesArr: any[] = [], targetMonth: string = 'August 2026') => {
+    if (st.status === 'inactive' || st.status === 'deactivated') {
+      return { dueAmount: 0, pendingMonths: '' }
+    }
+
+    const batchObj = (batchesArr || []).find(b => 
+      b.id === st.batch_id || 
+      (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim())
+    )
+    const expectedMonthlyFee = st.total_fee ? num(st.total_fee) : (batchObj ? num(batchObj.fee_amount) : 3500)
+
+    if (expectedMonthlyFee === 0) {
+      return { dueAmount: 0, pendingMonths: '' }
+    }
+
     const stFees = (feesArr || []).filter(f => 
       f.student_id === st.id || 
       f.students?.admission_id === st.admission_id || 
@@ -174,24 +189,48 @@ export default function FinancialTab({
       (f.student_name && st.full_name && String(f.student_name).toLowerCase().trim() === String(st.full_name).toLowerCase().trim())
     )
 
-    let due = stFees.reduce((dSum, f) => dSum + (f.status !== 'paid' ? num(f.pending_amount || f.amount || f.due_amount) : 0), 0)
+    let dueAmount = 0
+    const monthsSet = new Set<string>()
 
-    if (st.pending_dues && num(st.pending_dues) > 0 && due === 0) {
-      due = num(st.pending_dues)
-    }
-
-    const hasPaidFee = stFees.some(f => f.status === 'paid')
-    if (due === 0 && (!stFees.length || !hasPaidFee) && st.status !== 'inactive' && st.status !== 'deactivated') {
-      const batchObj = (batchesArr || []).find(b => 
-        b.id === st.batch_id || 
-        (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim())
+    if (targetMonth === 'All Months') {
+      if (stFees.length > 0) {
+        stFees.forEach(f => {
+          if (f.status !== 'paid') {
+            const net = num(f.net_amount || f.amount || 0)
+            const paid = num(f.amount_paid || 0)
+            const p = num(f.pending_amount) || Math.max(0, net - paid)
+            dueAmount += (p || net)
+            if (f.month) monthsSet.add(f.month)
+          }
+        })
+      }
+      if (dueAmount === 0) {
+        dueAmount = expectedMonthlyFee
+        monthsSet.add('August 2026')
+      }
+    } else {
+      const monthFees = stFees.filter(f => 
+        f.month === targetMonth || f.collected_for === targetMonth || f.title?.includes(targetMonth)
       )
-      const expectedTotal = st.total_fee ? num(st.total_fee) : (batchObj ? num(batchObj.fee_amount) : 3500)
-      const paid = num(st.amount_paid || 0)
-      due = Math.max(0, expectedTotal - paid)
+
+      if (monthFees.length > 0) {
+        monthFees.forEach(f => {
+          if (f.status !== 'paid') {
+            const net = num(f.net_amount || f.amount || 0)
+            const paid = num(f.amount_paid || 0)
+            const p = num(f.pending_amount) || Math.max(0, net - paid)
+            dueAmount += (p || net)
+            monthsSet.add(targetMonth)
+          }
+        })
+      } else {
+        dueAmount = expectedMonthlyFee
+        monthsSet.add(targetMonth)
+      }
     }
 
-    return due
+    const pendingMonths = Array.from(monthsSet).join(', ') || targetMonth
+    return { dueAmount, pendingMonths }
   }
 
   // Combined Fee Collections + Manual Incomes
@@ -238,10 +277,10 @@ export default function FinancialTab({
 
   const pendingReceivables = useMemo(() => {
     return (students || []).reduce((sum, st) => {
-      const due = getStudentPendingDue(st, fees, batches)
-      return sum + Math.max(0, due)
+      const { dueAmount } = getStudentPendingDueInfo(st, fees, batches, receivablesMonth)
+      return sum + Math.max(0, dueAmount)
     }, 0)
-  }, [students, fees, batches])
+  }, [students, fees, batches, receivablesMonth])
 
   const todayStr = new Date().toISOString().split('T')[0]
   const todayCollection = useMemo(() => {
@@ -684,13 +723,34 @@ export default function FinancialTab({
       {/* SUB-TAB 4: PENDING DUES RECEIVABLE */}
       {activeSubTab === 'receivables' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h4 className={`text-xs font-extrabold ${textPrimary}`}>Pending Dues Receivable Overview</h4>
               <p className="text-[11px] text-slate-400">List of enrolled students with outstanding fee balance</p>
             </div>
-            <div className="p-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 font-mono font-black text-xs">
-              Total Due: {inr(pendingReceivables)}
+            
+            <div className="flex items-center gap-3">
+              <select
+                value={receivablesMonth}
+                onChange={(e) => setReceivablesMonth(e.target.value)}
+                className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold ${
+                  isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-100'
+                }`}
+              >
+                <option value="August 2026">August 2026</option>
+                <option value="September 2026">September 2026</option>
+                <option value="October 2026">October 2026</option>
+                <option value="November 2026">November 2026</option>
+                <option value="December 2026">December 2026</option>
+                <option value="January 2027">January 2027</option>
+                <option value="February 2027">February 2027</option>
+                <option value="March 2027">March 2027</option>
+                <option value="All Months">All Months</option>
+              </select>
+
+              <div className="p-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 font-mono font-black text-xs shrink-0">
+                Total Due ({receivablesMonth}): {inr(pendingReceivables)}
+              </div>
             </div>
           </div>
 
@@ -710,16 +770,8 @@ export default function FinancialTab({
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-semibold">
                 {students.map(st => {
-                  const dueAmount = getStudentPendingDue(st, fees, batches)
+                  const { dueAmount, pendingMonths } = getStudentPendingDueInfo(st, fees, batches, receivablesMonth)
                   if (dueAmount <= 0) return null
-
-                  const stFees = (fees || []).filter(f => 
-                    (f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id) &&
-                    f.status !== 'paid' && f.month
-                  )
-                  const pendingMonths = stFees.length > 0 
-                    ? Array.from(new Set(stFees.map(f => f.month))).join(', ') 
-                    : 'August 2026'
 
                   return (
                     <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
@@ -748,7 +800,7 @@ export default function FinancialTab({
                     </tr>
                   )
                 }).filter(Boolean)}
-                {students.every(st => getStudentPendingDue(st, fees, batches) <= 0) && (
+                {students.every(st => getStudentPendingDueInfo(st, fees, batches, receivablesMonth).dueAmount <= 0) && (
                   <tr>
                     <td colSpan={8} className="p-6 text-center text-slate-400">
                       🎉 No pending dues receivable found! All student fees are up to date.

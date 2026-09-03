@@ -46,7 +46,7 @@ export default function TeacherProfileModal({
   useEffect(() => {
     if (teacher) {
       const baseSalary = teacher.monthly_salary || teacher.salary_amount || ''
-      setPayForm(prev => ({
+      setPayForm((prev: any) => ({
         ...prev,
         salary_amount: prev.salary_amount || (baseSalary ? String(baseSalary) : '')
       }))
@@ -255,24 +255,33 @@ export default function TeacherProfileModal({
                 <div className="flex flex-wrap gap-1.5">
                   {ATT_STATES.map(st => {
                     const isSelected = attToday === st
+                    let activeCls = 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/30 scale-105 ring-2 ring-indigo-400/40'
+                    if (st === 'Present') activeCls = 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-105 ring-2 ring-emerald-400/40'
+                    else if (st === 'Absent') activeCls = 'bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-600/30 scale-105 ring-2 ring-rose-400/40'
+                    else if (st === 'Half Day') activeCls = 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/30 scale-105 ring-2 ring-amber-400/40'
+                    else if (st === 'Paid Leave') activeCls = 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30 scale-105 ring-2 ring-blue-400/40'
+                    else if (st === 'Unpaid Leave') activeCls = 'bg-slate-700 border-slate-700 text-white shadow-md shadow-slate-700/30 scale-105 ring-2 ring-slate-400/40'
+                    else if (st === 'Late') activeCls = 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-600/30 scale-105 ring-2 ring-purple-400/40'
+                    else if (st === 'Holiday') activeCls = 'bg-teal-600 border-teal-600 text-white shadow-md shadow-teal-600/30 scale-105 ring-2 ring-teal-400/40'
+
                     return (
                       <button
                         key={st}
                         type="button"
                         onClick={() => {
                           if (isSelected) {
-                            // Single-click deselect
+                            // Single-click deselect back to unmarked normal state
                             onMarkAttendance(teacher.id, attDate, 'unmarked', '')
                           } else {
-                            // Single-click select
+                            // Single-click select status
                             const currentReason = ['Paid Leave', 'Unpaid Leave', 'Late', 'Holiday'].includes(st) ? attReason : ''
                             onMarkAttendance(teacher.id, attDate, st, currentReason)
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold border transition-all cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold border transition-all cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-95 ${
                           isSelected
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/30 scale-105 ring-2 ring-indigo-400/40'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/50'
+                            ? activeCls
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80'
                         }`}
                       >
                         {isSelected && <span className="font-black text-white">✓</span>}
@@ -414,7 +423,7 @@ export default function TeacherProfileModal({
                   value={payForm.payment_type}
                   onChange={(e) => {
                     const pType = e.target.value
-                    setPayForm(prev => ({
+                    setPayForm((prev: any) => ({
                       ...prev,
                       payment_type: pType,
                       salary_amount: pType === 'Salary' ? (prev.salary_amount || String(teacher.monthly_salary || '')) : prev.salary_amount

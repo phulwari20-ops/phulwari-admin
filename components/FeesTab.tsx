@@ -29,10 +29,10 @@ interface FeesTabProps {
 
 export default function FeesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight, badgeStatus,
-  filteredStudents, fees, feeSelectedMonth, setFeeSelectedMonth,
+  filteredStudents = [], fees = [], feeSelectedMonth, setFeeSelectedMonth,
   feeStatusFilter, setFeeStatusFilter,
   setSelectedERPStudent, setErpModalTab, handleSendWhatsAppFeeReminder,
-  batches, feeHeads, setFeeHeads, loadAllAdminData,
+  batches = [], feeHeads = [], setFeeHeads, loadAllAdminData,
   incomeCategories = [], expenseCategories = []
 }: FeesTabProps) {
   
@@ -292,6 +292,73 @@ export default function FeesTab({
     setTimeout(() => setClassFeeSaveStatus(''), 3000)
   }
 
+  // Helper to compute unified monthly fee status for any student in any selected month
+  const getStudentMonthlyFeeStatus = (st: any, month: string) => {
+    // Find all matching fee entries for the student and month
+    const studentFees = fees.filter((f: any) =>
+      (f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id) &&
+      (f.month === month || f.collected_for === month || f.title?.includes(month))
+    )
+
+    let isPaid = false
+    let isPartial = false
+    let paidValue = 0
+    let pendingValue = 0
+
+    const batchObj = batches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim()))
+    const totalBatchFee = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
+    let displayAmount = totalBatchFee
+
+    if (studentFees.length > 0) {
+      let totalOriginal = 0
+      let totalPaid = 0
+      let totalPending = 0
+
+      studentFees.forEach((f: any) => {
+        const net = Number(f.net_amount || f.amount || 0)
+        if (f.status === 'paid') {
+          totalPaid += net
+        } else if (f.status === 'partial') {
+          totalPaid += Number(f.amount_paid || 0)
+          totalPending += Number(f.pending_amount || Math.max(0, net - Number(f.amount_paid || 0)))
+        } else {
+          totalPending += net
+        }
+        totalOriginal += net
+      })
+
+      paidValue = totalPaid
+      pendingValue = totalPending
+      displayAmount = totalOriginal || totalBatchFee
+      isPaid = totalPending === 0 && totalPaid > 0
+      isPartial = totalPending > 0 && totalPaid > 0
+    } else {
+      if (st.status === 'inactive' || st.status === 'deactivated' || totalBatchFee === 0) {
+        paidValue = 0
+        pendingValue = 0
+        displayAmount = totalBatchFee
+        isPaid = true
+        isPartial = false
+      } else {
+        // Active student with no fee collection entry for this month -> full month fee is pending
+        paidValue = 0
+        pendingValue = totalBatchFee
+        displayAmount = totalBatchFee
+        isPaid = false
+        isPartial = false
+      }
+    }
+
+    return {
+      studentFees,
+      isPaid,
+      isPartial,
+      paidValue,
+      pendingValue,
+      displayAmount
+    }
+  }
+
   // Derive stats dynamically for the selected month
   const stats = useMemo(() => {
     let collected = 0
@@ -299,27 +366,10 @@ export default function FeesTab({
     const studentsWithDue = new Set()
 
     filteredStudents.forEach(st => {
-      // Find fee entries matching this student and selected month
-      const monthFees = fees.filter(f => 
-        (f.student_id === st.id || f.students?.admission_id === st.admission_id || f.admission_id === st.admission_id) &&
-        (f.month === feeSelectedMonth || f.collected_for === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
-      )
-
-      if (monthFees.length > 0) {
-        monthFees.forEach(f => {
-          const amt = Number(f.net_amount || f.amount || 0)
-          if (f.status === 'paid') {
-            collected += amt
-          } else {
-            pending += amt
-            studentsWithDue.add(st.id)
-          }
-        })
-      } else if (st.status !== 'inactive' && st.status !== 'deactivated') {
-        // Active student with no fee record yet for selected month -> full batch fee is due for this month
-        const batchObj = batches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim()))
-        const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
-        pending += total
+      const { isPaid, paidValue, pendingValue } = getStudentMonthlyFeeStatus(st, feeSelectedMonth)
+      collected += paidValue
+      if (!isPaid && pendingValue > 0 && st.status !== 'inactive' && st.status !== 'deactivated') {
+        pending += pendingValue
         studentsWithDue.add(st.id)
       }
     })
@@ -530,53 +580,7 @@ export default function FeesTab({
           {filteredStudents.map((st) => {
             if (selectedBatchIdFilter !== 'All' && st.batch_id !== selectedBatchIdFilter) return null;
             
-            // Find all matching fee entries for the student and month
-            const studentFees = fees.filter((f: any) =>
-              (f.student_id === st.id || f.students?.admission_id === st.admission_id) &&
-              (f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
-            )
-
-            let isPaid = false
-            let displayAmount = 3500
-            let isPartial = false
-            let paidValue = 0
-            let pendingValue = 0
-
-            if (studentFees.length > 0) {
-              // Sum up stats across matching entries
-              let totalOriginal = 0
-              let totalPaid = 0
-              let totalPending = 0
-
-              studentFees.forEach((f: any) => {
-                const net = Number(f.net_amount || f.amount || 0)
-                if (f.status === 'paid') {
-                  totalPaid += net
-                } else if (f.status === 'partial') {
-                  totalPaid += Number(f.amount_paid || 0)
-                  totalPending += Number(f.pending_amount || 0)
-                } else {
-                  totalPending += net
-                }
-                totalOriginal += net
-              })
-
-              paidValue = totalPaid
-              pendingValue = totalPending
-              isPaid = totalPending === 0 && totalPaid > 0
-              isPartial = totalPending > 0 && totalPaid > 0
-              displayAmount = totalOriginal
-            } else {
-              // Defaults from student registration if ledger is empty
-              const paid = Number(st.amount_paid || 0)
-              const batchObj = batches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name.toLowerCase().trim()))
-              const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
-              paidValue = paid
-              pendingValue = Math.max(0, total - paid)
-              isPaid = pendingValue === 0
-              isPartial = pendingValue > 0 && paidValue > 0
-              displayAmount = total
-            }
+            const { studentFees, isPaid, isPartial, paidValue, pendingValue, displayAmount } = getStudentMonthlyFeeStatus(st, feeSelectedMonth)
 
             if (feeStatusFilter === 'PAID' && !isPaid) return null;
             if (feeStatusFilter === 'PENDING' && isPaid) return null;
@@ -965,7 +969,7 @@ export default function FeesTab({
               </button>
               <button
                 type="button"
-                onClick={() => downloadLedgerPDF(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
+                onClick={() => printLedgerDocument(viewLedgerModal.student, viewLedgerModal.feeRecords, viewLedgerModal.month)}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Download / Save PDF
