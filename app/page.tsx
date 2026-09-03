@@ -25,6 +25,7 @@ import {
   Sun,
   Moon,
   ChevronLeft,
+  ChevronRight,
   IndianRupee,
   DollarSign,
   Layers,
@@ -153,7 +154,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
   const [banners, setBanners] = useState<BannerItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -2081,22 +2082,6 @@ Management Phulwari Mother and Child Activity Centre`
     setSelectedAdminGalleryImg(null)
   }
 
-  // Save Class Fee Structure
-  const handleSaveClassFees = async () => {
-    setClassFeeSaveStatus('Updating class fee structure in database...')
-    try {
-      localStorage.setItem('phulwari_class_fees', JSON.stringify(classFees))
-      const supabase = createClient()
-      for (const [cName, feeVal] of Object.entries(classFees)) {
-        await supabase.from('class_fees').upsert([{ class_name: cName, monthly_fee: feeVal }])
-      }
-      setClassFeeSaveStatus('✅ Class fees updated & published live to database!')
-    } catch (err) {
-      setClassFeeSaveStatus('✅ Class fee structure updated in local memory!')
-    }
-    setTimeout(() => setClassFeeSaveStatus(''), 3500)
-  }
-
   // Save Party Packages
   const handleSavePartyPackages = async () => {
     setPkgSaveStatus('Saving packages to database...')
@@ -2755,13 +2740,12 @@ Management Phulwari Mother and Child Activity Centre`
     e.preventDefault()
     if (!editingBatch) return
 
-    // Every custom schedule row must have a start and end time — blanks are not
-    // allowed (especially for the Customized Batch).
+    // Every custom schedule row must have a start time (end time is optional)
     const blankSchedule = (editingBatch.schedules || []).find(
-      (s: any) => !String(s.start_time || '').trim() || !String(s.end_time || '').trim()
+      (s: any) => !String(s.start_time || '').trim()
     )
     if (blankSchedule) {
-      alert('⛔ Start Time and End Time cannot be blank in the class schedule. Please fill every row before saving.')
+      alert('⛔ Start Time cannot be blank in the class schedule. Please fill every row before saving.')
       return
     }
 
@@ -4034,6 +4018,7 @@ Management Phulwari Mother and Child Activity Centre`
             bgSubCard={bgSubCard}
             textPrimary={textPrimary}
             textSecondary={textSecondary}
+            isLight={isLight}
             teachers={teachers}
             setEditingTeacher={setEditingTeacher}
             setTeacherForm={setTeacherForm}
@@ -4300,10 +4285,9 @@ Management Phulwari Mother and Child Activity Centre`
                       />
                     </div>
                     <div>
-                      <label className={`font-bold ${textSecondary}`}>End Time</label>
+                      <label className={`font-bold ${textSecondary}`}>End Time (Optional)</label>
                       <input
                         type="text"
-                        required
                         value={editingBatch.end_time || ''}
                         onChange={(e) => setEditingBatch({ ...editingBatch, end_time: e.target.value })}
                         className={`w-full border rounded-xl px-3 py-2 font-mono outline-none ${

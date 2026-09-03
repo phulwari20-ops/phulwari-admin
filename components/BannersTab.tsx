@@ -297,7 +297,7 @@ export default function BannersTab({
         if (error) {
           alert(`Could not save banner to Supabase DB: ${error.message}`)
         } else if (data && data[0]) {
-          const updatedList = prev => prev.map(b => b.id === editingBanner.id ? data[0] : b)
+          const updatedList = (prev: any[]) => prev.map((b: any) => b.id === editingBanner.id ? data[0] : b)
           setBanners(updatedList)
           try {
             localStorage.setItem('phulwari_admin_banners', JSON.stringify(banners.map(b => b.id === editingBanner.id ? data[0] : b)))

@@ -264,10 +264,18 @@ export default function StudentErpModal({
     const availMonths = getAvailableFeeMonths(studentPaidFees, student)
     const defaultUpcomingMonth = availMonths[0] || 'September 2026'
 
-    const systemHeads = [
-      { name: 'Registration Fee', default_amount: 1000 },
-      { name: 'Monthly Fee',      default_amount: 3500 },
-    ]
+    const isRegPaid = studentPaidFees.some(f => 
+      (f.fee_head === 'Registration Fee' || f.title?.includes('Registration')) && 
+      (f.status === 'paid' || f.status === 'collected' || Number(f.amount_paid || 0) > 0 || Number(f.paid_amount || 0) > 0)
+    )
+
+    const systemHeads = isRegPaid
+      ? [{ name: 'Monthly Fee', default_amount: 3500 }]
+      : [
+          { name: 'Registration Fee', default_amount: 1000 },
+          { name: 'Monthly Fee', default_amount: 3500 },
+        ]
+
     return systemHeads.map((h, i) => {
       const isMonthly = h.name === 'Monthly Fee'
       const batchObj = allAvailableBatches?.find(b => b.id === student?.batch_id)
@@ -280,7 +288,7 @@ export default function StudentErpModal({
         mode_of_payment: '', transaction_id: ''
       })
     })
-  }, [feeHeads, allAvailableBatches, student?.batch_id, fees, student?.id])
+  }, [feeHeads, allAvailableBatches, student?.batch_id, fees, student?.id, student?.admission_id, student?.full_name])
 
   const [feeRows, setFeeRows] = useState<FeeRow[]>([])
   const [collectionType, setCollectionType] = useState('Multiple Fee Collection')
@@ -2098,9 +2106,12 @@ export default function StudentErpModal({
                     className={inputCls}
                   >
                     <option value="">-- Select Batch --</option>
-                    {allAvailableBatches?.map(b => (
-                      <option key={b.id} value={b.id}>{b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / 30 Days</option>
-                    ))}
+                    {allAvailableBatches?.map(b => {
+                      const timingStr = b.start_time ? (b.end_time ? `${b.start_time} - ${b.end_time}` : b.start_time) : (b.batch_time || 'Flexi Timing');
+                      return (
+                        <option key={b.id} value={b.id}>{b.batch_name} ({timingStr}) — ₹{b.fee_amount || 3500} / 30 Days</option>
+                      );
+                    })}
                     <option value="00000000-0000-0000-0000-000000000000" className="font-bold text-orange-600">
                       ⚙️ Customize class (Build Custom Schedule)
                     </option>

@@ -677,11 +677,14 @@ export default function AddStudentModal({
                       }}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-orange-500 font-semibold cursor-pointer"
                     >
-                      {filteredBatches.map(b => (
-                        <option key={b.id} value={b.id} className="bg-white text-slate-900">
-                          {b.batch_name} ({b.batch_time || '10:30 AM'}) — ₹{b.fee_amount || 3500} / {b.validity_days || 30} Days
-                        </option>
-                      ))}
+                      {filteredBatches.map(b => {
+                        const timingStr = b.start_time ? (b.end_time ? `${b.start_time} - ${b.end_time}` : b.start_time) : (b.batch_time || 'Flexi Timing');
+                        return (
+                          <option key={b.id} value={b.id} className="bg-white text-slate-900">
+                            {b.batch_name} ({timingStr}) — ₹{b.fee_amount || 3500} / {b.validity_days || 30} Days
+                          </option>
+                        );
+                      })}
                       {newStudentForm.category === 'Child Activity' && (
                         <option value="00000000-0000-0000-0000-000000000000" className="bg-white font-bold text-orange-600">
                           ⚙️ Customized Batch (Build Custom Schedule)

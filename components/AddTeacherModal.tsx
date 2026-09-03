@@ -86,10 +86,9 @@ export default function AddTeacherModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={`font-bold ${textSecondary}`}>Email Address</label>
+              <label className={`font-bold ${textSecondary}`}>Email Address (Optional)</label>
               <input
                 type="email"
-                required
                 placeholder="teacher@phulwari.co.in"
                 value={teacherForm.email}
                 onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
