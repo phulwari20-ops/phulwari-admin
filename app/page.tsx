@@ -1374,6 +1374,14 @@ export default function AdminDashboardPage() {
     const selectedBatchObj = newStudentForm.batch_id === '00000000-0000-0000-0000-000000000000'
       ? { id: '00000000-0000-0000-0000-000000000000', batch_name: 'Customized Batch', validity_days: 30 }
       : batches.find(b => b.id === newStudentForm.batch_id) || batches[0]
+
+    const targetBatchId = selectedBatchObj?.id
+    // Only send batch_id if it's a real batch ID present in the DB batches table
+    const isRealDbBatch = !!(targetBatchId &&
+      targetBatchId !== '00000000-0000-0000-0000-000000000000' &&
+      targetBatchId !== '11111111-1111-1111-1111-111111111111' &&
+      batches.some(b => b.id === targetBatchId))
+
     const newStudentObj = {
       id: studentUuid,
       admission_id: newStudentForm.admission_id.trim() || `PH-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -1425,7 +1433,7 @@ export default function AdminDashboardPage() {
       dob: newStudentObj.dob,
       gender: newStudentObj.gender,
       blood_group: newStudentObj.blood_group,
-      batch_id: newStudentObj.batch_id || '11111111-1111-1111-1111-111111111111',
+      batch_id: isRealDbBatch ? targetBatchId : null,
       parent_name: newStudentObj.parent_name,
       parent_phone: newStudentObj.parent_phone,
       parent_email: newStudentObj.parent_email,
@@ -1476,14 +1484,24 @@ export default function AdminDashboardPage() {
 
       if (!res.ok) {
         const errJson = await res.clone().json().catch(() => ({}));
-        if (errJson.message && (errJson.message.includes('column') || errJson.message.includes('schema cache') || errJson.code === 'PGRST204')) {
-          console.warn('⚠️ Supabase missing student columns, retrying with stripped payload...');
-          const strippedPayload = { ...dbPayload };
-          delete (strippedPayload as any).category;
-          delete (strippedPayload as any).custom_days;
-          delete (strippedPayload as any).classes_total;
-          delete (strippedPayload as any).classes_consumed;
-          delete (strippedPayload as any).validity_end_date;
+        const errStr = JSON.stringify(errJson);
+
+        const isFkError = errJson.code === '23503' || errStr.includes('students_batch_id_fkey') || (errJson.message && errJson.message.includes('foreign key constraint'));
+        const isMissingCol = errJson.message && (errJson.message.includes('column') || errJson.message.includes('schema cache') || errJson.code === 'PGRST204');
+
+        if (isFkError || isMissingCol) {
+          console.warn('⚠️ Retrying Supabase student insert with fallback payload (FK/schema correction)...');
+          const fallbackPayload = { ...dbPayload };
+          if (isFkError) {
+            fallbackPayload.batch_id = null;
+          }
+          if (isMissingCol) {
+            delete (fallbackPayload as any).category;
+            delete (fallbackPayload as any).custom_days;
+            delete (fallbackPayload as any).classes_total;
+            delete (fallbackPayload as any).classes_consumed;
+            delete (fallbackPayload as any).validity_end_date;
+          }
 
           res = await fetch(`${supabaseUrl}/rest/v1/students`, {
             method: 'POST',
@@ -1493,7 +1511,7 @@ export default function AdminDashboardPage() {
               'Content-Type': 'application/json',
               'Prefer': 'return=representation'
             },
-            body: JSON.stringify([strippedPayload])
+            body: JSON.stringify([fallbackPayload])
           });
         }
       }
@@ -1702,6 +1720,14 @@ export default function AdminDashboardPage() {
       }
     });
 
+    // Sanitize batch_id in dbPayload to prevent foreign key constraint violations
+    if (dbPayload.batch_id !== undefined) {
+      const bId = dbPayload.batch_id;
+      if (!bId || bId === '00000000-0000-0000-0000-000000000000' || bId === '11111111-1111-1111-1111-111111111111' || !batches.some(b => b.id === bId)) {
+        dbPayload.batch_id = null;
+      }
+    }
+
     // Optimistic local update + persist
     setStudents(prev => {
       const next = prev.map(s => (s.id === studentId ? { ...s, ...studentTableUpdates } : s))
@@ -1712,7 +1738,14 @@ export default function AdminDashboardPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.from('students').update(dbPayload).eq('id', studentId)
+      let { error } = await supabase.from('students').update(dbPayload).eq('id', studentId)
+      if (error && (error.code === '23503' || error.message?.includes('students_batch_id_fkey') || error.message?.includes('foreign key constraint'))) {
+        console.warn('⚠️ Foreign key constraint on batch_id failed during student update. Retrying with batch_id = null...');
+        const retryPayload = { ...dbPayload, batch_id: null };
+        const { error: retryErr } = await supabase.from('students').update(retryPayload).eq('id', studentId);
+        error = retryErr;
+      }
+
       if (error) {
         console.error('❌ [STUDENT UPDATE ERROR]:', error)
         alert(`Could not save to database: ${error.message}`)
@@ -1873,8 +1906,15 @@ export default function AdminDashboardPage() {
 
     try {
       // additional_batches is a jsonb column — send the array as-is.
-      const { error } = await supabase.from('students').update(updates).eq('id', studentId)
-      if (error) {
+      const dbUpdates = { ...updates };
+      if (dbUpdates.batch_id && (dbUpdates.batch_id === '00000000-0000-0000-0000-000000000000' || dbUpdates.batch_id === '11111111-1111-1111-1111-111111111111' || !batches.some(b => b.id === dbUpdates.batch_id))) {
+        dbUpdates.batch_id = null;
+      }
+      let { error } = await supabase.from('students').update(dbUpdates).eq('id', studentId)
+      if (error && (error.code === '23503' || error.message?.includes('students_batch_id_fkey') || error.message?.includes('foreign key constraint'))) {
+        console.warn('⚠️ Batch update FK violation, retrying with batch_id = null...');
+        await supabase.from('students').update({ ...dbUpdates, batch_id: null }).eq('id', studentId);
+      } else if (error) {
         console.warn('⚠️ Batch update could not persist:', error.message)
       }
     } catch (err) { /* keep optimistic local state */ }
