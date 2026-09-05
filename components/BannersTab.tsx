@@ -431,11 +431,10 @@ export default function BannersTab({
                 onChange={(e) => setPreviewUrl(e.target.value)}
                 className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
               >
-                <option value="http://localhost:3000/">🏠 Local Dev Home Page (http://localhost:3000)</option>
-                <option value="http://localhost:3000/kids-and-child-birthday-party">🎂 Local Birthday Landing Page</option>
-                <option value="http://localhost:3000/activities">🎨 Local Activities &amp; Sidebar Page</option>
-                <option value="https://phulwari.co.in/">🌐 Production Home Page (https://phulwari.co.in)</option>
-                <option value="https://phulwari.co.in/kids-and-child-birthday-party">🌐 Production Birthday Page</option>
+                <option value="https://phulwari.co.in/">🏠 Live Home Page (https://phulwari.co.in)</option>
+                <option value="https://phulwari.co.in/kids-and-child-birthday-party">🎂 Live Birthday Landing Page (https://phulwari.co.in/kids-and-child-birthday-party)</option>
+                <option value="https://phulwari.co.in/activities">🎨 Live Activities Page (https://phulwari.co.in/activities)</option>
+                <option value="https://phulwari.co.in/batch-galary/batch">📅 Live Batches Page (https://phulwari.co.in/batch-galary/batch)</option>
               </select>
 
               <a

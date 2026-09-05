@@ -1,8 +1,86 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Save, Loader2, Sparkles, AlertCircle, Plus, Trash2, ChevronDown, ChevronUp, RefreshCw, Eye } from 'lucide-react'
+import { Save, Loader2, Sparkles, AlertCircle, Plus, Trash2, ChevronDown, ChevronUp, RefreshCw, Eye, ExternalLink, Smartphone, Laptop, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+
+const DEFAULT_BIRTHDAY_CONFIG = {
+  id: 1,
+  hero_section: {
+    pill_text: "🎉 Zero Stress, 100% Fun",
+    headline_part1: "Give Your Little One an",
+    headline_highlight: "Unforgettable",
+    headline_part2: "1st to 5th Birthday",
+    sub_headline: "— Zero Stress for You!",
+    description: "Safe, spacious, and toddler-friendly party celebrations at Phulwari Activity Centre. Creative themes, soft-play fun, and complete end-to-end event management.",
+    cta_text: "Check Date Availability & Get Free Quote",
+    hero_image: "/birthday/birthday_1.png",
+    playzone_images: [
+      "/birthday/birthday_1.png",
+      "/birthday/birthday_2.png",
+      "/birthday/birthday_3.png"
+    ]
+  },
+  trust_badges: [
+    { icon: "ShieldCheck", title: "100% Safe &", subtitle: "Hygienic Environment" },
+    { icon: "Camera", title: "24/7 CCTV", subtitle: "Monitored" },
+    { icon: "PartyPopper", title: "100+ Happy", subtitle: "Birthdays Hosted" }
+  ],
+  pain_points_section: {
+    title: "Planning a Toddler’s Birthday Party Shouldn't Leave You Exhausted.",
+    description: "When your child is under 5, hosting a birthday party at home or in an adult banquet hall can be overwhelming:",
+    points: [
+      {
+        icon: "ShieldAlert",
+        title: "The Mess & Safety Risks",
+        desc: "Sharp corners, fragile decor, and crowded spaces.",
+        image: "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        icon: "Frown",
+        title: "Toddler Boredom",
+        desc: "Traditional party venues don't keep 1–5-year-olds engaged.",
+        image: "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        icon: "Frown",
+        title: "Parent Exhaustion",
+        desc: "You spend the whole party managing logistics instead of enjoying the moment.",
+        image: "https://images.unsplash.com/photo-1537655780520-1e392ed8101a?w=500&auto=format&fit=crop&q=80"
+      }
+    ],
+    advantage_title: "The Phulwari Advantage:",
+    advantage_desc: "At Phulwari Mother & Child Activity Centre, we create child-centric celebrations where your little one can play freely in a safe, soft-padded environment while you relax and celebrate with guests.",
+    advantage_image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?w=600",
+    advantage_logo: "https://api.dicebear.com/7.x/bottts/svg?seed=teddy"
+  },
+  features_section: {
+    title: "Why Phulwari is Perfect for Ages 0–5",
+    features: [
+      { icon: "ShieldCheck", title: "Toddler-Proof Safety", desc: "Cushioned play areas, non-toxic materials, and rounded edges built specifically for early childhood safety." },
+      { icon: "Gamepad2", title: "Interactive Play Zone Access", desc: "Keeps toddlers active with age-appropriate games, music, soft play, and creative art activities." },
+      { icon: "Crown", title: "Magical Custom Themes", desc: "Cocomelon, Peppa Pig, Jungle Safari, Baby Shark, Princess, Superhero, and custom setups tailored to your kid's favorite world!" },
+      { icon: "Droplets", title: "Sanitized & Hygienic Premises", desc: "Cleaned and disinfected before every event to keep little immune systems safe." },
+      { icon: "Camera", title: "Picture-Perfect Backdrops", desc: "Beautiful, brightly lit theme setups designed for memory-making photo sessions." }
+    ]
+  },
+  testimonials_section: {
+    title: "What Parents Are Saying",
+    reviews: [
+      { text: "We hosted our son's 2nd birthday at Phulwari, and it was the best decision! The space was completely child-proof, so we didn't have to constantly chase him around. The theme setup was gorgeous!", author: "Priya & Amit S.", rating: 5, avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Priya" },
+      { text: "Usually, kids under 4 get bored in regular banquet halls. Here, the kids were busy in the activity zone the whole time. Stress-free event planning at its best!", author: "Ritu M.", rating: 5, avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Ritu" }
+    ]
+  },
+  faq_section: {
+    title: "Frequently Asked Questions",
+    faqs: [
+      { question: "Is the venue safe for 1 to 3-year-old toddlers?", answer: "Yes! Phulwari is designed as a Mother & Child Activity Centre. All play areas feature child-safe infrastructure, rounded edges, clean floors, and 24/7 CCTV surveillance." },
+      { question: "Can we bring our own food or caterer?", answer: "Yes, we offer flexible party planning options so you can choose your preferred menu or let us assist you with catering recommendations." },
+      { question: "How early should we book the venue?", answer: "Weekend slots fill up quickly. We recommend reserving your date at least 2–3 weeks in advance." }
+    ],
+    faq_image: "https://images.unsplash.com/photo-1596464716127-f2a82984de30?w=600"
+  }
+}
 
 export default function BirthdayLandingTab() {
   const [loading, setLoading] = useState(true)
@@ -10,59 +88,35 @@ export default function BirthdayLandingTab() {
   const [message, setMessage] = useState('')
   const [activeSection, setActiveSection] = useState<'hero' | 'badges' | 'pain' | 'features' | 'reviews' | 'faqs'>('hero')
   
-  const [config, setConfig] = useState<any>({
-    hero_section: {
-      pill_text: '',
-      headline_part1: '',
-      headline_highlight: '',
-      headline_part2: '',
-      sub_headline: '',
-      description: '',
-      cta_text: ''
-    },
-    trust_badges: [],
-    pain_points_section: {
-      title: '',
-      description: '',
-      points: [],
-      advantage_title: '',
-      advantage_desc: ''
-    },
-    features_section: {
-      title: '',
-      features: []
-    },
-    testimonials_section: {
-      title: '',
-      reviews: []
-    },
-    faq_section: {
-      title: '',
-      faqs: []
-    }
-  })
+  const [config, setConfig] = useState<any>(DEFAULT_BIRTHDAY_CONFIG)
 
-  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewUrl, setPreviewUrl] = useState('https://phulwari.co.in/kids-and-child-birthday-party')
+  const [previewDevice, setPreviewDevice] = useState<'laptop' | 'phone'>('phone')
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [laptopWidth, setLaptopWidth] = useState<number>(1280)
+  const [containerWidth, setContainerWidth] = useState<number>(550)
+  const previewContainerRef = useRef<HTMLDivElement>(null)
   const [isReloading, setIsReloading] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
     fetchConfig()
-    // Determine frontend URL based on window location
-    if (typeof window !== 'undefined') {
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      if (isLocalhost) {
-        const port = window.location.port
-        // Point at the canonical birthday route directly (avoids the /birthdays redirect).
-        const frontend = window.location.origin.replace(`:${port}`, ':3000') + '/kids-and-child-birthday-party'
-        setPreviewUrl(frontend)
-      } else {
-        // In production, always point to the live canonical birthday page.
-        setPreviewUrl('https://phulwari.co.in/kids-and-child-birthday-party')
+    setPreviewUrl('https://phulwari.co.in/kids-and-child-birthday-party')
+  }, [])
+
+  useEffect(() => {
+    if (!previewContainerRef.current) return
+    const updateSize = () => {
+      if (previewContainerRef.current) {
+        setContainerWidth(previewContainerRef.current.clientWidth)
       }
     }
-  }, [])
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(previewContainerRef.current)
+    return () => observer.disconnect()
+  }, [previewDevice, isExpanded])
 
   const fetchConfig = async () => {
     try {
@@ -74,17 +128,18 @@ export default function BirthdayLandingTab() {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          setMessage('No configuration found. Please run the SQL setup script first.')
-        } else if (error.code === '42P01') {
-          setMessage('The birthday_landing_config table does not exist. Run the SQL script in your Supabase SQL Editor.')
+          // Auto-seed table if empty
+          const { data: seeded } = await supabase.from('birthday_landing_config').upsert(DEFAULT_BIRTHDAY_CONFIG).select().single()
+          if (seeded) setConfig(seeded)
         } else {
-          console.error(error)
+          setConfig(DEFAULT_BIRTHDAY_CONFIG)
         }
       } else if (data) {
         setConfig(data)
       }
     } catch (error) {
       console.error(error)
+      setConfig(DEFAULT_BIRTHDAY_CONFIG)
     } finally {
       setLoading(false)
     }
@@ -224,7 +279,7 @@ export default function BirthdayLandingTab() {
       {/* Configuration Panels */}
       <div className="xl:col-span-7 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
         
-        <div className="flex justify-between items-center pb-6 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <Sparkles className="text-rose-500 w-5 h-5" />
@@ -232,14 +287,36 @@ export default function BirthdayLandingTab() {
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">Edit all sections dynamically. Click save to apply changes instantly.</p>
           </div>
-          <button 
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-70"
-          >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            {saving ? 'Saving...' : 'Save & Publish'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={previewUrl}
+              onChange={(e) => setPreviewUrl(e.target.value)}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+            >
+              <option value="https://phulwari.co.in/kids-and-child-birthday-party">🎂 Live Birthday Page (/kids-and-child-birthday-party)</option>
+              <option value="https://phulwari.co.in/birthdays">🎈 Birthday Route (/birthdays)</option>
+              <option value="https://phulwari.co.in/">🏠 Live Home Page (/)</option>
+              <option value="https://phulwari.co.in/activities">🎨 Live Activities Page (/activities)</option>
+              <option value="https://phulwari.co.in/batch-galary/batch">📅 Live Batches Page (/batch-galary/batch)</option>
+            </select>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Live ↗</span>
+            </a>
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-70"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saving ? 'Saving...' : 'Save & Publish'}
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -526,33 +603,142 @@ export default function BirthdayLandingTab() {
       </div>
 
       {/* Live Preview Panel */}
-      <div className="xl:col-span-5 sticky top-6 space-y-4">
+      <div className={`${isExpanded ? 'xl:col-span-12' : 'xl:col-span-5'} sticky top-6 space-y-4 transition-all duration-300`}>
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
               <Eye className="w-4 h-4 text-rose-500" /> Live Preview Snapshot
             </h3>
-            <button 
-              onClick={reloadPreview}
-              className="p-1.5 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"
-              title="Refresh Preview"
-            >
-              <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
-            </button>
+
+            <div className="flex items-center gap-2">
+              {/* Device View Toggle */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('phone')}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                    previewDevice === 'phone'
+                      ? 'bg-rose-500 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Phone</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('laptop')}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                    previewDevice === 'laptop'
+                      ? 'bg-rose-500 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Laptop className="w-3.5 h-3.5" />
+                  <span>Laptop</span>
+                </button>
+              </div>
+
+              {/* Expand / Minimize Full Width Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsExpanded(prev => !prev)}
+                className={`p-1.5 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  isExpanded ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+                title={isExpanded ? "Collapse to Split View" : "Expand to Full Width"}
+              >
+                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{isExpanded ? 'Collapse' : 'Expand'}</span>
+              </button>
+
+              <button 
+                onClick={reloadPreview}
+                className="p-1.5 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"
+                title="Refresh Preview"
+              >
+                <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
           
           {previewUrl ? (
-            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-inner bg-slate-50 relative aspect-[9/16] xl:aspect-[3/4]">
-              <iframe 
-                ref={iframeRef}
-                src={previewUrl} 
-                className="w-full h-full border-none origin-top"
-                title="Live Preview"
-              />
-              <div className="absolute bottom-2 right-2 bg-slate-900/80 text-white text-[9px] px-2 py-0.5 rounded-full font-semibold backdrop-blur-sm">
-                Preview Mode (Read-Only)
+            previewDevice === 'phone' ? (
+              <div className="w-full flex justify-center py-2 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="w-[340px] h-[600px] border-[10px] border-slate-900 rounded-[38px] shadow-2xl overflow-hidden bg-white relative transition-all duration-300">
+                  <div className="w-24 h-3.5 bg-slate-900 absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-20 flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-800 border border-slate-700"></div>
+                  </div>
+                  <iframe 
+                    ref={iframeRef}
+                    src={previewUrl} 
+                    className="w-full h-full border-none pt-2"
+                    title="Live Phone Preview"
+                  />
+                  <div className="absolute bottom-2 right-2 bg-slate-900/80 text-white text-[9px] px-2 py-0.5 rounded-full font-semibold backdrop-blur-sm z-20">
+                    📱 Phone View (Mobile)
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              (() => {
+                const scale = Math.min(1, Math.max(0.25, containerWidth / laptopWidth));
+                const scaledHeight = Math.round(720 * scale);
+
+                return (
+                  <div ref={previewContainerRef} className="w-full transition-all duration-300">
+                    <div className="w-full bg-slate-900 border-4 border-slate-800 rounded-2xl shadow-2xl overflow-hidden relative" style={{ height: `${scaledHeight + 36}px` }}>
+                      {/* Laptop Desktop Browser Bar */}
+                      <div className="w-full h-9 bg-slate-800 flex items-center justify-between px-3 text-slate-300 text-[10px] font-mono z-20 relative border-b border-slate-700">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                          <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                          <span className="ml-1 text-slate-300 font-bold hidden sm:inline">Desktop Viewport ({laptopWidth}px)</span>
+                        </div>
+
+                        <div className="flex-1 max-w-sm mx-2 text-center bg-slate-950/80 py-0.5 px-3 rounded-md text-[10px] text-slate-300 border border-slate-700/60 truncate">
+                          🔒 {previewUrl}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[9px] text-slate-400 font-sans hidden md:inline">Desktop Resolution:</span>
+                          <select
+                            value={laptopWidth}
+                            onChange={(e) => setLaptopWidth(Number(e.target.value))}
+                            className="bg-slate-950 text-rose-400 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold outline-none cursor-pointer"
+                          >
+                            <option value={1024}>1024px (Standard Laptop)</option>
+                            <option value={1280}>1280px (Desktop HD)</option>
+                            <option value={1440}>1440px (Widescreen)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Scaled Desktop Viewport Wrapper */}
+                      <div className="w-full overflow-hidden relative" style={{ height: `${scaledHeight}px` }}>
+                        <iframe 
+                          ref={iframeRef}
+                          src={previewUrl} 
+                          style={{
+                            width: `${laptopWidth}px`,
+                            height: `${720 / scale}px`,
+                            transform: `scale(${scale})`,
+                            transformOrigin: 'top left'
+                          }}
+                          className="border-none bg-white absolute top-0 left-0"
+                          title="Live Scaled Laptop Desktop Preview"
+                        />
+                        <div className="absolute bottom-2 right-2 bg-slate-900/90 text-white text-[9px] px-2.5 py-1 rounded-full font-semibold backdrop-blur-md z-20 shadow-lg border border-slate-700 flex items-center gap-1">
+                          <span>💻 Laptop View ({laptopWidth}px Desktop Layout)</span>
+                          <span className="text-amber-400 font-mono">[{Math.round(scale * 100)}% Auto Scale]</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            )
           ) : (
             <div className="flex flex-col items-center justify-center h-96 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin mb-2" />
