@@ -2010,7 +2010,7 @@ Management Phulwari Mother and Child Activity Centre`
     } catch (e) {}
   }
 
-  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+  const compressImage = (base64Str: string, maxWidth = 2560, maxHeight = 2560): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image()
       img.src = base64Str
@@ -2033,10 +2033,13 @@ Management Phulwari Mother and Child Activity Centre`
 
         canvas.width = width
         canvas.height = height
-        const ctx = canvas.getContext('2d')
+        const ctx = canvas.getContext('2d', { alpha: true })
         if (ctx) {
+          ctx.imageSmoothingEnabled = true
+          ctx.imageSmoothingQuality = 'high'
           ctx.drawImage(img, 0, 0, width, height)
-          resolve(canvas.toDataURL('image/jpeg', 0.7))
+          // High definition WebP with 0.95 quality retention
+          resolve(canvas.toDataURL('image/webp', 0.95))
         } else {
           resolve(base64Str)
         }
@@ -3064,35 +3067,46 @@ Management Phulwari Mother and Child Activity Centre`
   const totalStudentsCount = activeStudents.length
   const totalBatchesCount = allAvailableBatches.length
   
-  // Fees KPI: calculate dynamically per active student
+  // Fees KPI: calculate dynamically per active student with safe numeric parsing
+  const safeNum = (v: any): number => {
+    if (v === null || v === undefined || v === '') return 0
+    if (typeof v === 'number') return isNaN(v) ? 0 : v
+    const n = Number(String(v).replace(/[^0-9.-]+/g, ''))
+    return isNaN(n) ? 0 : n
+  }
+
   let totalPaidFees = 0
   let totalPendingFees = 0
 
   activeStudents.forEach(st => {
     const studentLedger = fees.filter(f => f.student_id === st.id || f.students?.admission_id === st.admission_id)
     if (studentLedger.length > 0) {
-      // Sum from ledger
       studentLedger.forEach(f => {
-        if (f.status === 'paid') {
-          totalPaidFees += Number(f.net_amount || f.amount || 0)
-        } else if (f.status === 'pending' || f.status === 'due') {
-          totalPendingFees += Number(f.net_amount || f.amount || 0)
+        const netAmt = safeNum(f.net_amount || f.amount || 0)
+        const paidAmt = safeNum(f.amount_paid || 0)
+        const pendAmt = safeNum(f.pending_amount !== undefined ? f.pending_amount : Math.max(0, netAmt - paidAmt))
+
+        if (f.status === 'paid' || (netAmt > 0 && paidAmt >= netAmt)) {
+          totalPaidFees += paidAmt > 0 ? paidAmt : netAmt
+        } else if (f.status === 'pending' || f.status === 'due' || pendAmt > 0) {
+          totalPaidFees += paidAmt
+          totalPendingFees += pendAmt
+        } else {
+          totalPaidFees += paidAmt
         }
       })
     } else {
-      // Sum from student registration defaults
-      const paid = Number(st.amount_paid || 0)
+      const paid = safeNum(st.amount_paid || 0)
       const batchObj = allAvailableBatches.find(b => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.trim().toLowerCase() === st.batch_name.trim().toLowerCase()))
-      const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
+      const total = st.total_fee ? safeNum(st.total_fee) : (batchObj ? safeNum(batchObj.fee_amount) : 3500)
       totalPaidFees += paid
       totalPendingFees += Math.max(0, total - paid)
     }
   })
-  
-  // For month-specific fee tab display
-  const currentMonthFees = fees.filter(f => f.month === feeSelectedMonth || f.title?.includes(feeSelectedMonth))
-  
-  const totalRevenueCombined = totalPaidFees + totalPendingFees
+
+  totalPaidFees = Math.round(totalPaidFees)
+  totalPendingFees = Math.round(totalPendingFees)
+  const totalRevenueCombined = Math.max(0, totalPaidFees + totalPendingFees)
   const paidRatioPercentage = totalRevenueCombined > 0 ? ((totalPaidFees / totalRevenueCombined) * 100).toFixed(1) : '0.0'
   const pendingRatioPercentage = totalRevenueCombined > 0 ? ((totalPendingFees / totalRevenueCombined) * 100).toFixed(1) : '0.0'
 

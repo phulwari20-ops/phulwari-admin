@@ -269,19 +269,19 @@ export default function DashboardTab({
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center"><TrendingUp className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full">Combined</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p><p className={`text-xl font-bold ${textPrimary}`}>₹{(totalPaidFees + totalPendingFees).toLocaleString('en-IN')}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Revenue</p><p className={`text-xl font-bold ${textPrimary}`}>₹{((totalPaidFees || 0) + (totalPendingFees || 0)).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center"><IndianRupee className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">{paidRatioPercentage}% Paid</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">{paidRatioPercentage || '0.0'}% Paid</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Fees Collected</p><p className="text-xl font-bold text-emerald-500">₹{(totalPaidFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center"><CreditCard className="w-4 h-4" /></div>
-            <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">{pendingRatioPercentage}% Due</span>
+            <span className="text-[10px] font-bold text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">{pendingRatioPercentage || '0.0'}% Due</span>
           </div>
           <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Pending Fees</p><p className="text-xl font-bold text-rose-500">₹{(totalPendingFees || 0).toLocaleString('en-IN')}</p></div>
         </div>
@@ -290,7 +290,7 @@ export default function DashboardTab({
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><UserCheck className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full">Live Tracker</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">{todayAttendanceRate}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>{"Today's Attendance"}</p><p className="text-xl font-bold text-blue-500">{todayAttendanceRate || '0%'}</p></div>
         </div>
       </div>
 
@@ -332,17 +332,17 @@ export default function DashboardTab({
           </div>
           <div className="relative flex items-center justify-center my-4">
             <svg className="w-44 h-44 transform -rotate-90" viewBox="0 0 36 36">
-              <path className="text-emerald-500" strokeWidth="4.5" strokeDasharray={`${paidRatioPercentage}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path className="text-amber-500" strokeWidth="4.5" strokeDasharray={`${pendingRatioPercentage}, 100`} strokeDashoffset={`-${paidRatioPercentage}`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path className="text-emerald-500" strokeWidth="4.5" strokeDasharray={`${paidRatioPercentage || 0}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path className="text-amber-500" strokeWidth="4.5" strokeDasharray={`${pendingRatioPercentage || 0}, 100`} strokeDashoffset={`-${paidRatioPercentage || 0}`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
             </svg>
             <div className="absolute text-center">
               <p className={`text-[10px] font-bold uppercase ${textSecondary}`}>Total</p>
-              <p className={`text-base font-extrabold ${textPrimary}`}>₹{totalRevenueCombined.toLocaleString()}</p>
+              <p className={`text-base font-extrabold ${textPrimary}`}>₹{(totalRevenueCombined || 0).toLocaleString('en-IN')}</p>
             </div>
           </div>
           <div className="space-y-2 text-xs font-semibold">
-            <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Collected</span><span className={textPrimary}>₹{totalPaidFees.toLocaleString()} ({paidRatioPercentage}%)</span></div>
-            <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Pending</span><span className={textPrimary}>₹{totalPendingFees.toLocaleString()} ({pendingRatioPercentage}%)</span></div>
+            <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Collected</span><span className={textPrimary}>₹{(totalPaidFees || 0).toLocaleString('en-IN')} ({paidRatioPercentage || '0.0'}%)</span></div>
+            <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Pending</span><span className={textPrimary}>₹{(totalPendingFees || 0).toLocaleString('en-IN')} ({pendingRatioPercentage || '0.0'}%)</span></div>
           </div>
         </div>
       </div>

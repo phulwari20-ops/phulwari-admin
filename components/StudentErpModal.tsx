@@ -276,10 +276,15 @@ export default function StudentErpModal({
           { name: 'Monthly Fee', default_amount: 3500 },
         ]
 
+    const latestMonthlyFee = studentPaidFees.find(f => f.fee_head === 'Monthly Fee' || f.title?.includes('Monthly'))
+    const customMonthlyFee = student?.total_fee ? Number(student.total_fee) : (latestMonthlyFee?.amount ? Number(latestMonthlyFee.amount) : null)
+
     return systemHeads.map((h, i) => {
       const isMonthly = h.name === 'Monthly Fee'
       const batchObj = allAvailableBatches?.find(b => b.id === student?.batch_id)
-      const defaultAmt = isMonthly && batchObj?.fee_amount ? Number(batchObj.fee_amount) : Number(h.default_amount || 0)
+      const defaultAmt = isMonthly 
+        ? (customMonthlyFee !== null ? customMonthlyFee : (batchObj?.fee_amount ? Number(batchObj.fee_amount) : Number(h.default_amount || 3500)))
+        : Number(h.default_amount || 0)
       return computeRow({
         id: `row-init-${i}`, fee_head: h.name, custom_head_name: '', 
         collected_for: isMonthly ? defaultUpcomingMonth : 'One Time',
@@ -288,7 +293,7 @@ export default function StudentErpModal({
         mode_of_payment: '', transaction_id: ''
       })
     })
-  }, [feeHeads, allAvailableBatches, student?.batch_id, fees, student?.id, student?.admission_id, student?.full_name])
+  }, [feeHeads, allAvailableBatches, student?.batch_id, student?.total_fee, fees, student?.id, student?.admission_id, student?.full_name])
 
   const [feeRows, setFeeRows] = useState<FeeRow[]>([])
   const [collectionType, setCollectionType] = useState('Multiple Fee Collection')
@@ -455,7 +460,7 @@ export default function StudentErpModal({
   }
 
   const removeFeeRow = (id: string) => {
-    setFeeRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev)
+    setFeeRows(prev => prev.filter(r => r.id !== id))
   }
 
   // ─── Photo Upload (any format → WebP) ─────────────────────────────────────
@@ -540,12 +545,18 @@ export default function StudentErpModal({
       } catch(err) { console.error('Fee save failed:', err) }
     }
 
-    // Update student validity date if provided
+    // Update student validity date and total_fee if customized
     try {
+      const studentUpdates: any = {}
       if (planValidityEnd) {
-        await supabase.from('students').update({
-          validity_end_date: planValidityEnd
-        }).eq('id', student.id)
+        studentUpdates.validity_end_date = planValidityEnd
+      }
+      const monthlyRow = feeRows.find(r => r.fee_head === 'Monthly Fee')
+      if (monthlyRow && monthlyRow.total_fee > 0) {
+        studentUpdates.total_fee = monthlyRow.total_fee
+      }
+      if (Object.keys(studentUpdates).length > 0) {
+        await supabase.from('students').update(studentUpdates).eq('id', student.id)
       }
     } catch(_) {}
 
@@ -563,6 +574,42 @@ export default function StudentErpModal({
       txnId: globalTransactionId,
       remarks: globalRemarks
     })
+  }
+
+  // ─── Delete Individual Fee Transaction Handler ──────────────────────────────
+  const handleDeleteFeeRecord = async (feeId: string) => {
+    if (!window.confirm('Are you sure you want to delete this fee transaction? All calculations, dues, ledger and reports will be updated automatically.')) return
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('fees').delete().eq('id', feeId)
+      if (error) {
+        alert('Failed to delete fee transaction: ' + error.message)
+        return
+      }
+      await loadAllAdminData()
+    } catch (err: any) {
+      alert('Error deleting transaction: ' + err.message)
+    }
+  }
+
+  // ─── Delete Entire Receipt Transaction Handler ──────────────────────────────
+  const handleDeleteReceiptTransaction = async (rNo: string) => {
+    if (!window.confirm(`Are you sure you want to delete receipt ${rNo} and all its associated transactions? All dues, ledger, revenue and financial reports will be updated automatically.`)) return
+    try {
+      const supabase = createClient()
+      let query = supabase.from('fees').delete().eq('receipt_no', rNo)
+      if (student?.id) {
+        query = query.eq('student_id', student.id)
+      }
+      const { error } = await query
+      if (error) {
+        alert('Failed to delete transaction receipt: ' + error.message)
+        return
+      }
+      await loadAllAdminData()
+    } catch (err: any) {
+      alert('Error deleting transaction: ' + err.message)
+    }
   }
 
 
@@ -1093,9 +1140,27 @@ export default function StudentErpModal({
             {(() => {
               const studentFees = fees.filter((f:any) => f.student_id===student.id || f.students?.admission_id===student.admission_id)
               if (studentFees.length === 0) return null
+
+              const normalizeHeadName = (rawHead: string, title: string) => {
+                const str = (rawHead || title || '').trim()
+                const lower = str.toLowerCase()
+                if (lower.includes('registration')) return 'Registration Fee'
+                if (lower.includes('monthly')) return 'Monthly Fee'
+                return rawHead || title || 'Other Fee'
+              }
+
+              // Deduplicate records
+              const seenKeys = new Set<string>()
+              const uniqueStudentFees = studentFees.filter((f: any) => {
+                const key = f.id ? `id_${f.id}` : `${f.receipt_no}_${f.collected_for || f.month}_${f.amount_paid}_${f.collection_date}`
+                if (seenKeys.has(key)) return false
+                seenKeys.add(key)
+                return true
+              })
+
               const headMap = new Map<string,any[]>()
-              studentFees.forEach((f:any) => {
-                const k = f.fee_head || f.title || 'Other'
+              uniqueStudentFees.forEach((f:any) => {
+                const k = normalizeHeadName(f.fee_head, f.title)
                 if(!headMap.has(k)) headMap.set(k,[])
                 headMap.get(k)!.push(f)
               })
@@ -1104,10 +1169,10 @@ export default function StudentErpModal({
                   <p className="font-black text-[10px] uppercase tracking-wider mb-2 text-slate-500">Collection History (Fee Head Wise)</p>
                   <div className="space-y-2">
                     {Array.from(headMap.entries()).map(([head, items]) => {
-                      const totalFeeH = items.reduce((s,f)=>s+Number(f.amount||0),0)
+                      const totalFeeH = items.reduce((s,f)=>s+Number(f.amount || f.net_amount || 0),0)
                       const discH = items.reduce((s,f)=>s+Number(f.discount||0),0)
                       const paidH = items.reduce((s,f)=>s+Number(f.amount_paid||0),0)
-                      const dueH = Math.max(0, totalFeeH - discH - paidH)
+                      const dueH = Math.max(0, items.reduce((s,f)=>s+Number(f.pending_amount !== undefined ? f.pending_amount : Math.max(0, Number(f.amount||0) - Number(f.discount||0) - Number(f.amount_paid||0))), 0))
                       const isExpanded = expandedFeeHead === head
                       return (
                         <div key={head} className={`rounded-xl border overflow-hidden ${isLight?'border-slate-200':'border-slate-700'}`}>
@@ -1126,7 +1191,7 @@ export default function StudentErpModal({
                               <table className="w-full text-[10px]">
                                 <thead>
                                   <tr className={isLight?'bg-slate-50':'bg-slate-900'}>
-                                    {['#','Amount Paid (₹)','Collection Date','Mode of Payment','Payment Ref / Txn ID','Collected For Month','Receipt No.'].map(h=>(
+                                    {['#','Amount Paid (₹)','Collection Date','Mode of Payment','Payment Ref / Txn ID','Collected For Month','Receipt No.','Actions'].map(h=>(
                                       <th key={h} className={`px-3 py-2 text-left font-bold ${textSecondary}`}>{h}</th>
                                     ))}
                                   </tr>
@@ -1141,6 +1206,28 @@ export default function StudentErpModal({
                                       <td className="px-3 py-2 font-mono text-blue-600">{f.transaction_id||'NA'}</td>
                                       <td className="px-3 py-2">{f.collected_for||f.month||'One Time'}</td>
                                       <td className="px-3 py-2 font-mono text-[9px]">{f.receipt_no||'—'}</td>
+                                      <td className="px-3 py-2">
+                                        <div className="flex items-center gap-1.5">
+                                          {f.receipt_no && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handlePrintTransactionReceipt(f.receipt_no)}
+                                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded transition"
+                                              title="Download / Print Receipt"
+                                            >
+                                              <Download className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteFeeRecord(f.id)}
+                                            className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
+                                            title="Delete Transaction"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1304,6 +1391,14 @@ export default function StudentErpModal({
                               title="Share Receipt on WhatsApp"
                             >
                               <MessageSquare className="w-3.5 h-3.5" /> Share
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteReceiptTransaction(rNo)}
+                              className="px-2.5 py-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-300 dark:border-rose-800 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                              title="Delete Transaction Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
                             </button>
                           </div>
                         </div>

@@ -51,7 +51,15 @@ export default function FeeAlertsTab({
 }: FeeAlertsTabProps) {
 
   const analyzed = useMemo(() => {
+    const safeNum = (v: any): number => {
+      if (v === null || v === undefined || v === '') return 0
+      if (typeof v === 'number') return isNaN(v) ? 0 : v
+      const n = Number(String(v).replace(/[^0-9.-]+/g, ''))
+      return isNaN(n) ? 0 : n
+    }
+
     return students
+      .filter(st => st.status !== 'deactivated')
       .map(st => {
         const studentLedger = fees.filter((f: any) => f.student_id === st.id || f.students?.admission_id === st.admission_id)
         let totalFee = 0
@@ -61,20 +69,24 @@ export default function FeeAlertsTab({
 
         if (studentLedger.length > 0) {
           studentLedger.forEach((f: any) => {
-            const feeAmt = Number(f.amount || f.net_amount || 0)
-            const netAmt = Number(f.net_amount || f.amount || 0)
-            if (f.status === 'paid') paidAmount += netAmt
-            if (f.status === 'pending' || f.status === 'due') {
-              pendingAmount += netAmt
-              totalFee += feeAmt
+            const feeAmt = safeNum(f.amount || f.net_amount || 0)
+            const netAmt = safeNum(f.net_amount || f.amount || 0)
+            const paid = safeNum(f.amount_paid !== undefined ? f.amount_paid : (f.status === 'paid' ? netAmt : 0))
+            const isPaid = f.status === 'paid' || (netAmt > 0 && paid >= netAmt)
+            const pend = isPaid ? 0 : safeNum(f.pending_amount !== undefined ? f.pending_amount : Math.max(0, netAmt - paid))
+
+            totalFee += feeAmt
+            paidAmount += paid
+
+            if (!isPaid && pend > 0) {
+              pendingAmount += pend
               if (!latestDueDate || (f.due_date && f.due_date > latestDueDate)) latestDueDate = f.due_date
             }
-            if (f.status === 'paid') totalFee += feeAmt
           })
         } else {
-          const paid = Number(st.amount_paid || 0)
+          const paid = safeNum(st.amount_paid || 0)
           const batchObj = batches.find((b: any) => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name?.toLowerCase().trim()))
-          const total = st.total_fee ? Number(st.total_fee) : (batchObj ? Number(batchObj.fee_amount) : 3500)
+          const total = st.total_fee ? safeNum(st.total_fee) : (batchObj ? safeNum(batchObj.fee_amount) : 3500)
           paidAmount = paid
           pendingAmount = Math.max(0, total - paid)
           totalFee = total

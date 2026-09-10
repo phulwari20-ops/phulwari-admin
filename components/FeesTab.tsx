@@ -443,12 +443,7 @@ export default function FeesTab({
   }
 
   const handleDeleteHead = async (id: string, name: string) => {
-    const head = feeHeads.find(h => h.id === id)
-    if (head?.is_system) {
-      alert('System fee heads cannot be deleted.')
-      return
-    }
-    if (!confirm(`Are you sure you want to delete the fee head "${name}"?`)) return
+    if (!confirm(`Are you sure you want to delete the fee head "${name}"? All related references will be updated.`)) return
     setLoadingAction(true)
 
     try {
@@ -830,14 +825,13 @@ export default function FeesTab({
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
-                              {!head.is_system && (
-                                <button
-                                  onClick={() => handleDeleteHead(head.id, head.name)}
-                                  className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleDeleteHead(head.id, head.name)}
+                                className="p-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition cursor-pointer"
+                                title="Delete Fee Head"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </>
                           )}
                         </div>
