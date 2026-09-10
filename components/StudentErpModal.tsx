@@ -255,6 +255,10 @@ export default function StudentErpModal({
   }
 
   const buildInitialRows = useCallback((): FeeRow[] => {
+    if (student?.total_fee === 0) {
+      return []
+    }
+
     const studentPaidFees = (fees || []).filter(f => 
       f.student_id === student?.id || 
       f.admission_id === student?.admission_id ||
@@ -277,7 +281,7 @@ export default function StudentErpModal({
         ]
 
     const latestMonthlyFee = studentPaidFees.find(f => f.fee_head === 'Monthly Fee' || f.title?.includes('Monthly'))
-    const customMonthlyFee = student?.total_fee ? Number(student.total_fee) : (latestMonthlyFee?.amount ? Number(latestMonthlyFee.amount) : null)
+    const customMonthlyFee = student?.total_fee !== undefined && student?.total_fee !== null ? Number(student.total_fee) : (latestMonthlyFee?.amount ? Number(latestMonthlyFee.amount) : null)
 
     return systemHeads.map((h, i) => {
       const isMonthly = h.name === 'Monthly Fee'
@@ -545,15 +549,19 @@ export default function StudentErpModal({
       } catch(err) { console.error('Fee save failed:', err) }
     }
 
-    // Update student validity date and total_fee if customized
+    // Update student validity date and total_fee if customized or cleared
     try {
       const studentUpdates: any = {}
       if (planValidityEnd) {
         studentUpdates.validity_end_date = planValidityEnd
       }
-      const monthlyRow = feeRows.find(r => r.fee_head === 'Monthly Fee')
-      if (monthlyRow && monthlyRow.total_fee > 0) {
-        studentUpdates.total_fee = monthlyRow.total_fee
+      if (feeRows.length === 0) {
+        studentUpdates.total_fee = 0
+      } else {
+        const monthlyRow = feeRows.find(r => r.fee_head === 'Monthly Fee')
+        if (monthlyRow && monthlyRow.total_fee !== undefined) {
+          studentUpdates.total_fee = monthlyRow.total_fee
+        }
       }
       if (Object.keys(studentUpdates).length > 0) {
         await supabase.from('students').update(studentUpdates).eq('id', student.id)

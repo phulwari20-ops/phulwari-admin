@@ -80,6 +80,9 @@ import DeactivatedTab from '../components/DeactivatedTab'
 import GalleryTab from '../components/GalleryTab'
 import PackagesTab from '../components/PackagesTab'
 import BirthdayLandingTab from '../components/BirthdayLandingTab'
+import FaqPageTab from '../components/FaqPageTab'
+import TermsPageTab from '../components/TermsPageTab'
+import PrivacyPageTab from '../components/PrivacyPageTab'
 import NoticesTab from '../components/NoticesTab'
 import DashboardTab from '../components/DashboardTab'
 import StudentsTab from '../components/StudentsTab'
@@ -154,7 +157,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'faq_page' | 'terms_page' | 'privacy_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
   const [banners, setBanners] = useState<BannerItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -2050,7 +2053,7 @@ Management Phulwari Mother and Child Activity Centre`
     })
   }
 
-  // Device File Image Picker Upload Handler
+  // Device File Image Picker Upload Handler (100% Original Photo Quality - Zero Compression)
   const handleDeviceImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -2063,9 +2066,7 @@ Management Phulwari Mother and Child Activity Centre`
         const titleText = file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo';
 
         try {
-          const compressedBase64 = await compressImage(base64Url)
-
-          // Post directly to Supabase REST API with public anon headers
+          // Post original uncompressed photo directly to Supabase
           const supabaseUrl = getSupabaseUrl()
           const supabaseKey = getSupabaseKey()
           if (supabaseUrl && supabaseKey) {
@@ -2076,10 +2077,10 @@ Management Phulwari Mother and Child Activity Centre`
                 'apikey': supabaseKey,
                 'Authorization': `Bearer ${supabaseKey}`
               },
-              body: JSON.stringify({ image_url: compressedBase64, title: titleText, category: 'Activities' })
+              body: JSON.stringify({ image_url: base64Url, title: titleText, category: 'Activities' })
             })
             if (res.ok) {
-              console.log('✅ Photo saved to Supabase database!')
+              console.log('✅ 100% Original Photo saved to Supabase database!')
               await fetchAdminGallery();
             }
           }
@@ -3397,6 +3398,9 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
               { id: 'packages', label: 'Party Packages & Pricing', icon: Gift },
               { id: 'birthday_page', label: 'Birthday Landing Page', icon: Sparkles },
+              { id: 'faq_page', label: 'FAQ Page Editor', icon: HelpCircle },
+              { id: 'terms_page', label: 'Terms & Conditions Editor', icon: FileText },
+              { id: 'privacy_page', label: 'Privacy Policy Editor', icon: Shield },
               { id: 'announcements', label: 'Notices Broadcaster', icon: Bell, count: announcements.length },
               { id: 'bookings', label: 'Registrations & Bookings', icon: Award, count: bookings.length },
               { id: 'blogs', label: 'Blogs CMS Editor', icon: FileText },
@@ -3523,6 +3527,9 @@ Management Phulwari Mother and Child Activity Centre`
               {activeTab === 'gallery' && 'Dynamic Gallery Photo Manager'}
               {activeTab === 'packages' && 'Birthday & Party Packages Configuration'}
               {activeTab === 'birthday_page' && 'Birthday Landing Page Editor'}
+              {activeTab === 'faq_page' && 'FAQ Page Dynamic CMS Editor'}
+              {activeTab === 'terms_page' && 'Terms & Conditions CMS Editor'}
+              {activeTab === 'privacy_page' && 'Privacy Policy CMS Editor'}
               {activeTab === 'batches' && 'Batches & Class Timings'}
               {activeTab === 'bookings' && 'Party & Camp Registrations'}
               {activeTab === 'announcements' && 'Notices & Circular Broadcaster'}
@@ -3818,6 +3825,21 @@ Management Phulwari Mother and Child Activity Centre`
         {/* TAB: BIRTHDAY LANDING PAGE EDITOR */}
         {activeTab === 'birthday_page' && (
           <BirthdayLandingTab />
+        )}
+
+        {/* TAB: FAQ PAGE EDITOR */}
+        {activeTab === 'faq_page' && (
+          <FaqPageTab />
+        )}
+
+        {/* TAB: TERMS & CONDITIONS PAGE EDITOR */}
+        {activeTab === 'terms_page' && (
+          <TermsPageTab />
+        )}
+
+        {/* TAB: PRIVACY POLICY PAGE EDITOR */}
+        {activeTab === 'privacy_page' && (
+          <PrivacyPageTab />
         )}
 
         {/* TAB 1: STUDENT MANAGEMENT */}
