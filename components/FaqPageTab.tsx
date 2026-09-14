@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import * as LucideIcons from 'lucide-react'
 import {
   Save,
   Loader2,
@@ -20,6 +21,20 @@ import {
   MoveDown
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+
+const COMMON_ICONS = [
+  'HelpCircle', 'Baby', 'Music4', 'Dumbbell', 'Sparkles', 'Cake', 'Tent',
+  'Snowflake', 'ShieldCheck', 'ClipboardCheck', 'Gamepad2', 'Trophy',
+  'Clock3', 'Eye', 'Settings2', 'FileText', 'Heart', 'Star', 'Phone', 'MapPin'
+]
+
+function renderIcon(iconName: string, className: string = 'w-4 h-4', style?: React.CSSProperties) {
+  if (!iconName) return <LucideIcons.HelpCircle className={className} style={style} />
+  const clean = iconName.trim()
+  const pascal = clean.replace(/(^|[-_ ])(\w)/g, (_, __, c) => c.toUpperCase())
+  const Comp = (LucideIcons as any)[pascal] || (LucideIcons as any)[clean] || LucideIcons.HelpCircle
+  return <Comp className={className} style={style} />
+}
 
 const DEFAULT_FAQ_DATA = {
   id: 1,
@@ -450,6 +465,11 @@ export default function FaqPageTab() {
                 onChange={(e) => updateField('hero_highlight', e.target.value)}
               />
             </div>
+            <div className="md:col-span-3 flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+              <span className="text-slate-400 font-medium">Title Live Preview:</span>
+              <span>{config.hero_title || 'Find Answers to'}</span>
+              <span className="text-pink-500 font-extrabold">{config.hero_highlight || 'Common Questions'}</span>
+            </div>
             <div className="md:col-span-3">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Hero Subtitle Text</label>
               <textarea
@@ -462,11 +482,18 @@ export default function FaqPageTab() {
           </div>
         </div>
 
+        {/* Suggested icons datalist */}
+        <datalist id="faq-icon-suggestions">
+          {COMMON_ICONS.map((ic) => (
+            <option key={ic} value={ic} />
+          ))}
+        </datalist>
+
         {/* FAQ Items List */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">
-              FAQ Questions & Answers ({config.faqs?.length || 0})
+              FAQ Questions &amp; Answers ({config.faqs?.length || 0})
             </h3>
             <button
               onClick={addFaqItem}
@@ -486,6 +513,12 @@ export default function FaqPageTab() {
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-pink-100 text-pink-700 font-bold text-xs flex items-center justify-center font-mono">
                       {idx + 1}
+                    </span>
+                    <span
+                      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-2xs"
+                      style={{ backgroundColor: faq.bg || '#FFE6EF' }}
+                    >
+                      {renderIcon(faq.icon, 'w-3.5 h-3.5', { color: faq.color || '#FF4D8D' })}
                     </span>
                     <span className="text-xs font-bold text-slate-700 truncate max-w-xs">
                       {faq.question || 'Untitled Question'}
@@ -543,33 +576,48 @@ export default function FaqPageTab() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-600 mb-1">Icon Name</label>
-                      <input
-                        type="text"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none"
-                        value={faq.icon || 'HelpCircle'}
-                        onChange={(e) => updateFaqItem(idx, 'icon', e.target.value)}
-                        placeholder="HelpCircle, Baby, Music4..."
-                      />
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs"
+                          style={{ backgroundColor: faq.bg || '#FFE6EF' }}
+                        >
+                          {renderIcon(faq.icon, 'w-4 h-4', { color: faq.color || '#FF4D8D' })}
+                        </div>
+                        <input
+                          type="text"
+                          list="faq-icon-suggestions"
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none font-mono"
+                          value={faq.icon || 'HelpCircle'}
+                          onChange={(e) => updateFaqItem(idx, 'icon', e.target.value)}
+                          placeholder="HelpCircle, Baby, Music4..."
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-600 mb-1">Color Theme</label>
-                      <select
-                        value={faq.color || '#FF4D8D'}
-                        onChange={(e) => {
-                          const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
-                          if (chosen) {
-                            updateFaqItem(idx, 'color', chosen.color)
-                            updateFaqItem(idx, 'bg', chosen.bg)
-                          }
-                        }}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer"
-                      >
-                        {COLOR_OPTIONS.map((c) => (
-                          <option key={c.color} value={c.color}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-4 h-4 rounded-full shrink-0 shadow-xs border border-slate-300"
+                          style={{ backgroundColor: faq.color || '#FF4D8D' }}
+                        />
+                        <select
+                          value={faq.color || '#FF4D8D'}
+                          onChange={(e) => {
+                            const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
+                            if (chosen) {
+                              updateFaqItem(idx, 'color', chosen.color)
+                              updateFaqItem(idx, 'bg', chosen.bg)
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-medium"
+                        >
+                          {COLOR_OPTIONS.map((c) => (
+                            <option key={c.color} value={c.color}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>

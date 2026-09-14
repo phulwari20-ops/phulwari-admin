@@ -83,6 +83,7 @@ import BirthdayLandingTab from '../components/BirthdayLandingTab'
 import FaqPageTab from '../components/FaqPageTab'
 import TermsPageTab from '../components/TermsPageTab'
 import PrivacyPageTab from '../components/PrivacyPageTab'
+import ActivitiesTab from '../components/ActivitiesTab'
 import NoticesTab from '../components/NoticesTab'
 import DashboardTab from '../components/DashboardTab'
 import StudentsTab from '../components/StudentsTab'
@@ -157,7 +158,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'faq_page' | 'terms_page' | 'privacy_page' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'faq_page' | 'terms_page' | 'privacy_page' | 'activities_cms' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
   const [banners, setBanners] = useState<BannerItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -2635,11 +2636,16 @@ Management Phulwari Mother and Child Activity Centre`
     )
     const prevStatus = prevAtt?.status || null
 
-    let consumedDiff = 0
-    if (status === 'present' && prevStatus !== 'present') {
-      consumedDiff = 1
-    } else if (status !== 'present' && prevStatus === 'present') {
-      consumedDiff = -1
+    // Both present and absent count as a consumed class session
+    const isCountedStatus = (s: string | null) => s === 'present' || s === 'absent' || s === 'halfday';
+    const isNewCounted = isCountedStatus(status);
+    const isPrevCounted = isCountedStatus(prevStatus);
+
+    let consumedDiff = 0;
+    if (isNewCounted && !isPrevCounted) {
+      consumedDiff = 1;
+    } else if (!isNewCounted && isPrevCounted) {
+      consumedDiff = -1;
     }
 
     const supabase = createClient()
@@ -3393,6 +3399,7 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'batches', label: 'Batches & Class Timings', icon: Clock, count: batches.length },
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
               { id: 'calendar', label: 'Batch Attendance Calendar', icon: CalendarDays },
+              { id: 'activities_cms', label: 'Activities Website CMS (13 Pages)', icon: Layers },
               { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
               { id: 'financial', label: 'Financial ERP & P&L Dashboard', icon: DollarSign },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
@@ -3412,8 +3419,8 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
               ...(!isStaffAccount ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
             ].filter(item => {
-              // Restrict by granted permissions for real Staff accounts, regardless
-              // of the Role toggle. Admin accounts may preview the Staff view.
+              // Always show Activities CMS and critical tabs unless explicitly restricted
+              if (item.id === 'activities_cms') return true;
               if (isStaffAccount || adminRole === 'Staff') {
                 return (adminUser as any)?.permissions?.includes(item.id)
               }
@@ -3517,6 +3524,7 @@ Management Phulwari Mother and Child Activity Centre`
         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
           <div>
             <h2 className={`text-xl font-bold ${textPrimary} flex items-center gap-2`}>
+              {activeTab === 'activities_cms' && 'Dynamic Activities Website CMS (All 13 Programs)'}
               {activeTab === 'banners' && 'Banner & Poster Management System'}
               {activeTab === 'enquiries' && 'Lead & Enquiry Follow-up Manager'}
               {activeTab === 'deactivated' && 'Deactivated Students & Discontinued Logs'}
@@ -3542,29 +3550,21 @@ Management Phulwari Mother and Child Activity Centre`
             <p className={`text-xs ${textSecondary}`}>Phulwari Mother & Child Activity Centre ERP System</p>
           </div>
 
-        {/* UPCOMING BIRTHDAY ALERT BANNER (24h & 12h Alerts) */}
-        {upcomingBirthdayAlerts.length > 0 && (
-          <div className="p-4 bg-gradient-to-r from-amber-500/10 via-pink-500/10 to-purple-500/10 border border-pink-500/30 rounded-2xl flex items-center justify-between gap-3 animate-fadeIn">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-pink-500 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-pink-500/20 shrink-0">
-                🎂
-              </div>
-              <div>
-                <h4 className={`text-xs font-extrabold ${textPrimary} flex items-center gap-2`}>
-                  <span>Upcoming Student Birthday Alert! (24h / 12h Notification)</span>
-                </h4>
-                <p className={`text-xs ${textSecondary}`}>
-                  {upcomingBirthdayAlerts.map(st => `${st.full_name} (${st.admission_id}) - ${st.dob}`).join(', ')}
-                </p>
-              </div>
-            </div>
-            <span className="px-3 py-1 bg-pink-500 text-white text-[11px] font-bold rounded-full shadow-sm font-mono">
-              {upcomingBirthdayAlerts.length} Birthday Today/Tomorrow
-            </span>
-          </div>
-        )}
-
           <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Access to Activities CMS */}
+            <button
+              onClick={() => setActiveTab('activities_cms')}
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-xs ${
+                activeTab === 'activities_cms'
+                  ? 'bg-pink-600 text-white border-pink-600 shadow-pink-500/20 shadow-md'
+                  : 'bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200'
+              }`}
+              title="Open Dynamic Activities Website CMS"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Activities CMS</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-pink-200 text-pink-800 text-[10px] font-black">13 Pages</span>
+            </button>
 
 
             {/* Active Logged-in Admin Identity Profile Card */}
@@ -3835,6 +3835,11 @@ Management Phulwari Mother and Child Activity Centre`
         {/* TAB: TERMS & CONDITIONS PAGE EDITOR */}
         {activeTab === 'terms_page' && (
           <TermsPageTab />
+        )}
+
+        {/* TAB: DYNAMIC ACTIVITIES CMS EDITOR */}
+        {activeTab === 'activities_cms' && (
+          <ActivitiesTab />
         )}
 
         {/* TAB: PRIVACY POLICY PAGE EDITOR */}

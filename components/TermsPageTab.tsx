@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import * as LucideIcons from 'lucide-react'
 import {
   Save,
   Loader2,
@@ -21,6 +22,20 @@ import {
   CalendarDays
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+
+const COMMON_ICONS = [
+  'Sparkles', 'UserCheck', 'ClipboardList', 'Wallet', 'RotateCcw', 'Clock',
+  'HeartPulse', 'Camera', 'Users', 'Copyright', 'Scale', 'Gavel', 'RefreshCw',
+  'Mail', 'Shield', 'FileText', 'Star', 'CheckCircle2', 'Heart', 'Award', 'Lock', 'HelpCircle'
+]
+
+function renderIcon(iconName: string, className: string = 'w-4 h-4', style?: React.CSSProperties) {
+  if (!iconName) return <LucideIcons.FileText className={className} style={style} />
+  const clean = iconName.trim()
+  const pascal = clean.replace(/(^|[-_ ])(\w)/g, (_, __, c) => c.toUpperCase())
+  const Comp = (LucideIcons as any)[pascal] || (LucideIcons as any)[clean] || LucideIcons.FileText
+  return <Comp className={className} style={style} />
+}
 
 const DEFAULT_TERMS_DATA = {
   id: 1,
@@ -459,7 +474,7 @@ export default function TermsPageTab() {
             <Sparkles className="w-4 h-4 text-blue-500" />
             Page Title &amp; Introduction
           </h3>
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-4 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Badge Text</label>
               <input
@@ -479,15 +494,31 @@ export default function TermsPageTab() {
               />
             </div>
             <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Main / Prefix</label>
+              <input
+                type="text"
+                placeholder="e.g. Terms &"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                value={config.title_part1 || ''}
+                onChange={(e) => updateField('title_part1', e.target.value)}
+              />
+            </div>
+            <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Highlight (Pink)</label>
               <input
                 type="text"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                placeholder="e.g. Conditions"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 outline-none focus:ring-1 focus:ring-pink-500 bg-white"
                 value={config.title_highlight || ''}
                 onChange={(e) => updateField('title_highlight', e.target.value)}
               />
             </div>
-            <div className="md:col-span-3">
+            <div className="md:col-span-4 flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+              <span className="text-slate-400 font-medium">Title Live Preview:</span>
+              <span>{config.title_part1 || 'Terms &'}</span>
+              <span className="text-pink-500 font-extrabold">{config.title_highlight || 'Conditions'}</span>
+            </div>
+            <div className="md:col-span-4">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Introduction Text</label>
               <textarea
                 rows={3}
@@ -498,6 +529,13 @@ export default function TermsPageTab() {
             </div>
           </div>
         </div>
+
+        {/* Suggested icons datalist */}
+        <datalist id="terms-icon-suggestions">
+          {COMMON_ICONS.map((ic) => (
+            <option key={ic} value={ic} />
+          ))}
+        </datalist>
 
         {/* Sections List */}
         <div className="space-y-4">
@@ -523,6 +561,12 @@ export default function TermsPageTab() {
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center font-mono">
                       {sec.num || String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <span
+                      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-2xs"
+                      style={{ backgroundColor: sec.bg || '#FFE6EF' }}
+                    >
+                      {renderIcon(sec.icon, 'w-3.5 h-3.5', { color: sec.color || '#FF4D8D' })}
                     </span>
                     <span className="text-xs font-bold text-slate-700 truncate max-w-xs">
                       {sec.label || 'Untitled Section'}
@@ -588,32 +632,48 @@ export default function TermsPageTab() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-1">Icon Name</label>
-                    <input
-                      type="text"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none"
-                      value={sec.icon || 'FileText'}
-                      onChange={(e) => updateSection(idx, 'icon', e.target.value)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs"
+                        style={{ backgroundColor: sec.bg || '#FFE6EF' }}
+                      >
+                        {renderIcon(sec.icon, 'w-4 h-4', { color: sec.color || '#FF4D8D' })}
+                      </div>
+                      <input
+                        type="text"
+                        list="terms-icon-suggestions"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none font-mono"
+                        value={sec.icon || 'FileText'}
+                        onChange={(e) => updateSection(idx, 'icon', e.target.value)}
+                        placeholder="Sparkles, Shield, UserCheck..."
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-1">Color Theme</label>
-                    <select
-                      value={sec.color || '#3D8BFF'}
-                      onChange={(e) => {
-                        const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
-                        if (chosen) {
-                          updateSection(idx, 'color', chosen.color)
-                          updateSection(idx, 'bg', chosen.bg)
-                        }
-                      }}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer"
-                    >
-                      {COLOR_OPTIONS.map((c) => (
-                        <option key={c.color} value={c.color}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-4 h-4 rounded-full shrink-0 shadow-xs border border-slate-300"
+                        style={{ backgroundColor: sec.color || '#3D8BFF' }}
+                      />
+                      <select
+                        value={sec.color || '#3D8BFF'}
+                        onChange={(e) => {
+                          const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
+                          if (chosen) {
+                            updateSection(idx, 'color', chosen.color)
+                            updateSection(idx, 'bg', chosen.bg)
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-medium"
+                      >
+                        {COLOR_OPTIONS.map((c) => (
+                          <option key={c.color} value={c.color}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>

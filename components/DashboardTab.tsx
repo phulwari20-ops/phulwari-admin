@@ -248,6 +248,32 @@ export default function DashboardTab({
         )
       })()}
 
+      {/* Quick Website Activities CMS Access Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-500/10 via-rose-500/10 to-purple-500/10 border border-pink-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 text-white flex items-center justify-center font-bold shadow-md shadow-pink-500/20 shrink-0">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className={`text-sm font-extrabold ${textPrimary}`}>Dynamic Activities Website CMS</h4>
+              <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-[10px] font-black uppercase tracking-wider">13 Pages</span>
+            </div>
+            <p className={`text-xs ${textSecondary} mt-0.5`}>
+              Edit web content, headlines, images, key benefits, curriculum batches, and FAQs for Music, Dance, Yoga, MMA, Skating, and all 13 activities.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setActiveTab('activities_cms')}
+          className="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs shadow-md shadow-pink-600/20 transition cursor-pointer flex items-center justify-center gap-2 shrink-0 active:scale-95"
+        >
+          <Layers className="w-4 h-4" />
+          <span>Open Activities CMS Editor</span>
+        </button>
+      </div>
+
       {/* 6 Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
