@@ -236,14 +236,22 @@ export default function AttendanceTab({
           </div>
         ) : (
           displayItems.map((item, idx) => {
+            const liveStudent = filteredStudents.find((s: any) => s.id === item.student.id) || item.student;
             const currentAtt = attendance.find(
               (a: any) => a.student_id === item.student.id && 
                           a.date === attendanceDate && 
                           a.class_name === item.class_name && 
                           a.class_time === item.class_time
+            ) || attendance.find(
+              (a: any) => a.student_id === item.student.id && 
+                          a.date === attendanceDate && 
+                          a.class_name === item.class_name
+            ) || attendance.find(
+              (a: any) => a.student_id === item.student.id && 
+                          a.date === attendanceDate
             );
             const currentStatus = currentAtt?.status || 'unmarked';
-            const classesLeft = (item.student.classes_total || 12) - (item.student.classes_consumed || 0);
+            const classesLeft = (liveStudent.classes_total || 12) - (liveStudent.classes_consumed || 0);
 
             return (
               <div key={`${item.student.id}-${item.class_name}-${idx}`} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}>
@@ -410,7 +418,8 @@ export default function AttendanceTab({
                   (a: any) => a.student_id === st.id && a.date === attendanceDate
                 )
                 const currentStatus = currentAtt?.status || 'unmarked'
-                const classesLeft = (st.classes_total || 12) - (st.classes_consumed || 0)
+                const liveSt = filteredStudents.find((s: any) => s.id === st.id) || st
+                const classesLeft = (liveSt.classes_total || 12) - (liveSt.classes_consumed || 0)
 
                 return (
                   <div key={`unsched-${st.id}`} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}>

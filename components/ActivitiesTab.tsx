@@ -26,6 +26,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import IconPickerModal, { renderLucideIcon } from './IconPickerModal'
 
 const COMMON_ICONS = [
   'Sparkles', 'Music', 'PersonStanding', 'Dumbbell', 'Shield', 'Palette',
@@ -44,11 +45,7 @@ const COLOR_PRESETS = [
 ]
 
 function renderIcon(iconName: string, className = 'w-4 h-4', style?: React.CSSProperties) {
-  if (!iconName) return <LucideIcons.Sparkles className={className} style={style} />
-  const clean = iconName.trim()
-  const pascal = clean.replace(/(^|[-_ ])(\w)/g, (_, __, c) => c.toUpperCase())
-  const Comp = (LucideIcons as any)[pascal] || (LucideIcons as any)[clean] || LucideIcons.Sparkles
-  return <Comp className={className} style={style} />
+  return renderLucideIcon(iconName, className, style)
 }
 
 export interface ActivityRecord {
@@ -65,6 +62,7 @@ export interface ActivityRecord {
   gallery_images: string[]
   color: string
   bg: string
+  content_color?: string
   icon: string
   why_matters_title: string
   why_matters_content: string
@@ -99,6 +97,7 @@ export default function ActivitiesTab() {
   const [searchQuery, setSearchQuery] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
 
   // Fetch activities from Supabase
   const loadActivities = async () => {
@@ -114,9 +113,13 @@ export default function ActivitiesTab() {
       if (error) throw error
 
       if (data) {
-        setActivities(data as ActivityRecord[])
-        if (data.length > 0 && !selectedId) {
-          setSelectedId(data[0].id)
+        const formatted = data.map((a: any) => ({
+          ...a,
+          content_color: a.content_color || a.cta?.content_color || '#334155'
+        }))
+        setActivities(formatted as ActivityRecord[])
+        if (formatted.length > 0 && !selectedId) {
+          setSelectedId(formatted[0].id)
         }
       }
     } catch (err: any) {
@@ -149,8 +152,13 @@ export default function ActivitiesTab() {
     setSaveSuccess(false)
 
     try {
-      const payload = {
-        ...currentActivity,
+      const { content_color, ...cleanActivity } = currentActivity
+      const payload: any = {
+        ...cleanActivity,
+        cta: {
+          ...(currentActivity.cta || {}),
+          content_color: content_color || '#334155'
+        },
         updated_at: new Date().toISOString()
       }
 
@@ -160,7 +168,7 @@ export default function ActivitiesTab() {
         const res = await fetch('/api/activities', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ ...payload, content_color })
         })
         if (res.ok) {
           const resJson = await res.json()
@@ -180,12 +188,15 @@ export default function ActivitiesTab() {
           .single()
 
         if (error) throw error
-        savedData = data
+        savedData = {
+          ...data,
+          content_color: data?.cta?.content_color || content_color || '#334155'
+        }
       }
 
       if (savedData) {
         setActivities(prev =>
-          prev.map(a => (a.id === selectedId ? { ...a, ...savedData } : a))
+          prev.map(a => (a.id === selectedId ? { ...a, ...savedData, content_color: savedData.content_color || content_color || '#334155' } : a))
         )
       }
 
@@ -521,23 +532,33 @@ export default function ActivitiesTab() {
                     {/* Icon Picker with live preview */}
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                        Lucide Icon Name
+                        Activity Icon
                       </label>
                       <div className="flex items-center gap-3">
-                        <div
-                          className="w-11 h-11 rounded-xl flex items-center justify-center border shrink-0"
+                        <button
+                          type="button"
+                          onClick={() => setIsIconPickerOpen(true)}
+                          className="w-11 h-11 rounded-xl flex items-center justify-center border shrink-0 hover:scale-105 transition cursor-pointer shadow-2xs"
                           style={{ backgroundColor: currentActivity.bg, borderColor: currentActivity.color }}
+                          title="Click to choose icon visually"
                         >
                           {renderIcon(currentActivity.icon, 'w-5 h-5', { color: currentActivity.color })}
-                        </div>
+                        </button>
                         <input
                           type="text"
                           list="activity-icon-suggestions"
                           value={currentActivity.icon || ''}
                           onChange={e => updateCurrent('icon', e.target.value)}
                           placeholder="Type icon name e.g. Music, Star, Sparkles..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20"
+                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20 font-mono"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setIsIconPickerOpen(true)}
+                          className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold rounded-xl transition cursor-pointer shrink-0"
+                        >
+                          Browse Icons
+                        </button>
                         <datalist id="activity-icon-suggestions">
                           {COMMON_ICONS.map(i => (
                             <option key={i} value={i} />
@@ -560,68 +581,136 @@ export default function ActivitiesTab() {
                       </div>
                     </div>
 
-                    {/* Color Swatches */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    {/* Color Theme Title & Active Theme Indicator */}
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b border-gray-200/60">
+                        <div className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: currentActivity.color || '#FF4D8D' }} />
+                          <span>Active Color Theme:</span>
+                          <span className="text-sm font-black text-blue-600 normal-case">
+                            {COLOR_PRESETS.find(p => p.color.toLowerCase() === (currentActivity.color || '').toLowerCase())?.label || 'Custom Theme'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono text-gray-400">
+                          {currentActivity.color || '#FF4D8D'}
+                        </span>
+                      </div>
+
+                      {/* Color Presets */}
                       <div>
+                        <span className="block text-xs font-semibold text-gray-600 mb-2">Select Theme Preset:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {COLOR_PRESETS.map((p, idx) => {
+                            const isMatch = (currentActivity.color || '').toLowerCase() === p.color.toLowerCase()
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  updateCurrent('color', p.color)
+                                  updateCurrent('bg', p.bg)
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                                  isMatch
+                                    ? 'border-gray-900 bg-gray-900 text-white shadow-xs scale-105'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                                }`}
+                              >
+                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                                <span>{p.label}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Color Swatches Inputs */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Accent Color
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={currentActivity.color || '#FF4D8D'}
+                              onChange={e => updateCurrent('color', e.target.value)}
+                              className="w-10 h-10 rounded-xl cursor-pointer border p-0.5"
+                            />
+                            <input
+                              type="text"
+                              value={currentActivity.color || ''}
+                              onChange={e => updateCurrent('color', e.target.value)}
+                              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Light Background Tint
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={currentActivity.bg || '#FFE6EF'}
+                              onChange={e => updateCurrent('bg', e.target.value)}
+                              className="w-10 h-10 rounded-xl cursor-pointer border p-0.5"
+                            />
+                            <input
+                              type="text"
+                              value={currentActivity.bg || ''}
+                              onChange={e => updateCurrent('bg', e.target.value)}
+                              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content / Paragraph Text Color Customization */}
+                      <div className="pt-2 border-t border-gray-200/60">
                         <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                          Accent Color
+                          Content / Paragraph Text Color
                         </label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
-                            value={currentActivity.color || '#FF4D8D'}
-                            onChange={e => updateCurrent('color', e.target.value)}
+                            value={currentActivity.content_color || '#334155'}
+                            onChange={e => updateCurrent('content_color', e.target.value)}
                             className="w-10 h-10 rounded-xl cursor-pointer border p-0.5"
                           />
                           <input
                             type="text"
-                            value={currentActivity.color || ''}
-                            onChange={e => updateCurrent('color', e.target.value)}
-                            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono"
+                            value={currentActivity.content_color || '#334155'}
+                            onChange={e => updateCurrent('content_color', e.target.value)}
+                            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono bg-white"
+                            placeholder="#334155"
                           />
                         </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                          Light Background Tint
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={currentActivity.bg || '#FFE6EF'}
-                            onChange={e => updateCurrent('bg', e.target.value)}
-                            className="w-10 h-10 rounded-xl cursor-pointer border p-0.5"
-                          />
-                          <input
-                            type="text"
-                            value={currentActivity.bg || ''}
-                            onChange={e => updateCurrent('bg', e.target.value)}
-                            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono"
-                          />
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[11px] text-gray-400 font-medium">Quick Text Colors:</span>
+                          {[
+                            { label: 'Slate (#334155)', color: '#334155' },
+                            { label: 'Dark Slate (#1E293B)', color: '#1E293B' },
+                            { label: 'Navy (#0F172A)', color: '#0F172A' },
+                            { label: 'Neutral (#4B5563)', color: '#4B5563' },
+                            { label: 'Theme Accent', color: currentActivity.color || '#FF4D8D' }
+                          ].map(tc => (
+                            <button
+                              key={tc.label}
+                              type="button"
+                              onClick={() => updateCurrent('content_color', tc.color)}
+                              className={`px-2 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 cursor-pointer transition ${
+                                (currentActivity.content_color || '#334155').toLowerCase() === tc.color.toLowerCase()
+                                  ? 'border-gray-900 bg-gray-900 text-white shadow-xs'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tc.color }} />
+                              <span>{tc.label}</span>
+                            </button>
+                          ))}
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Color Presets */}
-                    <div>
-                      <span className="block text-xs text-gray-500 mb-1.5">Quick Palette Presets:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {COLOR_PRESETS.map((p, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              updateCurrent('color', p.color)
-                              updateCurrent('bg', p.bg)
-                            }}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs hover:scale-105 transition"
-                            style={{ borderColor: p.color }}
-                          >
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }} />
-                            <span>{p.label}</span>
-                          </button>
-                        ))}
                       </div>
                     </div>
 
@@ -744,13 +833,21 @@ export default function ActivitiesTab() {
                           className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono"
                         />
                         {currentActivity.hero_image && (
-                          <div className="w-12 h-12 rounded-xl border overflow-hidden relative shrink-0 bg-gray-50">
+                          <div className="w-12 h-12 rounded-xl border overflow-hidden relative shrink-0 bg-gray-50 flex items-center justify-center">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={currentActivity.hero_image}
                               alt="Hero preview"
                               className="w-full h-full object-cover"
-                              onError={(e) => ((e.target as any).style.display = 'none')}
+                              onError={(e: any) => {
+                                const target = e.target as HTMLImageElement
+                                if (!target.dataset.triedFallback && currentActivity.hero_image?.startsWith('/')) {
+                                  target.dataset.triedFallback = 'true'
+                                  target.src = `https://phulwari.co.in${currentActivity.hero_image}`
+                                } else {
+                                  target.src = '/phulwari_logo.webp'
+                                }
+                              }}
                             />
                           </div>
                         )}
@@ -779,13 +876,21 @@ export default function ActivitiesTab() {
                       <div className="space-y-2">
                         {(currentActivity.gallery_images || []).map((imgUrl, idx) => (
                           <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-gray-200 bg-gray-50">
-                            <div className="w-10 h-10 rounded-lg border overflow-hidden relative shrink-0 bg-white">
+                            <div className="w-10 h-10 rounded-lg border overflow-hidden relative shrink-0 bg-white flex items-center justify-center">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={imgUrl}
                                 alt={`Gallery ${idx + 1}`}
                                 className="w-full h-full object-cover"
-                                onError={(e) => ((e.target as any).style.display = 'none')}
+                                onError={(e: any) => {
+                                  const target = e.target as HTMLImageElement
+                                  if (!target.dataset.triedFallback && imgUrl?.startsWith('/')) {
+                                    target.dataset.triedFallback = 'true'
+                                    target.src = `https://phulwari.co.in${imgUrl}`
+                                  } else {
+                                    target.src = '/phulwari_logo.webp'
+                                  }
+                                }}
                               />
                             </div>
                             <input
@@ -1301,6 +1406,17 @@ export default function ActivitiesTab() {
           )}
         </div>
       </div>
+
+      {/* Reusable Icon Picker Modal */}
+      <IconPickerModal
+        isOpen={isIconPickerOpen}
+        onClose={() => setIsIconPickerOpen(false)}
+        currentIcon={currentActivity?.icon}
+        accentColor={currentActivity?.color}
+        onSelect={(iconName) => {
+          updateCurrent('icon', iconName)
+        }}
+      />
     </div>
   )
 }

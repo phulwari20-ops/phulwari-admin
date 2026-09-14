@@ -21,6 +21,7 @@ import {
   MoveDown
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import IconPickerModal, { renderLucideIcon } from './IconPickerModal'
 
 const COMMON_ICONS = [
   'HelpCircle', 'Baby', 'Music4', 'Dumbbell', 'Sparkles', 'Cake', 'Tent',
@@ -29,11 +30,7 @@ const COMMON_ICONS = [
 ]
 
 function renderIcon(iconName: string, className: string = 'w-4 h-4', style?: React.CSSProperties) {
-  if (!iconName) return <LucideIcons.HelpCircle className={className} style={style} />
-  const clean = iconName.trim()
-  const pascal = clean.replace(/(^|[-_ ])(\w)/g, (_, __, c) => c.toUpperCase())
-  const Comp = (LucideIcons as any)[pascal] || (LucideIcons as any)[clean] || LucideIcons.HelpCircle
-  return <Comp className={className} style={style} />
+  return renderLucideIcon(iconName, className, style)
 }
 
 const DEFAULT_FAQ_DATA = {
@@ -203,6 +200,7 @@ export default function FaqPageTab() {
   const [previewUrl, setPreviewUrl] = useState('https://phulwari.co.in/legal/faq')
   const [previewDevice, setPreviewDevice] = useState<'laptop' | 'phone'>('phone')
   const [isExpanded, setIsExpanded] = useState(false)
+  const [iconPickerTarget, setIconPickerTarget] = useState<{ index: number; currentIcon: string; color: string } | null>(null)
   const [laptopWidth, setLaptopWidth] = useState<number>(1280)
   const [containerWidth, setContainerWidth] = useState<number>(550)
   const previewContainerRef = useRef<HTMLDivElement>(null)
@@ -286,7 +284,8 @@ export default function FaqPageTab() {
           setConfig(DEFAULT_FAQ_DATA)
         }
       } else if (data) {
-        setConfig(data)
+        const highlightColor = data.cta_section?.hero_highlight_color || data.hero_highlight_color || '#FF4D8D'
+        setConfig({ ...data, hero_highlight_color: highlightColor })
       }
     } catch (err) {
       console.error('Error loading FAQ config:', err)
@@ -310,9 +309,22 @@ export default function FaqPageTab() {
     setSaving(true)
     setMessage('')
     try {
+      const payload: any = {
+        id: 1,
+        badge_text: config.badge_text,
+        hero_title: config.hero_title,
+        hero_highlight: config.hero_highlight,
+        hero_subtitle: config.hero_subtitle,
+        faqs: config.faqs,
+        cta_section: {
+          ...(config.cta_section || {}),
+          hero_highlight_color: config.hero_highlight_color || '#FF4D8D'
+        },
+        updated_at: new Date().toISOString()
+      }
       const { error } = await supabase
         .from('faq_page_config')
-        .upsert({ id: 1, ...config, updated_at: new Date().toISOString() })
+        .upsert(payload)
 
       if (error) throw error
       setMessage('FAQ Page changes saved and published successfully!')
@@ -457,18 +469,74 @@ export default function FaqPageTab() {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Highlight (Pink)</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Highlight Text</label>
               <input
                 type="text"
+                placeholder="e.g. Common Questions"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 outline-none focus:ring-1 focus:ring-pink-500 bg-white"
                 value={config.hero_highlight || ''}
                 onChange={(e) => updateField('hero_highlight', e.target.value)}
               />
             </div>
-            <div className="md:col-span-3 flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+
+            {/* Title Highlight Color Selector */}
+            <div className="md:col-span-3 p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: config.hero_highlight_color || '#FF4D8D' }} />
+                  Title Highlight Color
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">Selected: {config.hero_highlight_color || '#FF4D8D'}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { label: 'Rose Pink', color: '#FF4D8D' },
+                  { label: 'Ocean Blue', color: '#3D8BFF' },
+                  { label: 'Emerald Green', color: '#34B36B' },
+                  { label: 'Amber Gold', color: '#E8A621' },
+                  { label: 'Royal Purple', color: '#8B5CF6' },
+                  { label: 'Warm Orange', color: '#FF8A3D' },
+                  { label: 'Teal Green', color: '#14B8A6' },
+                  { label: 'Ruby Red', color: '#F43F5E' }
+                ].map(sw => (
+                  <button
+                    key={sw.color}
+                    type="button"
+                    onClick={() => updateField('hero_highlight_color', sw.color)}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
+                      (config.hero_highlight_color || '#FF4D8D').toLowerCase() === sw.color.toLowerCase()
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-xs scale-105'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: sw.color }} />
+                    <span>{sw.label}</span>
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 ml-auto bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Custom:</span>
+                  <input
+                    type="color"
+                    value={config.hero_highlight_color || '#FF4D8D'}
+                    onChange={(e) => updateField('hero_highlight_color', e.target.value)}
+                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={config.hero_highlight_color || '#FF4D8D'}
+                    onChange={(e) => updateField('hero_highlight_color', e.target.value)}
+                    className="w-20 px-2 py-0.5 text-xs font-mono rounded-lg border border-slate-200 outline-none bg-white uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-3 flex items-center gap-2 p-3 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
               <span className="text-slate-400 font-medium">Title Live Preview:</span>
-              <span>{config.hero_title || 'Find Answers to'}</span>
-              <span className="text-pink-500 font-extrabold">{config.hero_highlight || 'Common Questions'}</span>
+              <span className="text-sm font-bold text-slate-900">{config.hero_title || 'Find Answers to'}</span>
+              <span className="text-sm font-black" style={{ color: config.hero_highlight_color || '#FF4D8D' }}>
+                {config.hero_highlight || 'Common Questions'}
+              </span>
             </div>
             <div className="md:col-span-3">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Hero Subtitle Text</label>
@@ -573,50 +641,102 @@ export default function FaqPageTab() {
                       onChange={(e) => updateFaqItem(idx, 'answer', e.target.value)}
                     />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-600 mb-1">Icon Name</label>
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs"
+                        <button
+                          type="button"
+                          onClick={() => setIconPickerTarget({ index: idx, currentIcon: faq.icon || 'HelpCircle', color: faq.color || '#FF4D8D' })}
+                          title="Click to choose icon visually"
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs hover:scale-105 transition cursor-pointer"
                           style={{ backgroundColor: faq.bg || '#FFE6EF' }}
                         >
                           {renderIcon(faq.icon, 'w-4 h-4', { color: faq.color || '#FF4D8D' })}
-                        </div>
+                        </button>
                         <input
                           type="text"
-                          list="faq-icon-suggestions"
                           className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none font-mono"
                           value={faq.icon || 'HelpCircle'}
                           onChange={(e) => updateFaqItem(idx, 'icon', e.target.value)}
-                          placeholder="HelpCircle, Baby, Music4..."
+                          placeholder="HelpCircle, Baby, Sparkles..."
                         />
+                        <button
+                          type="button"
+                          onClick={() => setIconPickerTarget({ index: idx, currentIcon: faq.icon || 'HelpCircle', color: faq.color || '#FF4D8D' })}
+                          className="px-2.5 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 border border-pink-200 text-[11px] font-bold rounded-lg transition shrink-0 cursor-pointer"
+                        >
+                          Browse
+                        </button>
+                      </div>
+
+                      {/* Quick Icon Chips */}
+                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                        <span className="text-[9px] text-slate-400 font-semibold uppercase">Popular:</span>
+                        {['HelpCircle', 'Baby', 'Sparkles', 'Heart', 'Smile', 'Cake', 'Music4', 'Trophy', 'Star'].map(ic => (
+                          <button
+                            key={ic}
+                            type="button"
+                            onClick={() => updateFaqItem(idx, 'icon', ic)}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                              (faq.icon || '').toLowerCase() === ic.toLowerCase()
+                                ? 'bg-pink-600 text-white border-pink-600 font-bold'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {ic}
+                          </button>
+                        ))}
                       </div>
                     </div>
+
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-600 mb-1">Color Theme</label>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-4 h-4 rounded-full shrink-0 shadow-xs border border-slate-300"
-                          style={{ backgroundColor: faq.color || '#FF4D8D' }}
-                        />
-                        <select
-                          value={faq.color || '#FF4D8D'}
-                          onChange={(e) => {
-                            const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
-                            if (chosen) {
-                              updateFaqItem(idx, 'color', chosen.color)
-                              updateFaqItem(idx, 'bg', chosen.bg)
-                            }
-                          }}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-medium"
-                        >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-5 h-5 rounded-full shrink-0 shadow-xs border border-slate-300"
+                            style={{ backgroundColor: faq.color || '#FF4D8D' }}
+                          />
+                          <select
+                            value={COLOR_OPTIONS.find(c => c.color.toLowerCase() === (faq.color || '').toLowerCase())?.color || faq.color || '#FF4D8D'}
+                            onChange={(e) => {
+                              const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
+                              if (chosen) {
+                                updateFaqItem(idx, 'color', chosen.color)
+                                updateFaqItem(idx, 'bg', chosen.bg)
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-bold text-slate-800 bg-white"
+                          >
+                            {COLOR_OPTIONS.map((c) => (
+                              <option key={c.color} value={c.color}>
+                                {c.label} ({c.color})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Quick Swatch Pills */}
+                        <div className="flex items-center gap-1.5 pt-0.5">
                           {COLOR_OPTIONS.map((c) => (
-                            <option key={c.color} value={c.color}>
-                              {c.label}
-                            </option>
+                            <button
+                              key={c.color}
+                              type="button"
+                              title={c.label}
+                              onClick={() => {
+                                updateFaqItem(idx, 'color', c.color)
+                                updateFaqItem(idx, 'bg', c.bg)
+                              }}
+                              className={`w-4 h-4 rounded-full transition-transform cursor-pointer border ${
+                                (faq.color || '').toLowerCase() === c.color.toLowerCase()
+                                  ? 'scale-125 ring-2 ring-pink-500 border-white'
+                                  : 'border-slate-300 hover:scale-110 opacity-70 hover:opacity-100'
+                              }`}
+                              style={{ backgroundColor: c.color }}
+                            />
                           ))}
-                        </select>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -795,6 +915,19 @@ export default function FaqPageTab() {
           )}
         </div>
       </div>
+
+      {/* Reusable Icon Picker Modal */}
+      <IconPickerModal
+        isOpen={iconPickerTarget !== null}
+        onClose={() => setIconPickerTarget(null)}
+        currentIcon={iconPickerTarget?.currentIcon}
+        accentColor={iconPickerTarget?.color}
+        onSelect={(iconName) => {
+          if (iconPickerTarget !== null) {
+            updateFaqItem(iconPickerTarget.index, 'icon', iconName)
+          }
+        }}
+      />
     </div>
   )
 }

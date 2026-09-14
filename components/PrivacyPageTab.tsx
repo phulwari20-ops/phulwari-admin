@@ -21,6 +21,7 @@ import {
   MoveDown
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import IconPickerModal, { renderLucideIcon } from './IconPickerModal'
 
 const COMMON_ICONS = [
   'Shield', 'Database', 'FileText', 'CreditCard', 'Share2', 'Clock', 'Lock',
@@ -29,11 +30,7 @@ const COMMON_ICONS = [
 ]
 
 function renderIcon(iconName: string, className: string = 'w-4 h-4', style?: React.CSSProperties) {
-  if (!iconName) return <LucideIcons.Shield className={className} style={style} />
-  const clean = iconName.trim()
-  const pascal = clean.replace(/(^|[-_ ])(\w)/g, (_, __, c) => c.toUpperCase())
-  const Comp = (LucideIcons as any)[pascal] || (LucideIcons as any)[clean] || LucideIcons.Shield
-  return <Comp className={className} style={style} />
+  return renderLucideIcon(iconName, className, style)
 }
 
 const DEFAULT_PRIVACY_DATA = {
@@ -210,6 +207,7 @@ export default function PrivacyPageTab() {
   const [previewUrl, setPreviewUrl] = useState('https://phulwari.co.in/legal/privacy')
   const [previewDevice, setPreviewDevice] = useState<'laptop' | 'phone'>('phone')
   const [isExpanded, setIsExpanded] = useState(false)
+  const [iconPickerTarget, setIconPickerTarget] = useState<{ index: number; currentIcon: string; color: string } | null>(null)
   const [laptopWidth, setLaptopWidth] = useState<number>(1280)
   const [containerWidth, setContainerWidth] = useState<number>(550)
   const previewContainerRef = useRef<HTMLDivElement>(null)
@@ -293,7 +291,8 @@ export default function PrivacyPageTab() {
           setConfig(DEFAULT_PRIVACY_DATA)
         }
       } else if (data) {
-        setConfig(data)
+        const highlightColor = data.contact_info?.title_highlight_color || data.title_highlight_color || '#3D8BFF'
+        setConfig({ ...data, title_highlight_color: highlightColor })
       }
     } catch (err) {
       console.error('Error loading Privacy config:', err)
@@ -317,9 +316,25 @@ export default function PrivacyPageTab() {
     setSaving(true)
     setMessage('')
     try {
+      const payload: any = {
+        id: 1,
+        badge_text: config.badge_text,
+        last_updated: config.last_updated,
+        title_part1: config.title_part1,
+        title_highlight: config.title_highlight,
+        title_part2: config.title_part2,
+        intro_text: config.intro_text,
+        sections: config.sections,
+        contact_info: {
+          ...(config.contact_info || {}),
+          title_highlight_color: config.title_highlight_color || '#3D8BFF'
+        },
+        closing_banner: config.closing_banner,
+        updated_at: new Date().toISOString()
+      }
       const { error } = await supabase
         .from('privacy_page_config')
-        .upsert({ id: 1, ...config, updated_at: new Date().toISOString() })
+        .upsert(payload)
 
       if (error) throw error
       setMessage('Privacy Policy page saved and published successfully!')
@@ -476,7 +491,7 @@ export default function PrivacyPageTab() {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Highlight (Blue)</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Title Highlight Text</label>
               <input
                 type="text"
                 placeholder="e.g. Privacy"
@@ -485,11 +500,66 @@ export default function PrivacyPageTab() {
                 onChange={(e) => updateField('title_highlight', e.target.value)}
               />
             </div>
-            <div className="md:col-span-4 flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+
+            {/* Title Highlight Color Selector */}
+            <div className="md:col-span-4 p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: config.title_highlight_color || '#3D8BFF' }} />
+                  Title Highlight Color
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">Selected: {config.title_highlight_color || '#3D8BFF'}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { label: 'Ocean Blue', color: '#3D8BFF' },
+                  { label: 'Rose Pink', color: '#FF4D8D' },
+                  { label: 'Emerald Green', color: '#34B36B' },
+                  { label: 'Amber Gold', color: '#E8A621' },
+                  { label: 'Royal Purple', color: '#8B5CF6' },
+                  { label: 'Warm Orange', color: '#FF8A3D' },
+                  { label: 'Teal Green', color: '#14B8A6' },
+                  { label: 'Ruby Red', color: '#F43F5E' }
+                ].map(sw => (
+                  <button
+                    key={sw.color}
+                    type="button"
+                    onClick={() => updateField('title_highlight_color', sw.color)}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
+                      (config.title_highlight_color || '#3D8BFF').toLowerCase() === sw.color.toLowerCase()
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-xs scale-105'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: sw.color }} />
+                    <span>{sw.label}</span>
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 ml-auto bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Custom:</span>
+                  <input
+                    type="color"
+                    value={config.title_highlight_color || '#3D8BFF'}
+                    onChange={(e) => updateField('title_highlight_color', e.target.value)}
+                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={config.title_highlight_color || '#3D8BFF'}
+                    onChange={(e) => updateField('title_highlight_color', e.target.value)}
+                    className="w-20 px-2 py-0.5 text-xs font-mono rounded-lg border border-slate-200 outline-none bg-white uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-4 flex items-center gap-2 p-3 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
               <span className="text-slate-400 font-medium">Title Live Preview:</span>
-              <span>{config.title_part1 || 'Your'}</span>
-              <span className="text-blue-500 font-extrabold">{config.title_highlight || 'Privacy'}</span>
-              <span>{config.title_part2 || 'Matters'}</span>
+              <span className="text-sm font-bold text-slate-900">{config.title_part1 || 'Your'}</span>
+              <span className="text-sm font-black" style={{ color: config.title_highlight_color || '#3D8BFF' }}>
+                {config.title_highlight || 'Privacy'}
+              </span>
+              <span className="text-sm font-bold text-slate-900">{config.title_part2 || 'Matters'}</span>
             </div>
             <div className="md:col-span-4">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Introduction Text</label>
@@ -606,46 +676,98 @@ export default function PrivacyPageTab() {
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-1">Icon Name</label>
                     <div className="flex items-center gap-2">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs"
-                        style={{ backgroundColor: sec.bg || '#FFE6EF' }}
+                      <button
+                        type="button"
+                        onClick={() => setIconPickerTarget({ index: idx, currentIcon: sec.icon || 'Shield', color: sec.color || '#34B36B' })}
+                        title="Click to choose icon visually"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs hover:scale-105 transition cursor-pointer"
+                        style={{ backgroundColor: sec.bg || '#E3F7EA' }}
                       >
                         {renderIcon(sec.icon, 'w-4 h-4', { color: sec.color || '#34B36B' })}
-                      </div>
+                      </button>
                       <input
                         type="text"
-                        list="privacy-icon-suggestions"
                         className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none font-mono"
                         value={sec.icon || 'Shield'}
                         onChange={(e) => updateSection(idx, 'icon', e.target.value)}
                         placeholder="Shield, Lock, Database..."
                       />
+                      <button
+                        type="button"
+                        onClick={() => setIconPickerTarget({ index: idx, currentIcon: sec.icon || 'Shield', color: sec.color || '#34B36B' })}
+                        className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-[11px] font-bold rounded-lg transition shrink-0 cursor-pointer"
+                      >
+                        Browse
+                      </button>
+                    </div>
+
+                    {/* Quick Icon Chips */}
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <span className="text-[9px] text-slate-400 font-semibold uppercase">Popular:</span>
+                      {['Shield', 'Lock', 'Database', 'FileText', 'CreditCard', 'Share2', 'Clock', 'UserCheck', 'Eye'].map(ic => (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => updateSection(idx, 'icon', ic)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                            (sec.icon || '').toLowerCase() === ic.toLowerCase()
+                              ? 'bg-emerald-600 text-white border-emerald-600 font-bold'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {ic}
+                        </button>
+                      ))}
                     </div>
                   </div>
+
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-1">Color Theme</label>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-4 h-4 rounded-full shrink-0 shadow-xs border border-slate-300"
-                        style={{ backgroundColor: sec.color || '#34B36B' }}
-                      />
-                      <select
-                        value={sec.color || '#34B36B'}
-                        onChange={(e) => {
-                          const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
-                          if (chosen) {
-                            updateSection(idx, 'color', chosen.color)
-                            updateSection(idx, 'bg', chosen.bg)
-                          }
-                        }}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-medium"
-                      >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 shadow-xs border border-slate-300"
+                          style={{ backgroundColor: sec.color || '#34B36B' }}
+                        />
+                        <select
+                          value={COLOR_OPTIONS.find(c => c.color.toLowerCase() === (sec.color || '').toLowerCase())?.color || sec.color || '#34B36B'}
+                          onChange={(e) => {
+                            const chosen = COLOR_OPTIONS.find((c) => c.color === e.target.value)
+                            if (chosen) {
+                              updateSection(idx, 'color', chosen.color)
+                              updateSection(idx, 'bg', chosen.bg)
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none cursor-pointer font-bold text-slate-800 bg-white"
+                        >
+                          {COLOR_OPTIONS.map((c) => (
+                            <option key={c.color} value={c.color}>
+                              {c.label} ({c.color})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Quick Swatch Pills */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
                         {COLOR_OPTIONS.map((c) => (
-                          <option key={c.color} value={c.color}>
-                            {c.label}
-                          </option>
+                          <button
+                            key={c.color}
+                            type="button"
+                            title={c.label}
+                            onClick={() => {
+                              updateSection(idx, 'color', c.color)
+                              updateSection(idx, 'bg', c.bg)
+                            }}
+                            className={`w-4 h-4 rounded-full transition-transform cursor-pointer border ${
+                              (sec.color || '').toLowerCase() === c.color.toLowerCase()
+                                ? 'scale-125 ring-2 ring-emerald-500 border-white'
+                                : 'border-slate-300 hover:scale-110 opacity-70 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: c.color }}
+                          />
                         ))}
-                      </select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -823,6 +945,19 @@ export default function PrivacyPageTab() {
           )}
         </div>
       </div>
+
+      {/* Reusable Icon Picker Modal */}
+      <IconPickerModal
+        isOpen={iconPickerTarget !== null}
+        onClose={() => setIconPickerTarget(null)}
+        currentIcon={iconPickerTarget?.currentIcon}
+        accentColor={iconPickerTarget?.color}
+        onSelect={(iconName) => {
+          if (iconPickerTarget !== null) {
+            updateSection(iconPickerTarget.index, 'icon', iconName)
+          }
+        }}
+      />
     </div>
   )
 }

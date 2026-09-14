@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle } from 'lucide-react';
+import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle, RefreshCw, Loader2 } from 'lucide-react';
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '—';
@@ -28,6 +28,8 @@ interface EnquiriesTabProps {
   badgePassword: string;
   isLight: boolean;
   enquiries: any[];
+  loading?: boolean;
+  onRefresh?: () => void;
   onUpdateStatus: (id: string, status: string) => void;
   onUpdateFollowUpDate?: (id: string, date: string) => void;
   onUpdateNotes?: (id: string, notes: string) => void;
@@ -38,33 +40,37 @@ interface EnquiriesTabProps {
 
 export default function EnquiriesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, badgePassword, isLight,
-  enquiries, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
+  enquiries, loading = false, onRefresh, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
 }: EnquiriesTabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [logModalEnq, setLogModalEnq] = useState<any | null>(null);
   const [newLogText, setNewLogText] = useState('');
   const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState({
+    date: new Date().toISOString().split('T')[0],
     child_name: '',
     age: '',
     parent_name: '',
     phone: '',
     email: '',
     program_interested: 'Gymnastics & MMA',
-    notes: ''
+    notes: '',
+    next_follow_up_date: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAddEnquiry(form);
     setForm({
+      date: new Date().toISOString().split('T')[0],
       child_name: '',
       age: '',
       parent_name: '',
       phone: '',
       email: '',
       program_interested: 'Gymnastics & MMA',
-      notes: ''
+      notes: '',
+      next_follow_up_date: ''
     });
     setIsOpen(false);
   };
@@ -170,13 +176,29 @@ export default function EnquiriesTab({
             </h3>
             <p className={`text-xs ${textSecondary}`}>Track incoming enquiries, trial sessions, and easily convert hot leads to student registrations.</p>
           </div>
-          <button
-            onClick={() => setIsOpen(true)}
-            className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-pink-600/20 transition cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Enquiry</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={loading}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition cursor-pointer ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                }`}
+                title="Refresh leads from Supabase"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-pink-500' : ''}`} />
+                <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+            )}
+            <button
+              onClick={() => setIsOpen(true)}
+              className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-pink-600/20 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Enquiry</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -193,9 +215,23 @@ export default function EnquiriesTab({
               </tr>
             </thead>
             <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
-              {enquiries.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-slate-400 font-semibold">No enquiries tracked yet.</td>
+                  <td colSpan={7} className="text-center py-12 text-slate-400 font-semibold">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin text-pink-500" />
+                      <span>Loading leads from database...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : enquiries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-10 text-slate-400 font-semibold">
+                    <div className="space-y-1">
+                      <p className="text-sm">No enquiries tracked yet.</p>
+                      <p className="text-[11px] text-slate-400">Click &quot;Add New Enquiry&quot; above to log an inquiry.</p>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 enquiries.map((enq) => (
@@ -396,6 +432,28 @@ export default function EnquiriesTab({
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Enquiry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Next Follow-up Date</label>
+                  <input
+                    type="date"
+                    value={form.next_follow_up_date}
+                    onChange={(e) => setForm({ ...form, next_follow_up_date: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
                   />
                 </div>
               </div>

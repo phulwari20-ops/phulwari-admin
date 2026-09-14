@@ -42,8 +42,13 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient();
+    const { content_color, ...cleanBody } = body;
     const payload = {
-      ...body,
+      ...cleanBody,
+      cta: {
+        ...(cleanBody.cta || {}),
+        ...(content_color ? { content_color } : {}),
+      },
       id: body.id || body.slug,
       updated_at: new Date().toISOString(),
     };
@@ -56,7 +61,12 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    const returnData = {
+      ...data,
+      content_color: data?.cta?.content_color || content_color || '#334155',
+    };
+
+    return NextResponse.json({ success: true, data: returnData });
   } catch (err: any) {
     console.error('API /api/activities POST error:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });

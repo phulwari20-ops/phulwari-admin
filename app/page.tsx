@@ -296,7 +296,16 @@ export default function AdminDashboardPage() {
   // Data states
   const [students, setStudents] = useState<any[]>([])
   // ERP upgrades & enhancements state
-  const [enquiries, setEnquiries] = useState<any[]>([])
+  const [enquiries, setEnquiries] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('phulwari_admin_enquiries')
+        if (cached) return JSON.parse(cached)
+      } catch (_) {}
+    }
+    return []
+  })
+  const [loadingEnquiries, setLoadingEnquiries] = useState<boolean>(false)
   const [adminRole, setAdminRole] = useState<'Admin' | 'Staff'>('Admin')
   const [categories, setCategories] = useState<any[]>(() => [
     { id: 'cat-1', name: 'Child Activity', emoji: '🧸' },
@@ -819,6 +828,42 @@ export default function AdminDashboardPage() {
     return () => { try { supabase.removeChannel(channel) } catch (e) {} }
   }, [])
 
+  const fetchEnquiries = async () => {
+    setLoadingEnquiries(true)
+    try {
+      const supabase = createClient()
+      const { data: dbEnquiries, error } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (!error && dbEnquiries && dbEnquiries.length > 0) {
+        setEnquiries(dbEnquiries)
+        try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(dbEnquiries)) } catch (_) {}
+      } else if (!error && dbEnquiries) {
+        setEnquiries(dbEnquiries)
+        try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(dbEnquiries)) } catch (_) {}
+      } else {
+        const cached = localStorage.getItem('phulwari_admin_enquiries')
+        if (cached) setEnquiries(JSON.parse(cached))
+      }
+    } catch (e) {
+      console.error('❌ [ENQUIRIES FETCH ERROR]:', e)
+      const cached = localStorage.getItem('phulwari_admin_enquiries')
+      if (cached) {
+        try { setEnquiries(JSON.parse(cached)) } catch (_) {}
+      }
+    } finally {
+      setLoadingEnquiries(false)
+    }
+  }
+
+  // Always refresh enquiries whenever the user switches to the Lead & Enquiry tab
+  useEffect(() => {
+    if (activeTab === 'enquiries') {
+      fetchEnquiries()
+    }
+  }, [activeTab])
+
   const loadAllAdminData = async () => {
     setLoading(true)
 
@@ -1007,12 +1052,7 @@ export default function AdminDashboardPage() {
 
       // 8. Fetch Enquiries
       try {
-        const { data: dbEnquiries } = await supabase.from('enquiries').select('*').order('created_at', { ascending: false })
-        if (dbEnquiries && dbEnquiries.length > 0) {
-          setEnquiries(dbEnquiries)
-        } else {
-          setEnquiries([])
-        }
+        await fetchEnquiries()
       } catch (e) {
         console.error('❌ [ENQUIRIES FETCH ERROR]:', e)
       }
@@ -1102,7 +1142,7 @@ export default function AdminDashboardPage() {
   // lead & enquiries handlers
   const handleAddEnquiry = async (form: any) => {
     const supabase = createClient()
-    const newEnq = {
+    const newEnq: any = {
       child_name: form.child_name,
       age: form.age,
       parent_name: form.parent_name,
@@ -1110,12 +1150,19 @@ export default function AdminDashboardPage() {
       email: form.email,
       program_interested: form.program_interested,
       notes: form.notes,
-      status: 'New'
+      status: 'New',
+      date: form.date || new Date().toISOString().split('T')[0],
+      next_follow_up_date: form.next_follow_up_date || null
     }
     const { data, error } = await supabase.from('enquiries').insert([newEnq]).select()
-    if (!error && data) {
-      setEnquiries([data[0], ...enquiries])
+    if (!error && data && data.length > 0) {
+      const updated = [data[0], ...enquiries]
+      setEnquiries(updated)
+      try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
       alert('🎉 Enquiry logged successfully!')
+    } else {
+      console.error('❌ [ENQUIRY INSERT ERROR]:', error)
+      alert(`Failed to save enquiry: ${error?.message || 'Unknown error'}`)
     }
   }
 
@@ -1123,14 +1170,18 @@ export default function AdminDashboardPage() {
     const supabase = createClient()
     const { error } = await supabase.from('enquiries').update({ status }).eq('id', id)
     if (!error) {
-      setEnquiries(enquiries.map(e => e.id === id ? { ...e, status } : e))
+      const updated = enquiries.map(e => e.id === id ? { ...e, status } : e)
+      setEnquiries(updated)
+      try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
     }
   }
 
   // Save the "Next Follow-up Date" for a lead so the admin can schedule and
   // later update the next call. Degrades gracefully if the column is missing.
   const handleUpdateFollowUpDate = async (id: string, next_follow_up_date: string) => {
-    setEnquiries(prev => prev.map(e => e.id === id ? { ...e, next_follow_up_date } : e))
+    const updated = enquiries.map(e => e.id === id ? { ...e, next_follow_up_date } : e)
+    setEnquiries(updated)
+    try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
     try {
       const supabase = createClient()
       const { error } = await supabase.from('enquiries').update({ next_follow_up_date }).eq('id', id)
@@ -1139,7 +1190,9 @@ export default function AdminDashboardPage() {
   }
 
   const handleUpdateEnquiryNotes = async (id: string, notes: string) => {
-    setEnquiries(prev => prev.map(e => e.id === id ? { ...e, notes } : e))
+    const updated = enquiries.map(e => e.id === id ? { ...e, notes } : e)
+    setEnquiries(updated)
+    try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
     try {
       const supabase = createClient()
       const { error } = await supabase.from('enquiries').update({ notes }).eq('id', id)
@@ -1185,7 +1238,9 @@ export default function AdminDashboardPage() {
     const supabase = createClient()
     const { error } = await supabase.from('enquiries').delete().eq('id', id)
     if (!error) {
-      setEnquiries(enquiries.filter(e => e.id !== id))
+      const updated = enquiries.filter(e => e.id !== id)
+      setEnquiries(updated)
+      try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
     }
   }
 
@@ -2630,9 +2685,13 @@ Management Phulwari Mother and Child Activity Centre`
   ) => {
     const targetStudent = students.find(s => s.id === studentId || s.admission_id === studentId)
 
-    // Find previous status of this student's attendance on this date/class/time slot
+    // Find previous status of this student's attendance on this date/class/time slot with fallback
     const prevAtt = attendance.find(
       a => a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime
+    ) || attendance.find(
+      a => a.student_id === studentId && a.date === targetDate && a.class_name === className
+    ) || attendance.find(
+      a => a.student_id === studentId && a.date === targetDate
     )
     const prevStatus = prevAtt?.status || null
 
@@ -2648,13 +2707,19 @@ Management Phulwari Mother and Child Activity Centre`
       consumedDiff = -1;
     }
 
+    const isMatchingEntry = (a: any) => {
+      if (a.student_id !== studentId || a.date !== targetDate) return false;
+      if (prevAtt?.id && a.id === prevAtt.id) return true;
+      if (a.class_name === className && a.class_time === classTime) return true;
+      if (a.class_name === className) return true;
+      return true;
+    };
+
     const supabase = createClient()
 
     if (status === 'unmarked') {
       // Optimistic local state update
-      setAttendance(prev => prev.filter(
-        a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
-      ))
+      setAttendance(prev => prev.filter(a => !isMatchingEntry(a)))
 
       if (consumedDiff !== 0 && targetStudent) {
         const currentConsumed = Number(targetStudent.classes_consumed || 0)
@@ -2666,13 +2731,14 @@ Management Phulwari Mother and Child Activity Centre`
       }
 
       try {
-        const { error } = await supabase.from('attendance')
-          .delete()
-          .eq('student_id', studentId)
-          .eq('date', targetDate)
-          .eq('class_name', className)
-          .eq('class_time', classTime)
-        if (error) throw error
+        let q = supabase.from('attendance').delete()
+        if (prevAtt?.id) {
+          const { error } = await q.eq('id', prevAtt.id)
+          if (error) throw error
+        } else {
+          const { error } = await q.eq('student_id', studentId).eq('date', targetDate)
+          if (error) throw error
+        }
       } catch (err) {
         console.error('❌ [ATTENDANCE DELETE ERROR]:', err)
         await refreshAttendanceFromDb()
@@ -2681,10 +2747,9 @@ Management Phulwari Mother and Child Activity Centre`
     }
 
     setAttendance(prev => {
-      const filtered = prev.filter(
-        a => !(a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime)
-      )
+      const filtered = prev.filter(a => !isMatchingEntry(a))
       const newEntry = {
+        id: prevAtt?.id || undefined,
         student_id: studentId,
         date: targetDate,
         status: status,
@@ -2727,25 +2792,39 @@ Management Phulwari Mother and Child Activity Centre`
     }
 
     try {
-      const { error } = await supabase
-        .from('attendance')
-        .upsert(
-          [
-            {
-              student_id: studentId,
-              date: targetDate,
-              status,
-              class_name: className,
-              class_time: classTime,
-              remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
-              leave_reason: status === 'leave' ? reason : null,
-              holiday_reason: status === 'holiday' ? reason : null
-            }
-          ],
-          { onConflict: 'student_id,date,class_name,class_time' }
-        )
-
-      if (error) throw error
+      if (prevAtt?.id) {
+        const { error } = await supabase
+          .from('attendance')
+          .update({
+            status,
+            class_name: className,
+            class_time: classTime,
+            remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
+            leave_reason: status === 'leave' ? reason : null,
+            holiday_reason: status === 'holiday' ? reason : null
+          })
+          .eq('id', prevAtt.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('attendance')
+          .upsert(
+            [
+              {
+                student_id: studentId,
+                date: targetDate,
+                status,
+                class_name: className,
+                class_time: classTime,
+                remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
+                leave_reason: status === 'leave' ? reason : null,
+                holiday_reason: status === 'holiday' ? reason : null
+              }
+            ],
+            { onConflict: 'student_id,date,class_name,class_time' }
+          )
+        if (error) throw error
+      }
     } catch (err: any) {
       console.error('❌ [ATTENDANCE UPSERT ERROR]:', err)
       alert(
@@ -3915,6 +3994,8 @@ Management Phulwari Mother and Child Activity Centre`
             badgePassword={badgePassword}
             isLight={isLight}
             enquiries={enquiries}
+            loading={loadingEnquiries}
+            onRefresh={fetchEnquiries}
             onUpdateStatus={handleUpdateEnquiryStatus}
             onUpdateFollowUpDate={handleUpdateFollowUpDate}
             onUpdateNotes={handleUpdateEnquiryNotes}
