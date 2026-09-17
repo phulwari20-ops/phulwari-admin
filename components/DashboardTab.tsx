@@ -141,6 +141,82 @@ export default function DashboardTab({
     return diffDays >= 0 && diffDays <= 5;
   });
 
+  // Dynamic Consolidated Recent Fee Collections (Deduplicated by Receipt Number, Real Batch & Student Names)
+  const recentFeeCollections = React.useMemo(() => {
+    const receiptMap = new Map<string, any>();
+    
+    // Sort all fees by date/time descending first
+    const sortedFees = [...(fees || [])].sort((a: any, b: any) => {
+      const timeA = new Date(a.collection_time || a.collection_date || a.created_at || a.date || a.due_date || 0).getTime();
+      const timeB = new Date(b.collection_time || b.collection_date || b.created_at || b.date || b.due_date || 0).getTime();
+      return timeB - timeA;
+    });
+
+    sortedFees.forEach((f: any) => {
+      const rNo = (f.receipt_no || '').trim();
+      const key = rNo && rNo !== 'N/A' ? rNo : (f.id || `fee-${Math.random()}`);
+      
+      const paid = Number(f.amount_paid !== undefined && f.amount_paid !== null ? f.amount_paid : (f.amount || f.net_amount || 0)) || 0;
+      const total = Number(f.net_amount !== undefined && f.net_amount !== null ? f.net_amount : (f.amount || paid)) || paid;
+      const pending = Number(f.pending_amount !== undefined && f.pending_amount !== null ? f.pending_amount : Math.max(0, total - paid)) || 0;
+
+      if (!receiptMap.has(key)) {
+        const matchedStudent = (students || []).find((s: any) => 
+          (f.student_id && s.id === f.student_id) || 
+          (f.admission_id && s.admission_id === f.admission_id) || 
+          (f.students?.admission_id && s.admission_id === f.students.admission_id) ||
+          (f.student_name && s.full_name && s.full_name.trim().toLowerCase() === f.student_name.trim().toLowerCase())
+        );
+
+        const studentName = f.students?.full_name || f.student_name || matchedStudent?.full_name || 'N/A';
+        const rawBatchName = f.students?.batch_name || f.batch_name || matchedStudent?.batch_name || matchedStudent?.class_name;
+        const batchName = rawBatchName && rawBatchName !== 'General' ? rawBatchName : (matchedStudent?.batch_name || 'General Batch');
+        
+        let dateStr = f.collection_date || f.date || (f.collection_time ? f.collection_time.split('T')[0] : (f.created_at ? f.created_at.split('T')[0] : ''));
+        if (!dateStr || dateStr === 'N/A') {
+          dateStr = new Date().toISOString().split('T')[0];
+        }
+
+        const rawTime = new Date(f.collection_time || f.collection_date || f.created_at || f.date || 0).getTime();
+
+        receiptMap.set(key, {
+          id: f.id || key,
+          receipt_no: rNo || f.id || 'N/A',
+          student_name: studentName,
+          batch_name: batchName,
+          amount_paid: paid,
+          total_amount: total,
+          pending_amount: pending,
+          date: dateStr,
+          raw_time: rawTime,
+          status: f.status || (pending > 0 ? (paid > 0 ? 'partial' : 'pending') : 'paid'),
+          payment_method: f.payment_method || f.mode_of_payment || 'UPI / Online'
+        });
+      } else {
+        // Accumulate amounts for the same receipt number
+        const existing = receiptMap.get(key);
+        existing.amount_paid += paid;
+        existing.total_amount += total;
+        existing.pending_amount += pending;
+        if (!existing.student_name || existing.student_name === 'N/A') {
+          const matchedStudent = (students || []).find((s: any) => 
+            (f.student_id && s.id === f.student_id) || 
+            (f.admission_id && s.admission_id === f.admission_id) || 
+            (f.students?.admission_id && s.admission_id === f.students.admission_id)
+          );
+          if (matchedStudent) {
+            existing.student_name = matchedStudent.full_name;
+            if (matchedStudent.batch_name) existing.batch_name = matchedStudent.batch_name;
+          }
+        }
+      }
+    });
+
+    return Array.from(receiptMap.values())
+      .sort((a, b) => b.raw_time - a.raw_time)
+      .slice(0, 6);
+  }, [fees, students]);
+
   return (
     <div className="space-y-6">
       {/* Expiry & Remaining Class Alerts */}
@@ -257,10 +333,10 @@ export default function DashboardTab({
           <div>
             <div className="flex items-center gap-2">
               <h4 className={`text-sm font-extrabold ${textPrimary}`}>Dynamic Activities Website CMS</h4>
-              <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-[10px] font-black uppercase tracking-wider">13 Pages</span>
+              <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-[10px] font-black uppercase tracking-wider">Dynamic Sync</span>
             </div>
             <p className={`text-xs ${textSecondary} mt-0.5`}>
-              Edit web content, headlines, images, key benefits, curriculum batches, and FAQs for Music, Dance, Yoga, MMA, Skating, and all 13 activities.
+              Edit web content, headlines, images, key benefits, curriculum batches, and FAQs for Music, Dance, Yoga, MMA, Skating, and all CMS activities.
             </p>
           </div>
         </div>
@@ -281,7 +357,7 @@ export default function DashboardTab({
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center"><Users className="w-4 h-4" /></div>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">Live Enrolled</span>
           </div>
-          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p><p className={`text-xl font-bold ${textPrimary}`}>{students.length}</p></div>
+          <div><p className={`text-[11px] font-semibold ${textSecondary}`}>Total Students</p><p className={`text-xl font-bold ${textPrimary}`}>{students.filter(s => s.status !== 'deactivated').length}</p></div>
         </div>
         <div className={`${bgCard} p-4 rounded-2xl space-y-2 border shadow-sm`}>
           <div className="flex items-center justify-between">
@@ -413,27 +489,55 @@ export default function DashboardTab({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`lg:col-span-2 ${bgCard} p-6 rounded-3xl border shadow-sm space-y-4`}>
           <div className="flex items-center justify-between">
-            <h3 className={`text-base font-bold ${textPrimary}`}>Recent Fee Collections</h3>
+            <div>
+              <h3 className={`text-base font-bold ${textPrimary}`}>Recent Fee Collections</h3>
+              <p className={`text-[11px] ${textSecondary}`}>Consolidated live payment transactions</p>
+            </div>
             <button onClick={() => setActiveTab('fees')} className="text-xs font-bold text-blue-500 hover:underline">View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className={`border-b font-bold ${textSecondary}`}>
-                  <th className="py-2.5 px-3">Receipt No</th><th className="py-2.5 px-3">Student Name</th><th className="py-2.5 px-3">Batch</th><th className="py-2.5 px-3">Amount</th><th className="py-2.5 px-3">Date</th><th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Receipt No</th>
+                  <th className="py-2.5 px-3">Student Name</th>
+                  <th className="py-2.5 px-3">Batch</th>
+                  <th className="py-2.5 px-3">Amount</th>
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Status</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800'}`}>
-                {fees.slice(0, 5).map((f: any) => (
-                  <tr key={f.id} className="hover:bg-blue-50/40 transition">
-                    <td className="py-3 px-3 font-mono font-bold text-blue-500">{f.receipt_no || f.id || 'N/A'}</td>
-                    <td className={`py-3 px-3 font-bold ${textPrimary}`}>{f.students?.full_name || f.student_name || 'N/A'}</td>
-                    <td className="py-3 px-3 font-semibold">{f.students?.batch_name || f.batch_name || 'General'}</td>
-                    <td className="py-3 px-3 font-bold text-emerald-500">₹{f.amount}</td>
-                    <td className={`py-3 px-3 ${textSecondary}`}>{f.date || f.created_at?.split('T')[0] || 'N/A'}</td>
-                    <td className="py-3 px-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Success</span></td>
+                {recentFeeCollections.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className={`py-6 text-center ${textSecondary}`}>No recent fee collections recorded yet.</td>
                   </tr>
-                ))}
+                ) : (
+                  recentFeeCollections.map((f: any) => {
+                    const isFullyPaid = f.status === 'paid' || f.pending_amount === 0;
+                    const isPartial = f.status === 'partial' || (f.amount_paid > 0 && f.pending_amount > 0);
+                    return (
+                      <tr key={f.id} className="hover:bg-blue-50/40 transition">
+                        <td className="py-3 px-3 font-mono font-bold text-blue-500">{f.receipt_no}</td>
+                        <td className={`py-3 px-3 font-bold ${textPrimary}`}>{f.student_name}</td>
+                        <td className="py-3 px-3 font-semibold text-slate-600 dark:text-slate-300">{f.batch_name}</td>
+                        <td className="py-3 px-3 font-bold text-emerald-500">₹{Number(f.amount_paid).toLocaleString('en-IN')}</td>
+                        <td className={`py-3 px-3 ${textSecondary}`}>{f.date}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isFullyPaid
+                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                              : isPartial
+                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                                : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                          }`}>
+                            {isFullyPaid ? 'Success' : isPartial ? 'Partial' : 'Pending'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

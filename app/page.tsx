@@ -307,6 +307,7 @@ export default function AdminDashboardPage() {
   })
   const [loadingEnquiries, setLoadingEnquiries] = useState<boolean>(false)
   const [adminRole, setAdminRole] = useState<'Admin' | 'Staff'>('Admin')
+  const [activityPages, setActivityPages] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>(() => [
     { id: 'cat-1', name: 'Child Activity', emoji: '🧸' },
     { id: 'cat-2', name: 'Zumba & Yoga', emoji: '🧘' }
@@ -333,15 +334,16 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(merged))
   }, [classes])
 
-  // Dynamic category list combining DB categories + registered student categories + batch categories
+  // Dynamic category list combining DB categories + registered student categories + batch categories + CMS activities
   const dynamicCategoriesList = useMemo(() => {
     const fromStudents = students.map((s: any) => s.category).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
     const fromBatches = batches.map((b: any) => b.category).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
     const fromDb = (categories || []).map((c: any) => (typeof c === 'string' ? c : c?.name)).filter((c: any): c is string => typeof c === 'string' && c.trim() !== '')
+    const fromActivities = (activityPages || []).map((a: any) => a.badge_text || a.h1).filter((name: any): name is string => typeof name === 'string' && name.trim() !== '')
     
-    const merged = Array.from(new Set(['Child Activity', 'Zumba & Yoga', ...fromDb, ...fromStudents, ...fromBatches]))
+    const merged = Array.from(new Set(['Child Activity', 'Zumba & Yoga', ...fromDb, ...fromActivities, ...fromStudents, ...fromBatches]))
     return merged
-  }, [students, batches, categories])
+  }, [students, batches, categories, activityPages])
 
   const handleCreateCategory = async (rawCatName: string) => {
     if (!rawCatName || !rawCatName.trim()) return
@@ -950,14 +952,22 @@ export default function AdminDashboardPage() {
         if (dbFees && dbFees.length > 0) {
           // Manually enrich fees with student info from already-fetched students
           const enriched = dbFees.map((fee: any) => {
-            const matchedStudent = (dbStudents || []).find((s: any) => s.id === fee.student_id || s.admission_id === fee.admission_id)
+            const matchedStudent = (dbStudents || []).find((s: any) => 
+              (fee.student_id && s.id === fee.student_id) || 
+              (fee.admission_id && s.admission_id === fee.admission_id) ||
+              (fee.student_name && s.full_name && s.full_name.trim().toLowerCase() === fee.student_name.trim().toLowerCase())
+            )
             return {
               ...fee,
+              student_name: fee.student_name || matchedStudent?.full_name,
+              batch_name: fee.batch_name || matchedStudent?.batch_name || matchedStudent?.class_name,
               students: matchedStudent ? {
                 full_name: matchedStudent.full_name,
                 admission_id: matchedStudent.admission_id,
                 class_name: matchedStudent.class_name,
-                section_name: matchedStudent.section_name
+                section_name: matchedStudent.section_name,
+                batch_name: matchedStudent.batch_name || matchedStudent.class_name,
+                category: matchedStudent.category
               } : fee.students
             }
           })
@@ -1176,6 +1186,21 @@ export default function AdminDashboardPage() {
         } catch (bErr) {
           const localBanners = localStorage.getItem('phulwari_banners')
           if (localBanners) setBanners(JSON.parse(localBanners))
+        }
+
+        // Fetch Dynamic Activity Pages — for automatic category & filter synchronization
+        try {
+          const { data: dbActivities } = await supabase.from('activity_pages').select('*').order('order_index', { ascending: true })
+          if (dbActivities && dbActivities.length > 0) {
+            setActivityPages(dbActivities)
+            try { localStorage.setItem('phulwari_activity_pages', JSON.stringify(dbActivities)) } catch (e) {}
+          } else {
+            const localActs = localStorage.getItem('phulwari_activity_pages')
+            if (localActs) setActivityPages(JSON.parse(localActs))
+          }
+        } catch (actErr) {
+          const localActs = localStorage.getItem('phulwari_activity_pages')
+          if (localActs) setActivityPages(JSON.parse(localActs))
         }
       } catch (e) {
         console.error('❌ [SCHEDULES/HOLIDAYS/ATTENDANCE FETCH EXCEPTION]:', e)
@@ -3219,6 +3244,35 @@ Management Phulwari Mother and Child Activity Centre`
   const totalEnrolled = filteredStudents.length
   const totalStudentsCount = activeStudents.length
   const totalBatchesCount = allAvailableBatches.length
+
+  // Helper to match student with dynamic category/activity
+  const isStudentMatchingCategory = (s: any, filterCat: string): boolean => {
+    if (!filterCat || filterCat === 'All') return true;
+    const target = filterCat.trim().toLowerCase();
+    const sCat = (s.category || '').trim().toLowerCase();
+    const sBatch = (s.batch_name || '').trim().toLowerCase();
+    const sProg = (s.program_interested || '').trim().toLowerCase();
+
+    if (sCat === target) return true;
+    if (sBatch && (sBatch === target || sBatch.includes(target) || target.includes(sBatch))) return true;
+    if (sProg && (sProg === target || sProg.includes(target) || target.includes(sProg))) return true;
+
+    if (target === 'child activity') {
+      return !sCat || sCat === 'child activity' || (!sCat.includes('mother') && !sCat.includes('zumba') && !sCat.includes('yoga'));
+    }
+    if (target.includes('zumba') || target.includes('yoga')) {
+      return sCat.includes('zumba') || sCat.includes('yoga') || sBatch.includes('zumba') || sBatch.includes('yoga') || sProg.includes('zumba') || sProg.includes('yoga');
+    }
+    if (target.includes('mother')) {
+      return sCat.includes('mother') || sBatch.includes('mother') || sProg.includes('mother');
+    }
+    return false;
+  };
+
+  const getCategoryStudentCount = (cat: string): number => {
+    if (cat === 'All') return activeStudents.length;
+    return activeStudents.filter(s => isStudentMatchingCategory(s, cat)).length;
+  };
   
   // Fees KPI: calculate dynamically per active student with safe numeric parsing
   const safeNum = (v: any): number => {
@@ -3995,23 +4049,44 @@ Management Phulwari Mother and Child Activity Centre`
 
         {/* TAB 1: STUDENT MANAGEMENT */}
         {(activeTab === 'students' || activeTab === 'student_list') && (
-          <div className={`flex items-center space-x-1.5 border rounded-xl p-1 shrink-0 text-xs w-fit mb-4 flex-wrap gap-1 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-            <span className={`font-semibold px-2 ${textSecondary}`}>Category Filter:</span>
+          <div className={`flex items-center space-x-1.5 border rounded-2xl p-2.5 shrink-0 text-xs w-full mb-4 flex-wrap gap-2 ${isLight ? 'bg-slate-100/90 border-slate-200 shadow-xs' : 'bg-slate-900 border-slate-800'}`}>
+            <div className="flex items-center gap-2 mr-2 font-black text-slate-800 dark:text-slate-200">
+              <Filter className="w-3.5 h-3.5 text-blue-500" />
+              <span>Category Filter:</span>
+            </div>
             <button
               onClick={() => setSelectedCategoryFilter('All')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                selectedCategoryFilter === 'All' ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCategoryFilter === 'All'
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25 ring-2 ring-orange-400'
+                  : `${textSecondary} bg-white dark:bg-slate-800 hover:text-orange-500 border border-slate-200 dark:border-slate-700`
               }`}
-            >All Categories</button>
-            {dynamicCategoriesList.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategoryFilter(cat)}
-                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                  selectedCategoryFilter === cat ? 'bg-orange-600 text-white shadow-sm' : `${textSecondary} hover:text-orange-500`
-                }`}
-              >{cat}</button>
-            ))}
+            >
+              <span>All Categories</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${selectedCategoryFilter === 'All' ? 'bg-white/25 text-white' : 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300'}`}>
+                {activeStudents.length}
+              </span>
+            </button>
+            {dynamicCategoriesList.map(cat => {
+              const count = getCategoryStudentCount(cat);
+              const isSelected = selectedCategoryFilter.trim().toLowerCase() === cat.trim().toLowerCase();
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategoryFilter(cat)}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25 ring-2 ring-orange-400'
+                      : `${textSecondary} bg-white dark:bg-slate-800 hover:text-orange-500 border border-slate-200 dark:border-slate-700`
+                  }`}
+                >
+                  <span>{cat}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -4025,10 +4100,7 @@ Management Phulwari Mother and Child Activity Centre`
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
             badgePassword={badgePassword}
-            filteredStudents={filteredStudents.filter(s => {
-              if (selectedCategoryFilter === 'All') return true;
-              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
-            })}
+            filteredStudents={filteredStudents.filter(s => isStudentMatchingCategory(s, selectedCategoryFilter))}
             batches={batches}
             setSelectedERPStudent={setSelectedERPStudent}
             setErpModalTab={setErpModalTab}
@@ -4095,10 +4167,7 @@ Management Phulwari Mother and Child Activity Centre`
             isLight={isLight}
             tableHeaderBg={tableHeaderBg}
             badgeClass={badgeClass}
-            filteredStudents={filteredStudents.filter(s => {
-              if (selectedCategoryFilter === 'All') return true;
-              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
-            })}
+            filteredStudents={filteredStudents.filter(s => isStudentMatchingCategory(s, selectedCategoryFilter))}
             students={students}
             batches={batches}
             setIsExportModalOpen={setIsExportModalOpen}
@@ -4117,10 +4186,7 @@ Management Phulwari Mother and Child Activity Centre`
             textPrimary={textPrimary}
             textSecondary={textSecondary}
             isLight={isLight}
-            filteredStudents={filteredStudents.filter(s => {
-              if (selectedCategoryFilter === 'All') return true;
-              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
-            })}
+            filteredStudents={filteredStudents.filter(s => isStudentMatchingCategory(s, selectedCategoryFilter))}
             attendance={attendance}
             attendanceDate={attendanceDate}
             setAttendanceDate={setAttendanceDate}
@@ -4162,10 +4228,7 @@ Management Phulwari Mother and Child Activity Centre`
             textSecondary={textSecondary}
             isLight={isLight}
             badgeStatus={badgeStatus}
-            filteredStudents={filteredStudents.filter(s => {
-              if (selectedCategoryFilter === 'All') return true;
-              return (s.category || 'Child Activity').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
-            })}
+            filteredStudents={filteredStudents.filter(s => isStudentMatchingCategory(s, selectedCategoryFilter))}
             fees={fees}
             feeSelectedMonth={feeSelectedMonth}
             setFeeSelectedMonth={setFeeSelectedMonth}

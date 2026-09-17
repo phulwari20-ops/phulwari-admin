@@ -66,7 +66,11 @@ export default function StudentsTab({
         <div className="flex items-center gap-3">
           <span>💡 Click &quot;Open ERP&quot; button to open fee management, payment ledger, password reset, or student profile.</span>
         </div>
-        <span className="font-mono text-blue-600 font-bold shrink-0">{sortedStudents.length} Active Students</span>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold text-xs shadow-xs">
+            Total Students: {filteredStudents.length} Active
+          </span>
+        </div>
       </div>
 
       {/* Sort & Alphabet Filter Header */}
