@@ -30,6 +30,17 @@ export default function AttendanceTab({
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
   const [localSearch, setLocalSearch] = useState('');
   const [unscheduledSearch, setUnscheduledSearch] = useState('');
+  const [sortKey, setSortKey] = useState<'name_asc' | 'name_desc' | 'admission_id_asc' | 'admission_id_desc'>('name_asc');
+  const [selectedLetter, setSelectedLetter] = useState<string>('ALL');
+
+  const ALPHABETS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
+
+  const compareAdmissionId = (a: string, b: string): number => {
+    const numA = parseInt((a || '').replace(/\D+/g, ''), 10) || 0;
+    const numB = parseInt((b || '').replace(/\D+/g, ''), 10) || 0;
+    if (numA !== numB) return numA - numB;
+    return (a || '').localeCompare(b || '');
+  };
 
   // Derive the day of the week from the selected date.
   // `new Date('2026-08-21')` is parsed as UTC midnight while getDay() reads the
@@ -124,19 +135,39 @@ export default function AttendanceTab({
     });
   });
 
-  // Filter items by selected batch and search query
-  const displayItems = attendanceItems.filter(item => {
-    // Batch filter
-    if (selectedBatchIdFilter !== 'All' && item.student.batch_id !== selectedBatchIdFilter) return false;
+  // Filter items by selected batch, letter, and search query
+  const displayItems = attendanceItems
+    .filter(item => {
+      // Batch filter
+      if (selectedBatchIdFilter !== 'All' && item.student.batch_id !== selectedBatchIdFilter) return false;
 
-    // Search query filter
-    const activeSearch = localSearch.trim() !== '' ? localSearch : searchQuery;
-    if (!activeSearch || activeSearch.trim() === '') return true;
-    const query = activeSearch.toLowerCase();
-    return item.student.full_name.toLowerCase().includes(query) || 
-           item.student.admission_id.toLowerCase().includes(query) ||
-           item.class_name.toLowerCase().includes(query);
-  });
+      // Letter filter
+      if (selectedLetter !== 'ALL' && !(item.student.full_name || '').trim().toUpperCase().startsWith(selectedLetter)) {
+        return false;
+      }
+
+      // Search query filter
+      const activeSearch = localSearch.trim() !== '' ? localSearch : searchQuery;
+      if (!activeSearch || activeSearch.trim() === '') return true;
+      const query = activeSearch.toLowerCase();
+      return item.student.full_name.toLowerCase().includes(query) || 
+             item.student.admission_id.toLowerCase().includes(query) ||
+             item.class_name.toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      switch (sortKey) {
+        case 'name_asc':
+          return (a.student.full_name || '').localeCompare(b.student.full_name || '');
+        case 'name_desc':
+          return (b.student.full_name || '').localeCompare(a.student.full_name || '');
+        case 'admission_id_asc':
+          return compareAdmissionId(a.student.admission_id, b.student.admission_id);
+        case 'admission_id_desc':
+          return compareAdmissionId(b.student.admission_id, a.student.admission_id);
+        default:
+          return 0;
+      }
+    });
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-4`}>
@@ -153,23 +184,38 @@ export default function AttendanceTab({
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center space-x-2 text-xs">
-            <span className={`font-semibold ${textSecondary}`}>Search Student:</span>
+            <span className={`font-semibold ${textSecondary}`}>Search:</span>
             <input
               type="text"
-              placeholder="Name or Admission ID..."
+              placeholder="Name or ID..."
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold shrink-0 w-44 ${
+              className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold shrink-0 w-36 ${
                 isLight ? 'bg-slate-100 border-slate-300 text-slate-800 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
               }`}
             />
           </div>
           <div className="flex items-center space-x-2 text-xs">
-            <span className={`font-semibold ${textSecondary}`}>Batch Filter:</span>
+            <span className={`font-semibold ${textSecondary}`}>Sort:</span>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as any)}
+              className={`text-xs px-2.5 py-1.5 rounded-xl border outline-none font-bold shrink-0 ${
+                isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
+              }`}
+            >
+              <option value="name_asc">Name A → Z</option>
+              <option value="name_desc">Name Z → A</option>
+              <option value="admission_id_asc">ID: First → Last</option>
+              <option value="admission_id_desc">ID: Last → First</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-2 text-xs">
+            <span className={`font-semibold ${textSecondary}`}>Batch:</span>
             <select
               value={selectedBatchIdFilter}
               onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
-              className={`text-xs px-3.5 py-1.5 rounded-xl border outline-none font-bold shrink-0 ${
+              className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-bold shrink-0 ${
                 isLight ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-950 border-slate-800 text-slate-100'
               }`}
             >
@@ -180,7 +226,7 @@ export default function AttendanceTab({
             </select>
           </div>
           <div className="flex items-center space-x-2 text-xs">
-            <span className={`font-semibold ${textSecondary}`}>Select Date:</span>
+            <span className={`font-semibold ${textSecondary}`}>Date:</span>
             <input
               type="date"
               value={attendanceDate}
@@ -191,6 +237,30 @@ export default function AttendanceTab({
             />
           </div>
         </div>
+      </div>
+
+      {/* Alphabet quick filter bar */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+        <span className={`text-[10px] font-extrabold uppercase mr-1 shrink-0 ${textSecondary}`}>Letter:</span>
+        {ALPHABETS.map((letter) => {
+          const isSelected = selectedLetter === letter;
+          return (
+            <button
+              key={letter}
+              type="button"
+              onClick={() => setSelectedLetter(letter)}
+              className={`px-2 py-0.5 rounded text-[11px] font-black transition-all shrink-0 cursor-pointer ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-xs scale-105'
+                  : isLight
+                  ? 'bg-slate-100 hover:bg-blue-50 text-slate-700 border border-slate-200'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+              }`}
+            >
+              {letter}
+            </button>
+          );
+        })}
       </div>
 
       {/* Holiday Management Status Bar */}

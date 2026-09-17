@@ -870,39 +870,75 @@ export default function AdminDashboardPage() {
     try {
       const supabase = createClient()
 
-      // 1. Fetch Batches — DB ONLY, no localStorage fallback
-      const { data: dbBatches, error: batchError } = await supabase.from('batches').select('*')
-      if (batchError) {
-        console.error('❌ [BATCHES FETCH ERROR]:', batchError)
-      }
-      if (dbBatches && dbBatches.length > 0) {
-        setBatches(dbBatches)
-        console.log(`✅ [BATCHES] Loaded ${dbBatches.length} batches from DB`)
-      } else {
-        setBatches([])
-        console.log('ℹ️ [BATCHES] No batches found in DB')
-      }
-      const activeBatches = dbBatches || []
-
-      // 2. Fetch Students — DB ONLY
-      const { data: dbStudents, error: studentError } = await supabase.from('students').select('*')
-      if (studentError) {
-        console.error('❌ [STUDENTS FETCH ERROR]:', studentError)
-      }
-      if (dbStudents && dbStudents.length > 0) {
-        // Normalize batch_name from batch_id for display
-        const normalized = dbStudents.map((st: any) => {
-          const matchedBt = activeBatches.find((b: any) => b.id === st.batch_id)
-          return {
-            ...st,
-            batch_name: matchedBt?.batch_name || st.batch_name || 'Unassigned'
+      // 1. Fetch Batches — Supabase DB with cached fallback
+      let activeBatches: any[] = []
+      try {
+        const { data: dbBatches, error: batchError } = await supabase.from('batches').select('*')
+        if (batchError) console.error('❌ [BATCHES FETCH ERROR]:', batchError)
+        if (dbBatches && dbBatches.length > 0) {
+          setBatches(dbBatches)
+          activeBatches = dbBatches
+          try { localStorage.setItem('phulwari_admin_batches', JSON.stringify(dbBatches)) } catch (_) {}
+          console.log(`✅ [BATCHES] Loaded ${dbBatches.length} batches from DB`)
+        } else {
+          const savedB = localStorage.getItem('phulwari_admin_batches')
+          if (savedB) {
+            const parsed = JSON.parse(savedB)
+            setBatches(parsed)
+            activeBatches = parsed
+          } else {
+            setBatches([])
           }
-        })
-        setStudents(normalized)
-        console.log(`✅ [STUDENTS] Loaded ${dbStudents.length} students from DB`)
-      } else {
-        setStudents([])
-        console.log('ℹ️ [STUDENTS] No students found in DB')
+        }
+      } catch (batchEx) {
+        console.error('❌ [BATCHES EXCEPTION]:', batchEx)
+        const savedB = localStorage.getItem('phulwari_admin_batches')
+        if (savedB) {
+          try {
+            const parsed = JSON.parse(savedB)
+            setBatches(parsed)
+            activeBatches = parsed
+          } catch (_) {}
+        }
+      }
+
+      // 2. Fetch Students — Supabase DB with cached fallback
+      let dbStudents: any[] = []
+      try {
+        const { data: fetchedStudents, error: studentError } = await supabase.from('students').select('*')
+        if (studentError) console.error('❌ [STUDENTS FETCH ERROR]:', studentError)
+        if (fetchedStudents && fetchedStudents.length > 0) {
+          const normalized = fetchedStudents.map((st: any) => {
+            const matchedBt = activeBatches.find((b: any) => b.id === st.batch_id)
+            return {
+              ...st,
+              batch_name: matchedBt?.batch_name || st.batch_name || 'Unassigned'
+            }
+          })
+          setStudents(normalized)
+          dbStudents = normalized
+          try { localStorage.setItem('phulwari_admin_students', JSON.stringify(normalized)) } catch (_) {}
+          console.log(`✅ [STUDENTS] Loaded ${fetchedStudents.length} students from DB`)
+        } else {
+          const savedS = localStorage.getItem('phulwari_admin_students')
+          if (savedS) {
+            const parsed = JSON.parse(savedS)
+            setStudents(parsed)
+            dbStudents = parsed
+          } else {
+            setStudents([])
+          }
+        }
+      } catch (studentEx) {
+        console.error('❌ [STUDENTS EXCEPTION]:', studentEx)
+        const savedS = localStorage.getItem('phulwari_admin_students')
+        if (savedS) {
+          try {
+            const parsed = JSON.parse(savedS)
+            setStudents(parsed)
+            dbStudents = parsed
+          } catch (_) {}
+        }
       }
 
       // 3. Fetch Fees — DB only (no join, fees table has no FK to students)
@@ -1087,7 +1123,20 @@ export default function AdminDashboardPage() {
         if (dbClasses) setClasses(dbClasses)
 
         const { data: dbAttendance } = await supabase.from('attendance').select('*')
-        if (dbAttendance) setAttendance(dbAttendance)
+        if (dbAttendance) {
+          const normalizedAtt = dbAttendance.map((row: any) => {
+            let st = (row.status || '').toLowerCase()
+            if (st === 'late') {
+              if (row.leave_reason === 'Leave' || row.remarks?.toLowerCase().includes('leave')) {
+                st = 'leave'
+              } else if (row.leave_reason === 'Half Day' || row.remarks?.toLowerCase().includes('half')) {
+                st = 'halfday'
+              }
+            }
+            return { ...row, status: st }
+          })
+          setAttendance(normalizedAtt)
+        }
 
         // Fetch categories (income_categories & expense_categories)
         try {
@@ -2668,7 +2717,20 @@ Management Phulwari Mother and Child Activity Centre`
     try {
       const supabase = createClient()
       const { data } = await supabase.from('attendance').select('*')
-      if (data) setAttendance(data)
+      if (data) {
+        const normalized = data.map((row: any) => {
+          let st = (row.status || '').toLowerCase()
+          if (st === 'late') {
+            if (row.leave_reason === 'Leave' || row.remarks?.toLowerCase().includes('leave')) {
+              st = 'leave'
+            } else if (row.leave_reason === 'Half Day' || row.remarks?.toLowerCase().includes('half')) {
+              st = 'halfday'
+            }
+          }
+          return { ...row, status: st }
+        })
+        setAttendance(normalized)
+      }
     } catch (err) {
       console.error('❌ [ATTENDANCE REFRESH ERROR]:', err)
     }
@@ -2755,8 +2817,8 @@ Management Phulwari Mother and Child Activity Centre`
         status: status,
         class_name: className,
         class_time: classTime,
-        remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked ${status} for ${className} on ${targetDate}`,
-        leave_reason: status === 'leave' ? reason : null,
+        remarks: status === 'leave' ? `Leave: ${reason || 'Leave'}` : status === 'holiday' ? `Holiday: ${reason || 'Holiday'}` : `Marked ${status} for ${className} on ${targetDate}`,
+        leave_reason: status === 'leave' ? (reason || 'Leave') : (status === 'halfday' ? 'Half Day' : null),
         holiday_reason: status === 'holiday' ? reason : null,
         students: targetStudent ? {
           full_name: targetStudent.full_name,
@@ -2791,16 +2853,21 @@ Management Phulwari Mother and Child Activity Centre`
       })()
     }
 
+    // Map status for Postgres check constraint: ('present', 'absent', 'late', 'holiday')
+    const dbStatus = (status === 'leave' || status === 'halfday') ? 'late' : status
+    const dbLeaveReason = status === 'leave' ? (reason || 'Leave') : (status === 'halfday' ? 'Half Day' : null)
+    const dbRemarks = status === 'leave' ? `Leave: ${reason || 'Leave'}` : status === 'halfday' ? 'Half Day' : status === 'holiday' ? `Holiday: ${reason || 'Holiday'}` : `Marked on ${targetDate}`
+
     try {
       if (prevAtt?.id) {
         const { error } = await supabase
           .from('attendance')
           .update({
-            status,
+            status: dbStatus,
             class_name: className,
             class_time: classTime,
-            remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
-            leave_reason: status === 'leave' ? reason : null,
+            remarks: dbRemarks,
+            leave_reason: dbLeaveReason,
             holiday_reason: status === 'holiday' ? reason : null
           })
           .eq('id', prevAtt.id)
@@ -2813,11 +2880,11 @@ Management Phulwari Mother and Child Activity Centre`
               {
                 student_id: studentId,
                 date: targetDate,
-                status,
+                status: dbStatus,
                 class_name: className,
                 class_time: classTime,
-                remarks: status === 'leave' ? `Leave: ${reason}` : status === 'holiday' ? `Holiday: ${reason}` : `Marked on ${targetDate}`,
-                leave_reason: status === 'leave' ? reason : null,
+                remarks: dbRemarks,
+                leave_reason: dbLeaveReason,
                 holiday_reason: status === 'holiday' ? reason : null
               }
             ],

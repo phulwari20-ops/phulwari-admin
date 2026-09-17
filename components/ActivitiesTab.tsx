@@ -99,31 +99,67 @@ export default function ActivitiesTab() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
 
-  // Fetch activities from Supabase
+  // Fetch activities via server-side /api/activities proxy with fallback
   const loadActivities = async () => {
     setLoading(true)
     setErrorMessage(null)
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('activity_pages')
-        .select('*')
-        .order('order_index', { ascending: true })
+      let data: any[] | null = null
 
-      if (error) throw error
+      // 1. Try server-side API proxy first
+      try {
+        const res = await fetch('/api/activities')
+        if (res.ok) {
+          const apiData = await res.json()
+          if (Array.isArray(apiData) && apiData.length > 0) {
+            data = apiData
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API /api/activities fetch failed, trying direct client:', apiErr)
+      }
 
-      if (data) {
+      // 2. Fallback to direct client
+      if (!data) {
+        const supabase = createClient()
+        const { data: dbData, error } = await supabase
+          .from('activity_pages')
+          .select('*')
+          .order('order_index', { ascending: true })
+
+        if (!error && dbData) {
+          data = dbData
+        }
+      }
+
+      if (data && data.length > 0) {
         const formatted = data.map((a: any) => ({
           ...a,
           content_color: a.content_color || a.cta?.content_color || '#334155'
         }))
         setActivities(formatted as ActivityRecord[])
+        try { localStorage.setItem('phulwari_admin_activities', JSON.stringify(formatted)) } catch (_) {}
         if (formatted.length > 0 && !selectedId) {
           setSelectedId(formatted[0].id)
+        }
+      } else {
+        const saved = localStorage.getItem('phulwari_admin_activities')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setActivities(parsed)
+          if (parsed.length > 0 && !selectedId) setSelectedId(parsed[0].id)
         }
       }
     } catch (err: any) {
       console.error('Error loading activities:', err)
+      const saved = localStorage.getItem('phulwari_admin_activities')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setActivities(parsed)
+          if (parsed.length > 0 && !selectedId) setSelectedId(parsed[0].id)
+        } catch (_) {}
+      }
       setErrorMessage(err.message || 'Failed to load activities from database')
     } finally {
       setLoading(false)

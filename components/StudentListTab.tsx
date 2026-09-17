@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Download, ArrowUpDown, CalendarDays, Hash, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, Download, ArrowUpDown, CalendarDays, Hash, ArrowUp, ArrowDown, Filter, Sparkles } from 'lucide-react';
+
+const ALPHABETS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '—';
@@ -34,13 +36,22 @@ interface StudentListTabProps {
   onSelectStudent?: (st: any) => void;
 }
 
-type SortKey = 'admission_date_desc' | 'admission_date_asc' | 'admission_id_asc' | 'admission_id_desc' | 'default';
+type SortKey =
+  | 'name_asc'
+  | 'name_desc'
+  | 'admission_id_asc'
+  | 'admission_id_desc'
+  | 'admission_date_desc'
+  | 'admission_date_asc'
+  | 'default';
 
-const SORT_OPTIONS: { key: SortKey; label: string; icon: 'cal-desc' | 'cal-asc' | 'num-asc' | 'num-desc' }[] = [
-  { key: 'admission_date_desc', label: 'Newest First', icon: 'cal-desc' },
-  { key: 'admission_date_asc',  label: 'Oldest First',  icon: 'cal-asc'  },
-  { key: 'admission_id_asc',    label: 'ID: Asc (A→Z)', icon: 'num-asc'  },
-  { key: 'admission_id_desc',   label: 'ID: Desc (Z→A)', icon: 'num-desc' },
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'name_asc', label: 'Name: A → Z' },
+  { key: 'name_desc', label: 'Name: Z → A' },
+  { key: 'admission_id_asc', label: 'Admission ID: First → Last (Asc)' },
+  { key: 'admission_id_desc', label: 'Admission ID: Last → First (Desc)' },
+  { key: 'admission_date_desc', label: 'Admission Date: Newest First' },
+  { key: 'admission_date_asc', label: 'Admission Date: Oldest First' },
 ];
 
 function parseAdmissionDate(st: any): Date {
@@ -50,7 +61,6 @@ function parseAdmissionDate(st: any): Date {
 }
 
 function compareAdmissionId(a: string, b: string): number {
-  // Format: PH-2026-001 — extract the numeric tail for proper numeric sort
   const numA = parseInt((a || '').replace(/\D+/g, ''), 10) || 0;
   const numB = parseInt((b || '').replace(/\D+/g, ''), 10) || 0;
   if (numA !== numB) return numA - numB;
@@ -61,29 +71,37 @@ export default function StudentListTab({
   bgCard, textPrimary, textSecondary, isLight, tableHeaderBg,
   badgeClass, filteredStudents, students, batches, setIsExportModalOpen, onSelectStudent
 }: StudentListTabProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [sortKey, setSortKey] = useState<SortKey>('name_asc');
+  const [selectedLetter, setSelectedLetter] = useState<string>('ALL');
 
+  // Filter by Alphabet Letter
+  const letterFiltered = useMemo(() => {
+    if (selectedLetter === 'ALL') return filteredStudents;
+    return filteredStudents.filter(st =>
+      (st.full_name || '').trim().toUpperCase().startsWith(selectedLetter)
+    );
+  }, [filteredStudents, selectedLetter]);
+
+  // Sort filtered students
   const sortedStudents = useMemo(() => {
-    const list = [...filteredStudents];
+    const list = [...letterFiltered];
     switch (sortKey) {
-      case 'admission_date_desc':
-        return list.sort((a, b) => parseAdmissionDate(b).getTime() - parseAdmissionDate(a).getTime());
-      case 'admission_date_asc':
-        return list.sort((a, b) => parseAdmissionDate(a).getTime() - parseAdmissionDate(b).getTime());
+      case 'name_asc':
+        return list.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+      case 'name_desc':
+        return list.sort((a, b) => (b.full_name || '').localeCompare(a.full_name || ''));
       case 'admission_id_asc':
         return list.sort((a, b) => compareAdmissionId(a.admission_id, b.admission_id));
       case 'admission_id_desc':
         return list.sort((a, b) => compareAdmissionId(b.admission_id, a.admission_id));
+      case 'admission_date_desc':
+        return list.sort((a, b) => parseAdmissionDate(b).getTime() - parseAdmissionDate(a).getTime());
+      case 'admission_date_asc':
+        return list.sort((a, b) => parseAdmissionDate(a).getTime() - parseAdmissionDate(b).getTime());
       default:
         return list;
     }
-  }, [filteredStudents, sortKey]);
-
-  const inputBase = `border rounded-xl px-3 py-1.5 text-xs font-bold outline-none transition ${
-    isLight
-      ? 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-400'
-      : 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500'
-  }`;
+  }, [letterFiltered, sortKey]);
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-5 shadow-sm`}>
@@ -110,20 +128,20 @@ export default function StudentListTab({
 
       {/* ── Admission & Student Status KPI Cards ── */}
       {(() => {
-        const masterList = (students && students.length > 0) ? students : filteredStudents
-        const activeCount = masterList.filter(s => s.status !== 'deactivated' && s.status !== 'left' && s.status !== 'inactive').length
-        const deactivatedCount = masterList.filter(s => s.status === 'deactivated' || s.status === 'left' || s.status === 'inactive').length
+        const masterList = (students && students.length > 0) ? students : filteredStudents;
+        const activeCount = masterList.filter(s => s.status !== 'deactivated' && s.status !== 'left' && s.status !== 'inactive').length;
+        const deactivatedCount = masterList.filter(s => s.status === 'deactivated' || s.status === 'left' || s.status === 'inactive').length;
         const newCount = masterList.filter(st => {
-          if (st.status === 'deactivated' || st.status === 'left' || st.status === 'inactive') return false
-          if (st.status === 'new' || st.status === 'New') return true
-          const dateStr = st.admission_date || st.created_at || st.print_date || st.plan_start_date
+          if (st.status === 'deactivated' || st.status === 'left' || st.status === 'inactive') return false;
+          if (st.status === 'new' || st.status === 'New') return true;
+          const dateStr = st.admission_date || st.created_at || st.print_date || st.plan_start_date;
           if (dateStr) {
-            const d = new Date(dateStr)
-            const now = new Date()
-            return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+            const d = new Date(dateStr);
+            const now = new Date();
+            return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
           }
-          return false
-        }).length
+          return false;
+        }).length;
 
         return (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -149,129 +167,70 @@ export default function StudentListTab({
               <Users className="w-6 h-6 text-rose-500 opacity-80" />
             </div>
           </div>
-        )
+        );
       })()}
 
-      {/* ── Sort / Filter Toolbar ── */}
+      {/* ── Sort & Alphabet Quick Filter Bar ── */}
       <div className={`rounded-2xl border p-4 space-y-3 ${
         isLight
           ? 'bg-gradient-to-br from-slate-50 to-blue-50/30 border-slate-200'
           : 'bg-slate-900/60 border-slate-800'
       }`}>
-        <div className="flex items-center gap-2">
-          <ArrowUpDown className="w-4 h-4 text-blue-500 shrink-0" />
-          <span className={`text-xs font-black uppercase tracking-wider ${textPrimary}`}>
-            Sort &amp; Filter
-          </span>
-          <span className={`text-[10px] font-semibold ${textSecondary}`}>
-            — {sortedStudents.length} student{sortedStudents.length !== 1 ? 's' : ''}
-          </span>
-          {sortKey !== 'default' && (
-            <button
-              onClick={() => setSortKey('default')}
-              className="ml-auto text-[10px] font-bold text-slate-400 hover:text-rose-500 transition cursor-pointer"
-            >
-              ✕ Reset Sort
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-          {/* ── Admission Date Sort ── */}
-          <div className={`rounded-xl border p-3 space-y-2 ${
-            isLight ? 'bg-white/80 border-blue-100' : 'bg-slate-800/50 border-slate-700'
-          }`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <CalendarDays className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600">
-                Admission Date
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSortKey(sortKey === 'admission_date_desc' ? 'default' : 'admission_date_desc')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  sortKey === 'admission_date_desc'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/20'
-                    : isLight
-                      ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-900/30 hover:border-blue-700 hover:text-blue-400'
-                }`}
-              >
-                <ArrowDown className="w-3 h-3" />
-                <span>Newest First</span>
-              </button>
-              <button
-                onClick={() => setSortKey(sortKey === 'admission_date_asc' ? 'default' : 'admission_date_asc')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  sortKey === 'admission_date_asc'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/20'
-                    : isLight
-                      ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-900/30 hover:border-blue-700 hover:text-blue-400'
-                }`}
-              >
-                <ArrowUp className="w-3 h-3" />
-                <span>Oldest First</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ── Admission Number Sort ── */}
-          <div className={`rounded-xl border p-3 space-y-2 ${
-            isLight ? 'bg-white/80 border-indigo-100' : 'bg-slate-800/50 border-slate-700'
-          }`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <Hash className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">
-                Admission Number
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSortKey(sortKey === 'admission_id_asc' ? 'default' : 'admission_id_asc')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  sortKey === 'admission_id_asc'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                    : isLight
-                      ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-indigo-900/30 hover:border-indigo-700 hover:text-indigo-400'
-                }`}
-              >
-                <ArrowUp className="w-3 h-3" />
-                <span>Asc (001→Last)</span>
-              </button>
-              <button
-                onClick={() => setSortKey(sortKey === 'admission_id_desc' ? 'default' : 'admission_id_desc')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  sortKey === 'admission_id_desc'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                    : isLight
-                      ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-indigo-900/30 hover:border-indigo-700 hover:text-indigo-400'
-                }`}
-              >
-                <ArrowDown className="w-3 h-3" />
-                <span>Desc (Last→001)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Active sort label */}
-        {sortKey !== 'default' && (
-          <div className="flex items-center gap-2 pt-1">
-            <span className={`text-[10px] font-semibold ${textSecondary}`}>Active sort:</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              sortKey.startsWith('admission_date')
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
-                : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400'
-            }`}>
-              {SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? sortKey}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ArrowUpDown className="w-4 h-4 text-blue-500 shrink-0" />
+            <span className={`text-xs font-black uppercase tracking-wider ${textPrimary}`}>
+              Sort &amp; Alphabet Quick Filter
+            </span>
+            <span className={`text-[10px] font-semibold ${textSecondary}`}>
+              — Showing {sortedStudents.length} student{sortedStudents.length !== 1 ? 's' : ''}
             </span>
           </div>
-        )}
+
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold ${textSecondary}`}>Sort By:</span>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className={`text-xs px-3.5 py-1.5 rounded-xl border outline-none font-bold ${
+                isLight ? 'bg-white border-slate-300 text-slate-800 focus:border-blue-500' : 'bg-slate-950 border-slate-700 text-slate-100 focus:border-blue-500'
+              }`}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Alphabet Letter Chips */}
+        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <span className={`text-[11px] font-extrabold uppercase mr-1 shrink-0 ${textSecondary}`}>Letter:</span>
+            {ALPHABETS.map((letter) => {
+              const isSelected = selectedLetter === letter;
+              return (
+                <button
+                  key={letter}
+                  type="button"
+                  onClick={() => setSelectedLetter(letter)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 scale-105'
+                      : isLight
+                      ? 'bg-white hover:bg-blue-50 text-slate-700 border border-slate-200 hover:border-blue-300'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                  }`}
+                >
+                  {letter}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Table ── */}
@@ -292,7 +251,18 @@ export default function StudentListTab({
                   {!sortKey.startsWith('admission_id') && <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-blue-400" />}
                 </button>
               </th>
-              <th className="py-3.5 px-4">Student Name</th>
+              <th className="py-3.5 px-4">
+                <button
+                  onClick={() => setSortKey(sortKey === 'name_asc' ? 'name_desc' : 'name_asc')}
+                  className="flex items-center gap-1 cursor-pointer hover:text-blue-600 transition group"
+                  title="Sort by Name"
+                >
+                  <span>Student Name</span>
+                  {sortKey === 'name_asc' && <ArrowUp className="w-3 h-3 text-blue-500" />}
+                  {sortKey === 'name_desc' && <ArrowDown className="w-3 h-3 text-blue-500" />}
+                  {!sortKey.startsWith('name_') && <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-blue-400" />}
+                </button>
+              </th>
               <th className="py-3.5 px-4">Assigned Batch Name</th>
               <th className="py-3.5 px-4">Parent Name</th>
               <th className="py-3.5 px-4">Contact Phone</th>
@@ -368,7 +338,7 @@ export default function StudentListTab({
             {sortedStudents.length === 0 && (
               <tr>
                 <td colSpan={9} className="py-12 text-center text-slate-400 font-semibold text-sm">
-                  No students found.
+                  No students found {selectedLetter !== 'ALL' ? `starting with letter "${selectedLetter}"` : ''}.
                 </td>
               </tr>
             )}
@@ -378,6 +348,3 @@ export default function StudentListTab({
     </div>
   );
 }
-
-
-

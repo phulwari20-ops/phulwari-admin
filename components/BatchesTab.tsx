@@ -30,10 +30,27 @@ export default function BatchesTab({
   const [expandedBatches, setExpandedBatches] = React.useState<Record<string, boolean>>({});
   const toggleExpanded = (id: string) => setExpandedBatches(prev => ({ ...prev, [id]: !prev[id] }));
 
+  const [batchSort, setBatchSort] = React.useState<'name_asc' | 'name_desc' | 'default'>('name_asc');
+  const [batchSearch, setBatchSearch] = React.useState('');
+
   const submitNewClass = async () => {
     const ok = await handleAddClass(newClassName);
     if (ok) setNewClassName('');
   };
+
+  const processedBatches = React.useMemo(() => {
+    return batches
+      .filter(b => {
+        if (selectedBatchIdFilter !== 'All' && b.id !== selectedBatchIdFilter) return false;
+        if (batchSearch.trim() && !(b.batch_name || '').toLowerCase().includes(batchSearch.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (batchSort === 'name_asc') return (a.batch_name || '').localeCompare(b.batch_name || '');
+        if (batchSort === 'name_desc') return (b.batch_name || '').localeCompare(a.batch_name || '');
+        return 0;
+      });
+  }, [batches, selectedBatchIdFilter, batchSearch, batchSort]);
 
   return (
     <div className="space-y-4">
@@ -45,6 +62,25 @@ export default function BatchesTab({
           <p className={`text-xs ${textSecondary}`}>Manage batch timings, age groups, validity, and student capacities.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search batch..."
+            value={batchSearch}
+            onChange={(e) => setBatchSearch(e.target.value)}
+            className={`text-xs px-3 py-2 rounded-xl border outline-none font-semibold w-36 ${
+              textPrimary === 'text-white' ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
+            }`}
+          />
+          <select
+            value={batchSort}
+            onChange={(e) => setBatchSort(e.target.value as any)}
+            className={`text-xs px-3 py-2 rounded-xl border outline-none font-bold shrink-0 ${
+              textPrimary === 'text-white' ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-100 border-slate-300 text-slate-800'
+            }`}
+          >
+            <option value="name_asc">Name: A → Z</option>
+            <option value="name_desc">Name: Z → A</option>
+          </select>
           <select
             value={selectedBatchIdFilter}
             onChange={(e) => setSelectedBatchIdFilter(e.target.value)}
@@ -143,7 +179,7 @@ export default function BatchesTab({
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {batches.filter(b => selectedBatchIdFilter === 'All' || b.id === selectedBatchIdFilter).map((bt) => {
+        {processedBatches.map((bt) => {
           const isVisible = bt.is_visible !== false; // Default to true if undefined
           return (
             <div key={bt.id} className={`${bgCard} p-6 rounded-2xl space-y-4 flex flex-col justify-between`}>
