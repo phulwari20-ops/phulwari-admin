@@ -567,9 +567,13 @@ export default function BlogsTab({
                       const f = e.target.files?.[0] || null;
                       setThumbnailFile(f);
                       if (f) {
-                        const localUrl = URL.createObjectURL(f);
-                        if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: localUrl });
-                        else setBlogForm({ ...blogForm, featured_image: localUrl });
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64Url = ev.target?.result as string;
+                          if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: base64Url });
+                          else setBlogForm({ ...blogForm, featured_image: base64Url });
+                        };
+                        reader.readAsDataURL(f);
                       }
                     }}
                   />
@@ -609,9 +613,10 @@ export default function BlogsTab({
                   }}
                 >
                   <img
-                    src={thumbnailFile ? URL.createObjectURL(thumbnailFile) : (editingBlog ? editingBlog.featured_image : blogForm.featured_image)}
+                    src={(editingBlog ? editingBlog.featured_image : blogForm.featured_image) || '/galary4.webp'}
                     alt="Thumbnail Preview"
                     className="w-full h-full object-cover"
+                    onError={(e: any) => { e.target.src = '/galary4.webp'; }}
                   />
                 </div>
               </div>

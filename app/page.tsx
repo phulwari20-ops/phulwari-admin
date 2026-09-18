@@ -72,8 +72,11 @@ import {
   PhoneCall,
   UserX,
   HelpCircle,
-  ShieldAlert
+  ShieldAlert,
+  Heart,
+  Tent
 } from 'lucide-react'
+import { subscribeWithFallback } from '../lib/supabase/realtimeFallback'
 import TeachersTab from '../components/TeachersTab'
 import EnquiriesTab from '../components/EnquiriesTab'
 import DeactivatedTab from '../components/DeactivatedTab'
@@ -158,7 +161,7 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'faq_page' | 'terms_page' | 'privacy_page' | 'activities_cms' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'students' | 'student_list' | 'teachers' | 'attendance' | 'calendar' | 'fees' | 'batches' | 'bookings' | 'announcements' | 'gallery' | 'packages' | 'birthday_page' | 'faq_page' | 'terms_page' | 'privacy_page' | 'activities_cms' | 'mothers_cms' | 'camps_cms' | 'blogs' | 'reviews' | 'birthdays' | 'enquiries' | 'deactivated' | 'staff_mgmt' | 'renewals' | 'fee_alerts' | 'banners' | 'financial'>('dashboard')
   const [banners, setBanners] = useState<BannerItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -796,38 +799,43 @@ export default function AdminDashboardPage() {
     }
 
     const supabase = createClient()
-    const channel = supabase
-      .channel('enquiries-inserts')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'enquiries' },
-        (payload: any) => {
-          const lead = payload.new || {}
-          const name = lead.parent_name || lead.child_name || 'New lead'
-          const phone = lead.phone || ''
-          const service = lead.program_interested || 'General Inquiry'
+    const handleNewEnquiry = (payload: any) => {
+      const lead = payload?.new || {}
+      const name = lead.parent_name || lead.child_name || 'New lead'
+      const phone = lead.phone || ''
+      const service = lead.program_interested || 'General Inquiry'
 
-          // Keep the enquiries list live
-          setEnquiries(prev => (prev.some(e => e.id === lead.id) ? prev : [lead, ...prev]))
+      // Keep the enquiries list live
+      setEnquiries(prev => (prev.some(e => e.id === lead.id) ? prev : [lead, ...prev]))
 
-          // In-app banner
-          setLeadAlert({ name, phone, service, id: lead.id })
+      // In-app banner
+      setLeadAlert({ name, phone, service, id: lead.id })
 
-          // Browser push notification
-          try {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              const n = new Notification('🔔 New Lead Enquiry', {
-                body: `${name}${phone ? ` • ${phone}` : ''}\nInterested in: ${service}`,
-                tag: `lead-${lead.id}`,
-              })
-              n.onclick = () => { window.focus(); setActiveTab('enquiries'); n.close() }
-            }
-          } catch (e) { /* notifications unavailable */ }
+      // Browser push notification
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          const n = new Notification('🔔 New Lead Enquiry', {
+            body: `${name}${phone ? ` • ${phone}` : ''}\nInterested in: ${service}`,
+            tag: `lead-${lead.id}`,
+          })
+          n.onclick = () => { window.focus(); setActiveTab('enquiries'); n.close() }
         }
-      )
-      .subscribe()
+      } catch (e) { /* notifications unavailable */ }
+    }
 
-    return () => { try { supabase.removeChannel(channel) } catch (e) {} }
+    const subHandle = subscribeWithFallback({
+      supabase,
+      channelName: 'enquiries-inserts',
+      table: 'enquiries',
+      event: 'INSERT',
+      onDataChange: handleNewEnquiry,
+      pollFn: fetchEnquiries,
+      pollIntervalMs: 15000,
+    })
+
+    return () => {
+      subHandle.unsubscribe()
+    }
   }, [])
 
   const fetchEnquiries = async () => {
@@ -3599,7 +3607,9 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'batches', label: 'Batches & Class Timings', icon: Clock, count: batches.length },
               { id: 'attendance', label: 'Daily Attendance Marker', icon: Calendar },
               { id: 'calendar', label: 'Batch Attendance Calendar', icon: CalendarDays },
-              { id: 'activities_cms', label: 'Activities Website CMS (13 Pages)', icon: Layers },
+              { id: 'activities_cms', label: 'Child Activities CMS', icon: Layers },
+              { id: 'mothers_cms', label: 'Programs for Mothers CMS', icon: Heart },
+              { id: 'camps_cms', label: 'Camps & Events CMS', icon: Tent },
               { id: 'fees', label: 'Fee Management & Dues', icon: CreditCard, count: fees.filter((f: any) => f.status === 'pending').length },
               { id: 'financial', label: 'Financial ERP & P&L Dashboard', icon: DollarSign },
               { id: 'gallery', label: 'Gallery Photo Manager', icon: ImageIcon, count: galleryImages.length },
@@ -3619,8 +3629,8 @@ Management Phulwari Mother and Child Activity Centre`
               { id: 'enquiries', label: 'Lead & Enquiry Manager', icon: PhoneCall, count: enquiries.filter((e: any) => e.status !== 'Admission Done').length },
               ...(!isStaffAccount ? [{ id: 'staff_mgmt', label: 'Staff Portal & Access Control', icon: ShieldCheck }] : [])
             ].filter(item => {
-              // Always show Activities CMS and critical tabs unless explicitly restricted
-              if (item.id === 'activities_cms') return true;
+              // Always show CMS tabs and critical tabs unless explicitly restricted
+              if (item.id === 'activities_cms' || item.id === 'mothers_cms' || item.id === 'camps_cms') return true;
               if (isStaffAccount || adminRole === 'Staff') {
                 return (adminUser as any)?.permissions?.includes(item.id)
               }
@@ -3724,7 +3734,9 @@ Management Phulwari Mother and Child Activity Centre`
         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
           <div>
             <h2 className={`text-xl font-bold ${textPrimary} flex items-center gap-2`}>
-              {activeTab === 'activities_cms' && 'Dynamic Activities Website CMS (All 13 Programs)'}
+              {activeTab === 'activities_cms' && 'Child Activities Website CMS'}
+              {activeTab === 'mothers_cms' && 'Programs for Mothers Website CMS'}
+              {activeTab === 'camps_cms' && 'Camps & Events Website CMS'}
               {activeTab === 'banners' && 'Banner & Poster Management System'}
               {activeTab === 'enquiries' && 'Lead & Enquiry Follow-up Manager'}
               {activeTab === 'deactivated' && 'Deactivated Students & Discontinued Logs'}
@@ -4039,7 +4051,17 @@ Management Phulwari Mother and Child Activity Centre`
 
         {/* TAB: DYNAMIC ACTIVITIES CMS EDITOR */}
         {activeTab === 'activities_cms' && (
-          <ActivitiesTab />
+          <ActivitiesTab mode="activities" />
+        )}
+
+        {/* TAB: PROGRAMS FOR MOTHERS CMS EDITOR */}
+        {activeTab === 'mothers_cms' && (
+          <ActivitiesTab mode="mothers" />
+        )}
+
+        {/* TAB: CAMPS & EVENTS CMS EDITOR */}
+        {activeTab === 'camps_cms' && (
+          <ActivitiesTab mode="camps" />
         )}
 
         {/* TAB: PRIVACY POLICY PAGE EDITOR */}
