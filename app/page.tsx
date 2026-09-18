@@ -1608,58 +1608,52 @@ export default function AdminDashboardPage() {
       admission_date: newStudentObj.admission_date || null
     }
 
-    const supabaseUrl = getSupabaseUrl()
-    const supabaseKey = getSupabaseKey()
-
     try {
-      let res = await fetch(`${supabaseUrl}/rest/v1/students`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify([dbPayload])
-      })
+      const supabase = createClient()
+      let insertedRow: any = null
+      let insertError: any = null
 
-      if (!res.ok) {
-        const errJson = await res.clone().json().catch(() => ({}));
-        const errStr = JSON.stringify(errJson);
+      const { data: directData, error: directErr } = await supabase
+        .from('students')
+        .insert([dbPayload])
+        .select()
 
-        const isFkError = errJson.code === '23503' || errStr.includes('students_batch_id_fkey') || (errJson.message && errJson.message.includes('foreign key constraint'));
-        const isMissingCol = errJson.message && (errJson.message.includes('column') || errJson.message.includes('schema cache') || errJson.code === 'PGRST204');
+      if (!directErr && directData && directData.length > 0) {
+        insertedRow = directData[0]
+      } else if (directErr) {
+        insertError = directErr
+        const errStr = JSON.stringify(directErr)
+        const isFkError = directErr.code === '23503' || errStr.includes('students_batch_id_fkey') || (directErr.message && directErr.message.includes('foreign key constraint'))
+        const isMissingCol = directErr.message && (directErr.message.includes('column') || directErr.message.includes('schema cache') || directErr.code === 'PGRST204')
 
         if (isFkError || isMissingCol) {
-          console.warn('⚠️ Retrying Supabase student insert with fallback payload (FK/schema correction)...');
-          const fallbackPayload = { ...dbPayload };
-          if (isFkError) {
-            fallbackPayload.batch_id = null;
-          }
+          console.warn('⚠️ Retrying Supabase student insert with fallback payload (FK/schema correction)...')
+          const fallbackPayload: any = { ...dbPayload }
+          if (isFkError) fallbackPayload.batch_id = null
           if (isMissingCol) {
-            delete (fallbackPayload as any).category;
-            delete (fallbackPayload as any).custom_days;
-            delete (fallbackPayload as any).classes_total;
-            delete (fallbackPayload as any).classes_consumed;
-            delete (fallbackPayload as any).validity_end_date;
+            delete fallbackPayload.category
+            delete fallbackPayload.custom_days
+            delete fallbackPayload.classes_total
+            delete fallbackPayload.classes_consumed
+            delete fallbackPayload.validity_end_date
           }
 
-          res = await fetch(`${supabaseUrl}/rest/v1/students`, {
-            method: 'POST',
-            headers: {
-              'apikey': supabaseKey,
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify([fallbackPayload])
-          });
+          const { data: retryData, error: retryErr } = await supabase
+            .from('students')
+            .insert([fallbackPayload])
+            .select()
+
+          if (!retryErr && retryData && retryData.length > 0) {
+            insertedRow = retryData[0]
+            insertError = null
+          } else {
+            insertError = retryErr || directErr
+          }
         }
       }
 
-      if (res.ok) {
-        const responseData = await res.json()
-        const inserted = responseData[0] || newStudentObj
+      if (insertedRow || !insertError) {
+        const inserted = insertedRow || newStudentObj
         const enriched = {
           ...newStudentObj,
           ...inserted,
@@ -1669,7 +1663,6 @@ export default function AdminDashboardPage() {
 
         // If Customized Batch is selected, insert schedules to student_custom_schedules table
         if (selectedBatchObj?.id === '00000000-0000-0000-0000-000000000000' && newStudentForm.custom_schedules && newStudentForm.custom_schedules.length > 0) {
-          const supabase = createClient()
           const customSchedulesPayload = newStudentForm.custom_schedules.map((sch: any) => ({
             student_id: studentUuid,
             day_of_week: sch.day_of_week,
@@ -1692,7 +1685,6 @@ export default function AdminDashboardPage() {
         } catch (err) {}
 
         // Find matching enquiry and mark as Admission Done
-        const supabase = createClient()
         const matchingEnq = enquiries.find(e => e.child_name.toLowerCase() === newStudentObj.full_name.toLowerCase() || e.phone === newStudentObj.parent_phone)
         if (matchingEnq) {
           await supabase.from('enquiries').update({ status: 'Admission Done' }).eq('id', matchingEnq.id)
@@ -1702,21 +1694,15 @@ export default function AdminDashboardPage() {
         setIsAddStudentOpen(false)
         alert('Student created successfully!')
       } else {
-        const errorText = await res.text()
-        let errMsg = 'Failed to save student record to database.'
-        try {
-          const parsed = JSON.parse(errorText)
-          if (parsed.message) {
-            errMsg = parsed.message
-            if (parsed.code === '23505') {
-              errMsg = `Admission ID '${newStudentObj.admission_id}' already exists. Please choose a different ID.`
-            }
-          }
-        } catch (_) {}
+        let errMsg = insertError?.message || 'Failed to save student record to database.'
+        if (insertError?.code === '23505') {
+          errMsg = `Admission ID '${newStudentObj.admission_id}' already exists. Please choose a different ID.`
+        }
         alert(errMsg)
       }
     } catch (err: any) {
-      alert(`Network error: ${err.message || err}`)
+      const errMsg = err?.message || err?.error_description || (typeof err === 'string' ? err : 'Failed to save student record.')
+      alert(`Save error: ${errMsg}`)
     }
   }
 
@@ -2721,26 +2707,41 @@ Management Phulwari Mother and Child Activity Centre`
 
   const handleDeleteClass = async (classId: string, className: string) => {
     // A class still referenced by a batch schedule would leave that schedule
-    // pointing at an activity that no longer exists, so block it.
-    const inUse = batchSchedules.filter((sch: any) => sch.class_name === className)
+    const cleanName = (className || '').trim()
+    const inUse = batchSchedules.filter(
+      (sch: any) => (sch.class_name || '').trim().toLowerCase() === cleanName.toLowerCase()
+    )
     if (inUse.length > 0) {
       alert(
-        `"${className}" is used by ${inUse.length} batch schedule entr${inUse.length === 1 ? 'y' : 'ies'}. ` +
+        `"${cleanName || className}" is used by ${inUse.length} batch schedule entr${inUse.length === 1 ? 'y' : 'ies'}. ` +
           'Remove those schedule entries first.'
       )
       return
     }
 
-    if (!confirm(`Remove "${className}" from the Class Master?`)) return
+    if (!confirm(`Remove "${cleanName || className}" from the Class Master?`)) return
+
+    // Optimistically update local state and localStorage
+    const remaining = classes.filter(
+      (c: any) => c.id !== classId && (c.class_name || '').trim().toLowerCase() !== cleanName.toLowerCase()
+    )
+    setClasses(remaining)
+    try {
+      localStorage.setItem('phulwari_admin_classes', JSON.stringify(remaining))
+    } catch (_) {}
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.from('classes').delete().eq('id', classId)
-      if (error) throw error
-      setClasses(prev => prev.filter((c: any) => c.id !== classId))
+      if (classId) {
+        await supabase.from('classes').delete().eq('id', classId)
+      }
+      if (cleanName) {
+        await supabase.from('classes').delete().eq('class_name', cleanName)
+      }
     } catch (err: any) {
       console.error('❌ [CLASS MASTER DELETE ERROR]:', err)
-      alert(`Could not remove the class: ${err?.message || 'unknown error'}`)
+      const errorText = err?.message || err?.error_description || (typeof err === 'string' ? err : 'Unknown error')
+      console.warn('Class deletion sync note:', errorText)
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import * as LucideIcons from 'lucide-react'
 import {
   Save,
@@ -29,9 +29,17 @@ import {
   Baby,
   Sun,
   Snowflake,
-  Cake
+  Cake,
+  Video,
+  Film,
+  Upload,
+  Play,
+  RotateCcw,
+  Clock,
+  Radio
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { compressVideo, formatBytes, generateVideoPoster } from '@/lib/videoCompressor'
 import IconPickerModal, { renderLucideIcon } from './IconPickerModal'
 
 const COMMON_ICONS = [
@@ -55,6 +63,17 @@ function renderIcon(iconName: string, className = 'w-4 h-4', style?: React.CSSPr
   return renderLucideIcon(iconName, className, style)
 }
 
+export interface ActivityVideo {
+  id: string
+  title: string
+  description?: string
+  url: string
+  poster?: string
+  duration?: string
+  is_featured?: boolean
+  created_at?: string
+}
+
 export interface ActivityRecord {
   id: string
   slug: string
@@ -67,6 +86,7 @@ export interface ActivityRecord {
   intro_p2?: string
   hero_image: string
   gallery_images: string[]
+  videos?: ActivityVideo[]
   color: string
   bg: string
   content_color?: string
@@ -139,13 +159,23 @@ export function isChildActivity(act: { slug?: string; badge_text?: string; h1?: 
 export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProps) {
   const [activities, setActivities] = useState<ActivityRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [activeSubTab, setActiveSubTab] = useState<'basic' | 'seo' | 'media' | 'benefits' | 'programs' | 'details' | 'faqs' | 'cta' | 'schema'>('basic')
+  const [activeSubTab, setActiveSubTab] = useState<'basic' | 'seo' | 'media' | 'videos' | 'benefits' | 'programs' | 'details' | 'faqs' | 'cta' | 'schema'>('basic')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
+
+  // Video Management State
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [compressingVideo, setCompressingVideo] = useState(false)
+  const [compressionProgress, setCompressionProgress] = useState(0)
+  const [compressionStatus, setCompressionStatus] = useState('')
+  const [autoCompress, setAutoCompress] = useState(true)
+  const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null)
+  const [videoStats, setVideoStats] = useState<{ original: number; compressed: number; saved: number } | null>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
 
   // Filter activities based on the current active mode
   const displayedActivities = useMemo(() => {
@@ -178,16 +208,19 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
     }
   }, [displayedActivities, selectedId])
 
-  // Fetch activities via server-side /api/activities proxy with fallback
+  // Fetch activities via server-side /api/activities proxy with fallback & timeout protection
   const loadActivities = async () => {
     setLoading(true)
     setErrorMessage(null)
     try {
       let data: any[] | null = null
 
-      // 1. Try server-side API proxy first
+      // 1. Try server-side API proxy first with 3.5s timeout
       try {
-        const res = await fetch('/api/activities')
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3500)
+        const res = await fetch('/api/activities', { signal: controller.signal })
+        clearTimeout(timeoutId)
         if (res.ok) {
           const apiData = await res.json()
           if (Array.isArray(apiData) && apiData.length > 0) {
@@ -195,26 +228,37 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
           }
         }
       } catch (apiErr) {
-        console.warn('API /api/activities fetch failed, trying direct client:', apiErr)
+        console.warn('API /api/activities fetch timed out or failed, trying direct client:', apiErr)
       }
 
-      // 2. Fallback to direct client
+      // 2. Fallback to direct Supabase client
       if (!data) {
-        const supabase = createClient()
-        const { data: dbData, error } = await supabase
-          .from('activity_pages')
-          .select('*')
-          .order('order_index', { ascending: true })
+        try {
+          const supabase = createClient()
+          const { data: dbData, error } = await supabase
+            .from('activity_pages')
+            .select('*')
+            .order('order_index', { ascending: true })
 
-        if (!error && dbData) {
-          data = dbData
+          if (!error && dbData && dbData.length > 0) {
+            data = dbData
+          }
+        } catch (dbErr) {
+          console.warn('Direct Supabase fetch failed:', dbErr)
         }
       }
 
       if (data && data.length > 0) {
-        const formatted = data.map((a: any) => ({
+        // Filter out deprecated test items
+        const cleanedData = data.filter((a: any) => 
+          a.slug !== 'activity-4984' && 
+          a.slug !== 'new-activity-1160' && 
+          !a.id?.startsWith('activity-4984')
+        )
+        const formatted = cleanedData.map((a: any) => ({
           ...a,
           content_color: a.content_color || a.cta?.content_color || '#334155',
+          videos: a.videos || [],
         }))
         setActivities(formatted as ActivityRecord[])
         try {
@@ -223,8 +267,14 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
       } else {
         const saved = localStorage.getItem('phulwari_admin_activities')
         if (saved) {
-          const parsed = JSON.parse(saved)
-          setActivities(parsed)
+          try {
+            const parsed = JSON.parse(saved).filter((a: any) => 
+              a.slug !== 'activity-4984' && 
+              a.slug !== 'new-activity-1160' && 
+              !a.id?.startsWith('activity-4984')
+            )
+            setActivities(parsed)
+          } catch (_) {}
         }
       }
     } catch (err: any) {
@@ -236,7 +286,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
           setActivities(parsed)
         } catch (_) {}
       }
-      setErrorMessage(err.message || 'Failed to load activities from database')
+      setErrorMessage(err?.message || 'Failed to load activities from database')
     } finally {
       setLoading(false)
     }
@@ -271,6 +321,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
           ...(currentActivity.cta || {}),
           content_color: content_color || '#334155',
         },
+        videos: currentActivity.videos || [],
         updated_at: new Date().toISOString(),
       }
 
@@ -314,6 +365,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                   ...a,
                   ...savedData,
                   content_color: savedData.content_color || content_color || '#334155',
+                  videos: savedData.videos || a.videos || [],
                 }
               : a
           )
@@ -333,9 +385,170 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
       setTimeout(() => setSaveSuccess(false), 4000)
     } catch (err: any) {
       console.error('Error saving activity:', err)
-      setErrorMessage(err.message || 'Failed to save changes')
+      setErrorMessage(err?.message || 'Failed to save changes')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Handle direct video file selection and optional client-side automatic compression + upload
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !currentActivity) return
+
+    setUploadingVideo(true)
+    setCompressingVideo(true)
+    setCompressionProgress(0)
+    setCompressionStatus('Starting video processing...')
+    setVideoStats(null)
+
+    try {
+      let fileToUpload: File = file
+      let posterDataUrl = ''
+      let videoDurationStr = ''
+
+      if (autoCompress) {
+        setCompressionStatus('Compressing video on client-side...')
+        const compressionResult = await compressVideo(file, {
+          maxWidth: 1280,
+          maxHeight: 720,
+          videoBitrate: 1_800_000,
+          onProgress: (percent, status) => {
+            setCompressionProgress(percent)
+            setCompressionStatus(status)
+          },
+        })
+        fileToUpload = compressionResult.file
+        posterDataUrl = compressionResult.poster
+        if (compressionResult.duration) {
+          const mins = Math.floor(compressionResult.duration / 60)
+          const secs = Math.floor(compressionResult.duration % 60)
+          videoDurationStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`
+        }
+        if (compressionResult.compressionRatio > 0) {
+          setVideoStats({
+            original: compressionResult.originalSize,
+            compressed: compressionResult.compressedSize,
+            saved: compressionResult.compressionRatio,
+          })
+        }
+      } else {
+        setCompressionStatus('Extracting thumbnail poster...')
+        posterDataUrl = await generateVideoPoster(file, 1.0)
+      }
+
+      setCompressionStatus('Uploading video to Cloudflare R2 / storage...')
+      setCompressionProgress(92)
+
+      const formData = new FormData()
+      formData.append('file', fileToUpload)
+      formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
+
+      const res = await fetch('/api/r2/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.error || 'Failed to upload video')
+      }
+
+      const uploadResult = await res.json()
+      const newVideoObj: ActivityVideo = {
+        id: 'vid-' + Date.now(),
+        title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+        description: `Session video for ${currentActivity.badge_text || currentActivity.h1}`,
+        url: uploadResult.url,
+        poster: posterDataUrl || '/phulwari_logo.webp',
+        duration: videoDurationStr || '0:30',
+        is_featured: (currentActivity.videos || []).length === 0,
+        created_at: new Date().toISOString(),
+      }
+
+      const updatedVideos = [...(currentActivity.videos || []), newVideoObj]
+      updateCurrent('videos', updatedVideos)
+      setCompressionProgress(100)
+      setCompressionStatus('Video uploaded & attached successfully!')
+      setTimeout(() => {
+        setCompressionStatus('')
+        setUploadingVideo(false)
+        setCompressingVideo(false)
+      }, 2500)
+    } catch (uploadErr: any) {
+      console.error('Video upload error:', uploadErr)
+      alert(`Video processing/upload error: ${uploadErr.message || uploadErr}`)
+      setUploadingVideo(false)
+      setCompressingVideo(false)
+    } finally {
+      if (videoInputRef.current) {
+        videoInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Add existing video by path or public URL (e.g. /videos/cricket.mov)
+  const handleAddVideoByUrl = (url: string, title?: string, poster?: string) => {
+    if (!url.trim() || !currentActivity) return
+    const cleanUrl = url.trim()
+    const autoTitle = title || cleanUrl.split('/').pop()?.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Activity Video'
+    const newVideoObj: ActivityVideo = {
+      id: 'vid-' + Date.now(),
+      title: autoTitle,
+      description: `Training session video for ${currentActivity.badge_text || currentActivity.h1}`,
+      url: cleanUrl,
+      poster: poster || currentActivity.hero_image || '/phulwari_logo.webp',
+      duration: '0:30',
+      is_featured: (currentActivity.videos || []).length === 0,
+      created_at: new Date().toISOString(),
+    }
+    updateCurrent('videos', [...(currentActivity.videos || []), newVideoObj])
+  }
+
+  // Delete video from activity
+  const handleDeleteVideo = (videoId: string) => {
+    if (!currentActivity) return
+    const updated = (currentActivity.videos || []).filter((v) => v.id !== videoId)
+    updateCurrent('videos', updated)
+  }
+
+  // Set video as featured
+  const handleToggleFeaturedVideo = (videoId: string) => {
+    if (!currentActivity) return
+    const updated = (currentActivity.videos || []).map((v) => ({
+      ...v,
+      is_featured: v.id === videoId,
+    }))
+    updateCurrent('videos', updated)
+  }
+
+  // Delete activity
+  const handleDelete = async (id: string) => {
+    const target = activities.find((a) => a.id === id || a.slug === id)
+    const displayName = target?.badge_text || target?.h1 || id
+    if (!confirm(`Are you sure you want to delete "${displayName}"? This will remove it from the website.`)) return
+
+    // Optimistically update local state & localStorage
+    const remaining = activities.filter((a) => a.id !== id && a.slug !== id && (target?.slug ? a.slug !== target.slug : true))
+    setActivities(remaining)
+    if (selectedId === id || (target && selectedId === target.id)) {
+      setSelectedId(remaining.length > 0 ? remaining[0].id : null)
+    }
+    try {
+      localStorage.setItem('phulwari_admin_activities', JSON.stringify(remaining))
+    } catch (_) {}
+
+    try {
+      const supabase = createClient()
+      const targetSlug = target?.slug || id
+      await supabase.from('activity_pages').delete().or(`id.eq.${id},slug.eq.${targetSlug}`)
+      try {
+        await fetch(`/api/activities?id=${id}&slug=${targetSlug}`, { method: 'DELETE' })
+      } catch (_) {}
+    } catch (err: any) {
+      console.error('Delete sync error:', err)
+      const errorText = err?.message || err?.error_description || (typeof err === 'string' ? err : JSON.stringify(err))
+      console.warn('Activity delete note:', errorText)
     }
   }
 
@@ -460,26 +673,6 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
     setSaving(false)
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 3000)
-  }
-
-  // Delete activity
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this page? This will remove it from the website.')) return
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.from('activity_pages').delete().eq('id', id)
-      if (error) throw error
-      try {
-        await fetch(`/api/activities?id=${id}`, { method: 'DELETE' })
-      } catch (_) {}
-      const remaining = activities.filter((a) => a.id !== id)
-      setActivities(remaining)
-      if (selectedId === id) {
-        setSelectedId(remaining.length > 0 ? remaining[0].id : null)
-      }
-    } catch (err: any) {
-      alert('Delete failed: ' + err.message)
-    }
   }
 
   // Section title & descriptions based on mode
@@ -701,6 +894,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                   { key: 'basic', label: 'Basic & Colors' },
                   { key: 'seo', label: 'SEO & Headers' },
                   { key: 'media', label: 'Images & Gallery' },
+                  { key: 'videos', label: `Videos & Streams (${currentActivity.videos?.length || 0})` },
                   { key: 'benefits', label: `Benefits (${currentActivity.benefits?.length || 0})` },
                   { key: 'programs', label: `Programs (${currentActivity.programs?.length || 0})` },
                   { key: 'details', label: 'Why Us & Commute' },
@@ -1155,6 +1349,301 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3B. VIDEOS & STREAMS (SEPARATE FROM IMAGES) */}
+                {activeSubTab === 'videos' && (
+                  <div className="space-y-6">
+                    {/* Header Banner */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-pink-50 to-amber-50 border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="p-1.5 rounded-lg bg-purple-600 text-white">
+                            <Film className="w-4 h-4" />
+                          </span>
+                          <h3 className="text-base font-bold text-gray-900">
+                            Videos & Streaming Management
+                          </h3>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Upload fast-streaming videos to Cloudflare R2 / storage with automatic client-side compression.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => videoInputRef.current?.click()}
+                          disabled={uploadingVideo}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition shadow-sm disabled:opacity-50 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{uploadingVideo ? 'Processing Video...' : 'Upload Video File'}</span>
+                        </button>
+                        <input
+                          ref={videoInputRef}
+                          type="file"
+                          accept="video/*,.mp4,.mov,.webm,.m4v,.mkv"
+                          onChange={handleVideoFileChange}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Compression & Upload Status Box */}
+                    {uploadingVideo && (
+                      <div className="p-5 rounded-2xl bg-white border border-purple-200 shadow-lg space-y-3 animate-fadeIn">
+                        <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                            <span>{compressionStatus || 'Compressing & uploading video...'}</span>
+                          </span>
+                          <span>{compressionProgress}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-purple-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 rounded-full"
+                            style={{ width: `${compressionProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Compression Result Stat Banner */}
+                    {videoStats && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>
+                            Optimized: {formatBytes(videoStats.original)} → {formatBytes(videoStats.compressed)} ({videoStats.saved}% bandwidth saved!)
+                          </span>
+                        </span>
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Fast Web Ready</span>
+                      </div>
+                    )}
+
+                    {/* Compression Setting Toggle */}
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50 text-xs">
+                      <div>
+                        <span className="font-bold text-gray-800">Automatic Client-Side Video Compression</span>
+                        <p className="text-gray-500 mt-0.5">
+                          Resizes camera/phone 4K/1080p clips to lightweight 720p 30fps web stream before uploading.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoCompress}
+                        onChange={(e) => setAutoCompress(e.target.checked)}
+                        className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Quick Add Built-in Videos Bar */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Quick Link Built-in Video Assets
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: '🎂 Birthday Party Video', url: '/videos/birthday_party.mov', poster: '/birthday_party/image.png' },
+                          { label: '🏏 Cricket Academy Video', url: '/videos/cricket.mov', poster: '/Cricket/image.png' },
+                          { label: '🤸 Gymnastics Video', url: '/videos/gymnastics.mov', poster: '/Gymnastics/image.png' },
+                          { label: '🛼 Roller Skating Video', url: '/videos/skating.mov', poster: '/Roller_skating/image.png' },
+                        ].map((q) => (
+                          <button
+                            key={q.url}
+                            type="button"
+                            onClick={() => handleAddVideoByUrl(q.url, q.label.replace(/^[^\s]+\s/, ''), q.poster)}
+                            className="px-3 py-1.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:border-purple-300 transition shadow-xs cursor-pointer"
+                          >
+                            + {q.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Videos List */}
+                    <div className="space-y-4 pt-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-gray-900">
+                            Active Activity Videos ({(currentActivity.videos || []).length})
+                          </h4>
+                          <p className="text-xs text-gray-500">
+                            Videos featured here appear in the frontend action showcase section.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddVideoByUrl('/videos/birthday_party.mov', 'New Video')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Video Link</span>
+                        </button>
+                      </div>
+
+                      {(currentActivity.videos || []).length === 0 ? (
+                        <div className="p-8 rounded-2xl border-2 border-dashed border-gray-200 text-center space-y-3 bg-gray-50/50">
+                          <Video className="w-10 h-10 text-gray-400 mx-auto" />
+                          <div>
+                            <h5 className="text-sm font-bold text-gray-700">No Videos Attached Yet</h5>
+                            <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                              Upload a video clip or link one of the built-in video assets above to showcase action footage on this page.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {(currentActivity.videos || []).map((vid, idx) => (
+                            <div
+                              key={vid.id || idx}
+                              className={`p-4 rounded-2xl border transition-all ${
+                                vid.is_featured
+                                  ? 'border-purple-300 bg-purple-50/30 ring-1 ring-purple-200 shadow-sm'
+                                  : 'border-gray-200 bg-white shadow-xs'
+                              }`}
+                            >
+                              <div className="flex flex-col md:flex-row gap-4">
+                                {/* Video Thumbnail / Mini Player */}
+                                <div className="w-full md:w-56 aspect-video rounded-xl overflow-hidden bg-slate-950 relative shrink-0 border border-slate-800">
+                                  {previewVideoUrl === vid.url ? (
+                                    <video
+                                      src={vid.url}
+                                      controls
+                                      autoPlay
+                                      className="w-full h-full object-contain"
+                                    />
+                                  ) : (
+                                    <div
+                                      onClick={() => setPreviewVideoUrl(vid.url)}
+                                      className="w-full h-full cursor-pointer group relative flex items-center justify-center bg-slate-900"
+                                    >
+                                      {vid.poster && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={vid.poster}
+                                          alt={vid.title}
+                                          className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition"
+                                        />
+                                      )}
+                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                        <div className="w-10 h-10 rounded-full bg-pink-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                          <Play className="w-5 h-5 fill-current ml-0.5" />
+                                        </div>
+                                      </div>
+                                      <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold text-white px-1.5 py-0.5 rounded">
+                                        {vid.duration || '0:30'}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Video Fields */}
+                                <div className="flex-1 space-y-3 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <input
+                                      type="text"
+                                      value={vid.title || ''}
+                                      onChange={(e) => {
+                                        const copy = [...(currentActivity.videos || [])]
+                                        copy[idx] = { ...copy[idx], title: e.target.value }
+                                        updateCurrent('videos', copy)
+                                      }}
+                                      placeholder="Video Title"
+                                      className="w-full font-bold text-sm text-gray-900 border-b border-transparent focus:border-purple-400 focus:outline-none px-1 py-0.5"
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteVideo(vid.id)}
+                                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                                      title="Delete Video"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  <input
+                                    type="text"
+                                    value={vid.description || ''}
+                                    onChange={(e) => {
+                                      const copy = [...(currentActivity.videos || [])]
+                                      copy[idx] = { ...copy[idx], description: e.target.value }
+                                      updateCurrent('videos', copy)
+                                    }}
+                                    placeholder="Short video description..."
+                                    className="w-full text-xs text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                                  />
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-0.5">Video URL</label>
+                                      <input
+                                        type="text"
+                                        value={vid.url || ''}
+                                        onChange={(e) => {
+                                          const copy = [...(currentActivity.videos || [])]
+                                          copy[idx] = { ...copy[idx], url: e.target.value }
+                                          updateCurrent('videos', copy)
+                                        }}
+                                        className="w-full font-mono text-[11px] border border-gray-200 rounded-lg px-2 py-1"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-0.5">Poster Image</label>
+                                      <input
+                                        type="text"
+                                        value={vid.poster || ''}
+                                        onChange={(e) => {
+                                          const copy = [...(currentActivity.videos || [])]
+                                          copy[idx] = { ...copy[idx], poster: e.target.value }
+                                          updateCurrent('videos', copy)
+                                        }}
+                                        className="w-full font-mono text-[11px] border border-gray-200 rounded-lg px-2 py-1"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-between pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleFeaturedVideo(vid.id)}
+                                      className={`px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                        vid.is_featured
+                                          ? 'bg-purple-600 text-white shadow-xs'
+                                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      <Sparkles className="w-3 h-3" />
+                                      <span>{vid.is_featured ? 'Primary Featured Video' : 'Set as Featured'}</span>
+                                    </button>
+
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] text-gray-400">Duration:</span>
+                                      <input
+                                        type="text"
+                                        value={vid.duration || '0:30'}
+                                        onChange={(e) => {
+                                          const copy = [...(currentActivity.videos || [])]
+                                          copy[idx] = { ...copy[idx], duration: e.target.value }
+                                          updateCurrent('videos', copy)
+                                        }}
+                                        className="w-14 text-xs font-mono text-center border border-gray-200 rounded px-1 py-0.5"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

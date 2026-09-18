@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/client';
+import { createClient as createSupabaseServerClient } from '@supabase/supabase-js';
+import { getSupabaseUrl, getSupabaseKey } from '@/lib/supabase/env';
+
+function getServerSupabase() {
+  return createSupabaseServerClient(getSupabaseUrl(), getSupabaseKey(), {
+    auth: { persistSession: false },
+  });
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
 
-    const supabase = createClient();
+    const supabase = getServerSupabase();
 
     if (slug) {
       const { data, error } = await supabase
@@ -41,7 +48,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = getServerSupabase();
     const { content_color, ...cleanBody } = body;
     const payload = {
       ...cleanBody,
@@ -82,7 +89,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID or slug is required' }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = getServerSupabase();
     const { error } = await supabase
       .from('activity_pages')
       .delete()
