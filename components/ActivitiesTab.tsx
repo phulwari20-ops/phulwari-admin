@@ -1449,10 +1449,10 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {[
-                          { label: '🎂 Birthday Party Video', url: '/videos/birthday_party.mov', poster: '/birthday_party/image.png' },
-                          { label: '🏏 Cricket Academy Video', url: '/videos/cricket.mov', poster: '/Cricket/image.png' },
-                          { label: '🤸 Gymnastics Video', url: '/videos/gymnastics.mov', poster: '/Gymnastics/image.png' },
-                          { label: '🛼 Roller Skating Video', url: '/videos/skating.mov', poster: '/Roller_skating/image.png' },
+                          { label: '🎂 Birthday Party Video', url: '/videos/birthday_party.mp4', poster: '/birthday_party/image.png' },
+                          { label: '🏏 Cricket Academy Video', url: '/videos/cricket.mp4', poster: '/Cricket/image.png' },
+                          { label: '🤸 Gymnastics Video', url: '/videos/gymnastics.mp4', poster: '/Gymnastics/image.png' },
+                          { label: '🛼 Roller Skating Video', url: '/videos/skating.mp4', poster: '/Roller_skating/image.png' },
                         ].map((q) => (
                           <button
                             key={q.url}
@@ -1479,7 +1479,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleAddVideoByUrl('/videos/birthday_party.mov', 'New Video')}
+                          onClick={() => handleAddVideoByUrl('/videos/birthday_party.mp4', 'New Video')}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
