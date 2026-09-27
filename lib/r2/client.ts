@@ -117,7 +117,7 @@ export async function listVideos(): Promise<Array<{ key: string; url: string; si
       );
 
       if (res.Contents) {
-        return res.Contents.map((obj) => {
+        return res.Contents.map((obj: any) => {
           const key = obj.Key || '';
           const url = config.publicDomain
             ? `${config.publicDomain.replace(/\/$/, '')}/${key}`
