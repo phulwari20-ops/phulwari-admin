@@ -48,15 +48,34 @@ function getAlertInfo(remaining: number, daysDiff: number | null) {
   return alerts
 }
 
+function cleanPhoneNumber(rawPhone: string | number | undefined | null): string {
+  if (!rawPhone) return '919999999999'
+  let phone = String(rawPhone).replace(/[^0-9]/g, '')
+  if (phone.startsWith('0')) {
+    phone = phone.replace(/^0+/, '')
+  }
+  if (phone.length === 10) {
+    phone = `91${phone}`
+  }
+  return phone || '919999999999'
+}
+
+function getWhatsappUrl(rawPhone: string | number | undefined | null, msg: string): string {
+  const target = cleanPhoneNumber(rawPhone)
+  const encoded = encodeURIComponent(msg)
+  const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  if (isMobile) {
+    return `https://api.whatsapp.com/send?phone=${target}&text=${encoded}`
+  }
+  return `https://web.whatsapp.com/send?phone=${target}&text=${encoded}`
+}
+
 function buildRenewalWhatsapp(st: any, batchName: string, remaining: number, daysDiff: number | null) {
-  const phone = (st.parent_phone || '').replace(/[^0-9]/g, '')
-  const target = phone.length === 10 ? `91${phone}` : phone || '919999999999'
-  
   const alerts = getAlertInfo(remaining, daysDiff)
   const alertText = alerts.length > 0 ? alerts.map(a => `⚠️ ${a}`).join('\n') : 'Plan Renewal Reminder'
   
   const msg = `Dear ${st.parent_name || 'Parent'},\n\nThis is a gentle renewal reminder from Phulwari Mother & Child Activity Centre.\n\n🎓 Student: ${st.full_name} (${st.admission_id})\n📦 Package: ${batchName}\n\n${alertText}\n\nPlease renew at the earliest to ensure uninterrupted sessions.\n\n🌸 Phulwari Centre\nPatna`
-  return `https://wa.me/${target}?text=${encodeURIComponent(msg)}`
+  return getWhatsappUrl(st.parent_phone, msg)
 }
 
 function buildSmsLink(st: any, remaining: number, daysDiff: number | null) {
@@ -235,6 +254,11 @@ export default function RenewalAlertsTab({
                             href={buildRenewalWhatsapp(st, st.batchName, st.remaining, st.daysDiff)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              const url = buildRenewalWhatsapp(st, st.batchName, st.remaining, st.daysDiff)
+                              window.open(url, '_blank', 'noopener,noreferrer')
+                            }}
                             className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-600 border border-emerald-500/20 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
                             title="Send WhatsApp reminder"
                           >

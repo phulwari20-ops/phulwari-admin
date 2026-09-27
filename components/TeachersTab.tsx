@@ -159,7 +159,11 @@ export default function TeachersTab({
                   <Edit3 className="w-4 h-4" /> Edit
                 </button>
                 <button
-                  onClick={() => handleDeleteTeacher(tch.id)}
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete teacher "${tch.name}"? This action cannot be undone.`)) {
+                      handleDeleteTeacher(tch.id)
+                    }
+                  }}
                   className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-600 hover:text-white dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
                   <Trash2 className="w-4 h-4" /> Delete

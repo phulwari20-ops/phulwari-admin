@@ -36,7 +36,7 @@ export default function BlogsTab({
     banner_image: '',
     category: 'Education',
     tags: '',
-    status: 'draft',
+    status: 'published',
     featured: false,
     author_name: 'Phulwari Admin',
     meta_title: '',
@@ -45,10 +45,45 @@ export default function BlogsTab({
   });
   const [thumbnailAspect, setThumbnailAspect] = useState('16:9');
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     fetchBlogs();
   }, []);
+
+  const uploadBlogImage = async (file: File): Promise<string> => {
+    setUploadingImage(true);
+    try {
+      const supabase = createClient();
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const fileName = `blog_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+      const filePath = `blogs/${fileName}`;
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('gallery')
+        .upload(filePath, file, {
+          contentType: file.type || 'image/jpeg',
+          upsert: true
+        });
+
+      if (!uploadErr && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from('gallery').getPublicUrl(filePath);
+        if (publicUrlData?.publicUrl) {
+          return publicUrlData.publicUrl;
+        }
+      }
+      // If storage upload encounters an issue, fallback to high-quality compressed WebP data URL
+      const compressed = await compressImage(file);
+      return compressed;
+    } catch (err) {
+      console.warn('Storage upload fallback:', err);
+      const compressed = await compressImage(file);
+      return compressed;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const compressImage = (file: File, maxWidth = 1200, quality = 0.82): Promise<string> => {
     return new Promise((resolve) => {
@@ -181,7 +216,7 @@ export default function BlogsTab({
         banner_image: '',
         category: 'Education',
         tags: '',
-        status: 'draft',
+        status: 'published',
         featured: false,
         author_name: 'Phulwari Admin',
         meta_title: '',
@@ -592,21 +627,24 @@ export default function BlogsTab({
               <div>
                 <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Upload Thumbnail File (अपलोड फाइल):</label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-[11px] transition cursor-pointer">Choose file</span>
+                  <span className={`px-4 py-2 font-bold rounded-xl text-[11px] transition cursor-pointer text-white ${uploadingImage ? 'bg-orange-400 animate-pulse' : 'bg-orange-500 hover:bg-orange-600'}`}>
+                    {uploadingImage ? 'Uploading...' : 'Choose file'}
+                  </span>
                   <span className={`text-[10px] font-semibold truncate max-w-[160px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                     {thumbnailFile ? thumbnailFile.name : 'No file chosen'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={uploadingImage}
                     className="hidden"
                     onChange={async (e) => {
                       const f = e.target.files?.[0] || null;
                       setThumbnailFile(f);
                       if (f) {
-                        const compressedBase64 = await compressImage(f);
-                        if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: compressedBase64 });
-                        else setBlogForm({ ...blogForm, featured_image: compressedBase64 });
+                        const uploadedUrl = await uploadBlogImage(f);
+                        if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: uploadedUrl });
+                        else setBlogForm({ ...blogForm, featured_image: uploadedUrl });
                       }
                     }}
                   />
@@ -655,16 +693,47 @@ export default function BlogsTab({
               </div>
             )}
 
-            {/* Banner image URL */}
-            <div>
-              <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Banner Image URL (Optional — for blog detail page hero)</label>
-              <input
-                type="text"
-                placeholder="https://example.com/banner.jpg"
-                value={editingBlog ? editingBlog.banner_image : blogForm.banner_image}
-                onChange={(e) => editingBlog ? setEditingBlog({ ...editingBlog, banner_image: e.target.value }) : setBlogForm({ ...blogForm, banner_image: e.target.value })}
-                className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
-              />
+            {/* Banner image upload & URL */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div>
+                <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Upload Banner File (Optional hero banner):</label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className={`px-4 py-2 font-bold rounded-xl text-[11px] transition cursor-pointer text-white ${uploadingImage ? 'bg-indigo-400 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                    {uploadingImage ? 'Uploading...' : 'Choose banner'}
+                  </span>
+                  <span className={`text-[10px] font-semibold truncate max-w-[160px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {bannerFile ? bannerFile.name : 'No banner chosen'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingImage}
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0] || null;
+                      setBannerFile(f);
+                      if (f) {
+                        const uploadedUrl = await uploadBlogImage(f);
+                        if (editingBlog) setEditingBlog({ ...editingBlog, banner_image: uploadedUrl });
+                        else setBlogForm({ ...blogForm, banner_image: uploadedUrl });
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label className={`block font-bold mb-1 text-[10px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Or Banner Image URL:</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/banner.jpg"
+                  value={editingBlog ? editingBlog.banner_image : blogForm.banner_image}
+                  onChange={(e) => {
+                    setBannerFile(null);
+                    editingBlog ? setEditingBlog({ ...editingBlog, banner_image: e.target.value }) : setBlogForm({ ...blogForm, banner_image: e.target.value });
+                  }}
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'}`}
+                />
+              </div>
             </div>
           </div>
 

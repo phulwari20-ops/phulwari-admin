@@ -235,29 +235,47 @@ export default function FinancialTab({
 
   // Combined Fee Collections + Manual Incomes
   const feeIncomeEntries = useMemo(() => {
-    return (fees || []).map(f => ({
-      id: f.id || f.receipt_no,
-      date: f.collection_date || f.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-      type: 'Income',
-      category_name: f.fee_head || f.title || 'Student Fee',
-      amount: num(f.amount_paid || f.paid_amount || f.net_amount || 0),
-      payment_mode: f.mode_of_payment || f.payment_method || 'Cash',
-      reference_no: f.receipt_no || f.transaction_id || '',
-      student_name: f.student_name || f.students?.full_name || 'Enrolled Student',
-      admission_no: f.admission_id || f.students?.admission_id || '',
-      description: `Fee Collection for ${f.collected_for || f.month || 'Tuition'}`,
-      is_auto: true
-    }))
+    return (fees || [])
+      .map(f => {
+        // Collect actual paid amount only
+        const amt = num(f.amount_paid !== undefined ? f.amount_paid : (f.paid_amount !== undefined ? f.paid_amount : (f.status === 'paid' ? (f.net_amount || f.amount) : 0)))
+        const rawDate = f.paid_date || f.collection_date || (f.collection_time ? f.collection_time.split('T')[0] : '') || (f.created_at ? f.created_at.split('T')[0] : '') || new Date().toISOString().split('T')[0]
+        const rawTimestamp = f.created_at || f.collection_time || (f.paid_date ? `${f.paid_date}T12:00:00.000Z` : '') || rawDate
+        const timestamp = new Date(rawTimestamp).getTime() || new Date(rawDate).getTime() || 0
+
+        return {
+          id: f.id || f.receipt_no,
+          date: rawDate,
+          created_at: f.created_at || rawTimestamp,
+          timestamp,
+          type: 'Income',
+          category_name: f.fee_head || f.title || 'Student Fee',
+          amount: amt,
+          payment_mode: f.mode_of_payment || f.payment_method || 'Cash',
+          reference_no: f.receipt_no || f.transaction_id || '',
+          student_name: f.student_name || f.students?.full_name || 'Enrolled Student',
+          admission_no: f.admission_id || f.students?.admission_id || '',
+          description: `Fee Collection for ${f.collected_for || f.month || 'Tuition'}`,
+          is_auto: true
+        }
+      })
+      .filter(entry => entry.amount > 0)
   }, [fees])
 
   const allIncomes = useMemo(() => {
-    return [...feeIncomeEntries, ...manualIncomes].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return [...feeIncomeEntries, ...manualIncomes].sort((a, b) => {
+      const tb = b.timestamp || new Date(b.created_at || b.date).getTime() || 0
+      const ta = a.timestamp || new Date(a.created_at || a.date).getTime() || 0
+      return tb - ta
+    })
   }, [feeIncomeEntries, manualIncomes])
 
   const allExpenses = useMemo(() => {
     const teacherSalaryExpenses = (teacherPayments || []).map(p => ({
       id: p.id,
       date: p.date || new Date().toISOString().split('T')[0],
+      created_at: p.created_at || p.date,
+      timestamp: new Date(p.created_at || p.date).getTime() || 0,
       type: 'Expense',
       category_name: 'Teacher Salary',
       amount: num(p.net_paid || p.salary_amount),
@@ -267,7 +285,11 @@ export default function FinancialTab({
       description: `Salary Payout for ${p.salary_month || 'Month'}`,
       is_auto: true
     }))
-    return [...teacherSalaryExpenses, ...manualExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return [...teacherSalaryExpenses, ...manualExpenses].sort((a, b) => {
+      const tb = b.timestamp || new Date(b.created_at || b.date).getTime() || 0
+      const ta = a.timestamp || new Date(a.created_at || a.date).getTime() || 0
+      return tb - ta
+    })
   }, [teacherPayments, manualExpenses])
 
   // Financial KPI Computations
@@ -282,9 +304,19 @@ export default function FinancialTab({
     }, 0)
   }, [students, fees, batches, receivablesMonth])
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  // Local Indian Date (YYYY-MM-DD)
+  const todayStr = useMemo(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }, [])
+
   const todayCollection = useMemo(() => {
-    return allIncomes.filter(i => i.date === todayStr).reduce((sum, i) => sum + i.amount, 0)
+    return allIncomes
+      .filter(i => i.date === todayStr || (i.created_at && i.created_at.startsWith(todayStr)))
+      .reduce((sum, i) => sum + i.amount, 0)
   }, [allIncomes, todayStr])
 
   const cashInHand = useMemo(() => {
@@ -514,6 +546,25 @@ export default function FinancialTab({
           </button>
 
           <button
+            onClick={() => {
+              if (loadAllAdminData) loadAllAdminData()
+              try {
+                const supabase = createClient()
+                supabase.from('financial_ledger').select('*').order('date', { ascending: false }).then(({ data }: any) => {
+                  if (data) {
+                    setManualIncomes(data.filter((d: any) => d.type === 'Income').map((lg: any) => ({ ...lg, is_auto: false })))
+                    setManualExpenses(data.filter((d: any) => d.type === 'Expense').map((lg: any) => ({ ...lg, is_auto: false })))
+                  }
+                })
+              } catch (_) {}
+            }}
+            className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="Refresh latest fee income & expenses from database"
+          >
+            <span>🔄 Refresh Data</span>
+          </button>
+
+          <button
             onClick={exportReportCSV}
             className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
@@ -597,7 +648,17 @@ export default function FinancialTab({
                 <h4 className={`text-xs font-extrabold ${textPrimary} flex items-center gap-1.5`}>
                   <ArrowUpRight className="w-4 h-4 text-emerald-500" /> Recent Income Postings
                 </h4>
-                <span className="text-[10px] font-bold text-slate-400 font-mono">{allIncomes.length} records</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 font-mono">{allIncomes.length} records</span>
+                  <button
+                    type="button"
+                    onClick={() => loadAllAdminData && loadAllAdminData()}
+                    className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    title="Refresh latest fee collections"
+                  >
+                    <span>🔄 Refresh</span>
+                  </button>
+                </div>
               </div>
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {allIncomes.slice(0, 5).map(inc => (
@@ -790,7 +851,14 @@ export default function FinancialTab({
                         <button
                           onClick={() => {
                             const msg = `Dear ${st.parent_name || 'Parent'}, reminder from Phulwari Centre: Pending fee due for ${st.full_name} for ${pendingMonths} is ${inr(dueAmount)}. Please clear dues.`
-                            window.open(`https://wa.me/${String(st.parent_phone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
+                            let phone = String(st.parent_phone || '').replace(/[^0-9]/g, '')
+                            if (phone.startsWith('0')) phone = phone.replace(/^0+/, '')
+                            if (phone.length === 10) phone = `91${phone}`
+                            const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                            const waUrl = isMobile 
+                              ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+                              : `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+                            window.open(waUrl, '_blank', 'noopener,noreferrer')
                           }}
                           className="px-2.5 py-1 bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
                         >

@@ -64,9 +64,20 @@ async function handleProxy(req: NextRequest) {
 
     respHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 
-    const isNoBody = response.status === 204 || response.status === 304;
-    return new NextResponse(isNoBody ? null : respText, {
+    const isNoBody = response.status === 204 || response.status === 205 || response.status === 304;
+    if (isNoBody) {
+      respHeaders.delete('content-type');
+      respHeaders.delete('content-length');
+      return new Response(null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: respHeaders,
+      });
+    }
+
+    return new Response(respText, {
       status: response.status,
+      statusText: response.statusText,
       headers: respHeaders,
     });
 
@@ -104,7 +115,7 @@ export async function HEAD(req: NextRequest) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',

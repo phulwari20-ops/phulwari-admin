@@ -28,10 +28,29 @@ export default function AttendanceTab({
 }: AttendanceTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'child' | 'zumba_yoga'>('all');
   const [localSearch, setLocalSearch] = useState('');
   const [unscheduledSearch, setUnscheduledSearch] = useState('');
   const [sortKey, setSortKey] = useState<'name_asc' | 'name_desc' | 'admission_id_asc' | 'admission_id_desc'>('name_asc');
   const [selectedLetter, setSelectedLetter] = useState<string>('ALL');
+
+  const isChildCategoryStudent = (st: any) => {
+    const c = (st.category || '').toLowerCase();
+    const b = (st.batch_name || '').toLowerCase();
+    const p = (st.program_interested || '').toLowerCase();
+    return !c.includes('zumba') && !c.includes('yoga') && !c.includes('mother') &&
+           !b.includes('zumba') && !b.includes('yoga') && !b.includes('mother') &&
+           !p.includes('zumba') && !p.includes('yoga') && !p.includes('mother');
+  };
+
+  const isZumbaYogaCategoryStudent = (st: any) => {
+    const c = (st.category || '').toLowerCase();
+    const b = (st.batch_name || '').toLowerCase();
+    const p = (st.program_interested || '').toLowerCase();
+    return c.includes('zumba') || c.includes('yoga') || c.includes('mother') ||
+           b.includes('zumba') || b.includes('yoga') || b.includes('mother') ||
+           p.includes('zumba') || p.includes('yoga') || p.includes('mother');
+  };
 
   const ALPHABETS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
@@ -138,6 +157,10 @@ export default function AttendanceTab({
   // Filter items by selected batch, letter, and search query
   const displayItems = attendanceItems
     .filter(item => {
+      // Category filter (Child vs Zumba & Yoga)
+      if (categoryFilter === 'child' && !isChildCategoryStudent(item.student)) return false;
+      if (categoryFilter === 'zumba_yoga' && !isZumbaYogaCategoryStudent(item.student)) return false;
+
       // Batch filter
       if (selectedBatchIdFilter !== 'All' && item.student.batch_id !== selectedBatchIdFilter) return false;
 
@@ -413,7 +436,50 @@ export default function AttendanceTab({
       {/* ─────────────────────────────────────────────────────────────
           SECTION 1: SCHEDULED ATTENDANCE (Auto populated by dayName)
          ───────────────────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      <div className="space-y-4">
+        {/* Category Tabs: Child vs Zumba & Yoga */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                categoryFilter === 'all'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+              }`}
+            >
+              All Activities ({attendanceItems.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('child')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'child'
+                  ? 'bg-pink-600 text-white shadow-md shadow-pink-600/20'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+              }`}
+            >
+              <span>👶</span> Child Activities ({attendanceItems.filter(i => isChildCategoryStudent(i.student)).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('zumba_yoga')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'zumba_yoga'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+              }`}
+            >
+              <span>🧘</span> Zumba &amp; Yoga ({attendanceItems.filter(i => isZumbaYogaCategoryStudent(i.student)).length})
+            </button>
+          </div>
+
+          <span className={`text-[11px] font-bold ${textSecondary}`}>
+            Showing: <strong className={textPrimary}>{categoryFilter === 'child' ? 'Child Activities' : categoryFilter === 'zumba_yoga' ? 'Zumba & Yoga' : 'All Activities'}</strong>
+          </span>
+        </div>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black">1</span>
@@ -476,7 +542,7 @@ export default function AttendanceTab({
                       <span>⏰</span> Time: {item.class_time}
                     </span>
                     <span>|</span>
-                    <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>{classesLeft}</span></span>
+                    <span>Classes Left: <span className={`font-extrabold px-1.5 py-0.5 rounded text-[10px] ${classesLeft < 0 ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : classesLeft <= 3 ? 'text-amber-500 font-bold animate-pulse' : 'text-emerald-600 font-bold'}`}>{classesLeft} {classesLeft < 0 ? '(Exceeded)' : ''}</span></span>
                   </div>
                 </div>
 
@@ -804,7 +870,7 @@ export default function AttendanceTab({
                         <span>⏰</span> Time: {attRec.class_time || 'Custom Time'}
                       </span>
                       <span>|</span>
-                      <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500' : 'text-green-600'}`}>{classesLeft}</span></span>
+                      <span>Classes Left: <span className={`font-extrabold px-1.5 py-0.5 rounded text-[10px] ${classesLeft < 0 ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : classesLeft <= 3 ? 'text-amber-500 font-bold' : 'text-emerald-600 font-bold'}`}>{classesLeft} {classesLeft < 0 ? '(Exceeded)' : ''}</span></span>
                     </div>
                   </div>
 

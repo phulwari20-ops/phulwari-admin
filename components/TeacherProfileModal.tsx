@@ -1,7 +1,5 @@
-'use client'
-
-import React, { useState, useEffect } from 'react'
-import { X, User, CalendarCheck, Wallet, HandCoins, Receipt, FileDown, Trash2, Check, Edit3 } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { X, User, CalendarCheck, Wallet, HandCoins, Receipt, FileDown, Trash2, Check, Edit3, Calculator, Clock, Calendar, Zap, AlertCircle } from 'lucide-react'
 
 interface TeacherProfileModalProps {
   isOpen: boolean
@@ -43,15 +41,90 @@ export default function TeacherProfileModal({
     reference_no: '',
   })
 
+  // Dynamic Salary Type & Overtime configuration
+  const salaryType: 'Monthly' | 'Daily' | 'Hourly' = (teacher?.salary_type || 'Monthly') as any
+  const baseRate = Number(teacher?.monthly_salary) || 0
+  const [workingHoursPerDay, setWorkingHoursPerDay] = useState(8)
+  const [customUnits, setCustomUnits] = useState('')
+  const [overtimeHours, setOvertimeHours] = useState<number>(0)
+  const [overtimeRate, setOvertimeRate] = useState<number>(0)
+  const [autoCalcApplied, setAutoCalcApplied] = useState(false)
+
+  // Sync default overtime rate whenever salaryType or baseRate changes
+  useEffect(() => {
+    if (salaryType === 'Hourly') {
+      setOvertimeRate(baseRate)
+    } else if (salaryType === 'Daily') {
+      setOvertimeRate(baseRate > 0 ? Math.round(baseRate / 8) : 100)
+    } else {
+      setOvertimeRate(baseRate > 0 ? Math.round(baseRate / 200) : 100)
+    }
+  }, [salaryType, baseRate])
+
+  const myPayments = (teacherPayments || []).filter(p => p.teacher_id === teacher?.id)
+  const myAttendance = (teacherAttendance || []).filter(a => a.teacher_id === teacher?.id)
+
+  // Attendance for the chosen salary month
+  const monthAttForSalary = useMemo(() => {
+    return myAttendance.filter(a => {
+      const d = new Date(a.date)
+      return `${MONTHS[d.getMonth()]} ${d.getFullYear()}` === payForm.salary_month
+    })
+  }, [myAttendance, payForm.salary_month])
+
+  const salPresent = monthAttForSalary.filter(a => a.status === 'Present' || a.status === 'Late').length
+  const salHalfDay = monthAttForSalary.filter(a => a.status === 'Half Day').length
+  const salPaidLeave = monthAttForSalary.filter(a => a.status === 'Paid Leave').length
+  const salUnpaidLeave = monthAttForSalary.filter(a => a.status === 'Unpaid Leave').length
+  const salAbsent = monthAttForSalary.filter(a => a.status === 'Absent').length
+
+  const effectiveDaysFromAtt = salPresent + salPaidLeave + (salHalfDay * 0.5)
+  const effectiveHoursFromAtt = effectiveDaysFromAtt * workingHoursPerDay
+
+  const activeUnits = customUnits !== '' ? Number(customUnits) || 0 : (salaryType === 'Hourly' ? effectiveHoursFromAtt : effectiveDaysFromAtt)
+  const otAmount = (Number(overtimeHours) || 0) * (Number(overtimeRate) || 0)
+
+  // Computed salary based on Salary Type
+  const { computedBaseSalary, formulaDescription, regularPay } = useMemo(() => {
+    if (salaryType === 'Hourly') {
+      const reg = Math.round(activeUnits * baseRate)
+      const total = reg + otAmount
+      const desc = `${activeUnits} Total Hours × ₹${baseRate}/hr = ₹${reg}${otAmount > 0 ? ` + Overtime (₹${otAmount})` : ''}`
+      return { computedBaseSalary: total, formulaDescription: desc, regularPay: reg }
+    } else if (salaryType === 'Daily') {
+      const reg = Math.round(activeUnits * baseRate)
+      const total = reg + otAmount
+      const desc = `${activeUnits} Working Days × ₹${baseRate}/day = ₹${reg}${otAmount > 0 ? ` + Overtime (₹${otAmount})` : ''}`
+      return { computedBaseSalary: total, formulaDescription: desc, regularPay: reg }
+    } else {
+      // Monthly
+      const perDayRate = baseRate / 30
+      const unpaidDeduction = Math.round((salUnpaidLeave + salAbsent) * perDayRate)
+      const reg = Math.max(0, Math.round(baseRate - unpaidDeduction))
+      const total = reg + otAmount
+      const desc = `Fixed Monthly ₹${baseRate}${unpaidDeduction > 0 ? ` - ${salUnpaidLeave + salAbsent} Unpaid/Absent days (₹${unpaidDeduction})` : ''}${otAmount > 0 ? ` + Overtime (₹${otAmount})` : ''}`
+      return { computedBaseSalary: total, formulaDescription: desc, regularPay: reg }
+    }
+  }, [salaryType, baseRate, activeUnits, otAmount, salUnpaidLeave, salAbsent])
+
   useEffect(() => {
     if (teacher) {
-      const baseSalary = teacher.monthly_salary || teacher.salary_amount || ''
+      const initialAmt = computedBaseSalary > 0 ? String(computedBaseSalary) : (teacher.monthly_salary ? String(teacher.monthly_salary) : '')
       setPayForm((prev: any) => ({
         ...prev,
-        salary_amount: prev.salary_amount || (baseSalary ? String(baseSalary) : '')
+        salary_amount: prev.salary_amount || initialAmt
       }))
     }
-  }, [teacher?.id])
+  }, [teacher?.id, computedBaseSalary])
+
+  const applyAttendanceCalculation = () => {
+    setPayForm((prev: any) => ({
+      ...prev,
+      salary_amount: String(computedBaseSalary),
+      remarks: prev.remarks || `Auto-calculated (${salaryType}): ${formulaDescription}`
+    }))
+    setAutoCalcApplied(true)
+  }
 
   if (!isOpen || !teacher) return null
 
@@ -59,22 +132,19 @@ export default function TeacherProfileModal({
   const num = (v: any) => Number(v) || 0
   const inr = (v: any) => `₹${num(v).toLocaleString('en-IN')}`
 
-  const myPayments = (teacherPayments || []).filter(p => p.teacher_id === teacher.id)
-  const myAttendance = (teacherAttendance || []).filter(a => a.teacher_id === teacher.id)
-
   // Advance ledger
   const advanceTaken = myPayments.reduce((s, p) => s + num(p.advance_taken), 0)
   const advanceAdjusted = myPayments.reduce((s, p) => s + num(p.advance_adjusted), 0)
   const advanceBalance = advanceTaken - advanceAdjusted
 
-  const activeSalaryAmt = num(payForm.salary_amount) || num(teacher?.monthly_salary) || 0
+  const activeSalaryAmt = num(payForm.salary_amount) || computedBaseSalary || num(teacher?.monthly_salary) || 0
   const netPayable = payForm.payment_type === 'Advance'
     ? num(payForm.advance_taken)
     : payForm.payment_type === 'Bonus'
     ? num(payForm.bonus)
     : Math.max(0, activeSalaryAmt + num(payForm.bonus) - num(payForm.deduction) - num(payForm.advance_adjusted) + num(payForm.advance_taken))
 
-  // Monthly attendance summary for the chosen month
+  // Monthly attendance summary for the attendance tab
   const monthAtt = myAttendance.filter(a => {
     const d = new Date(a.date)
     return `${MONTHS[d.getMonth()]} ${d.getFullYear()}` === summaryMonth
@@ -108,7 +178,7 @@ export default function TeacherProfileModal({
       <div class="hd"><div><div class="org">🌸 Phulwari Mother & Child Activity Centre</div><div style="font-size:11px;color:#64748b;margin-top:4px;">M/32, Road No. 25, Sri Krishna Nagar, Patna — 800001</div></div><div class="tag">SALARY SLIP</div></div>
       <div class="grid">
         <div class="box"><div class="lbl">Teacher</div><div class="val">${teacher.name}</div></div>
-        <div class="box"><div class="lbl">Teacher ID</div><div class="val">${teacher.id}</div></div>
+        <div class="box"><div class="lbl">Salary Type</div><div class="val">${salaryType} (${salaryType === 'Hourly' ? `₹${baseRate}/hr` : salaryType === 'Daily' ? `₹${baseRate}/day` : 'Fixed Monthly'})</div></div>
         <div class="box"><div class="lbl">Salary Month</div><div class="val">${p.salary_month || '—'}</div></div>
         <div class="box"><div class="lbl">Designation</div><div class="val">${teacher.designation || teacher.specialization || '—'}</div></div>
         <div class="box"><div class="lbl">Payment Date</div><div class="val">${p.date ? new Date(p.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')}</div></div>
@@ -117,7 +187,7 @@ export default function TeacherProfileModal({
       <table>
         <thead><tr><th>Description</th><th style="text-align:right;">Amount</th></tr></thead>
         <tbody>
-          <tr><td>Basic / Monthly Salary</td><td class="amt">${inr(p.salary_amount)}</td></tr>
+          <tr><td>${salaryType === 'Hourly' ? 'Hourly Base Pay' : salaryType === 'Daily' ? 'Daily Base Pay' : 'Basic Monthly Salary'}</td><td class="amt">${inr(p.salary_amount)}</td></tr>
           <tr><td>Bonus / Incentive</td><td class="amt">+ ${inr(p.bonus)}</td></tr>
           <tr><td>Gross</td><td class="amt">${inr(gross)}</td></tr>
           <tr><td>Deductions</td><td class="amt" style="color:#dc2626;">- ${inr(p.deduction)}</td></tr>
@@ -386,23 +456,168 @@ export default function TeacherProfileModal({
         {/* SALARY TAB */}
         {tab === 'salary' && (
           <form onSubmit={submitPayment} className="space-y-4 text-xs">
+            {/* Top KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-3.5 rounded-2xl border bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/60 text-center">
-                <div className="text-[9px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400">Monthly Base Salary</div>
-                <div className="text-base font-extrabold font-mono text-indigo-700 dark:text-indigo-300 mt-0.5">
-                  {inr(payForm.salary_amount || teacher.monthly_salary || 0)}
+              <div className="p-3 rounded-2xl border bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/60 text-center">
+                <div className="text-[9px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400">
+                  {salaryType === 'Hourly' ? 'Hourly Rate' : salaryType === 'Daily' ? 'Daily Rate' : 'Base Monthly Salary'}
                 </div>
+                <div className="text-base font-extrabold font-mono text-indigo-700 dark:text-indigo-300 mt-0.5">
+                  {inr(baseRate)}{salaryType === 'Hourly' ? '/hr' : salaryType === 'Daily' ? '/day' : ''}
+                </div>
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-indigo-200/50 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300">
+                  Mode: {salaryType}
+                </span>
               </div>
-              <div className="p-3.5 rounded-2xl border bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 text-center">
+              <div className="p-3 rounded-2xl border bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900/60 text-center">
+                <div className="text-[9px] font-extrabold uppercase text-purple-600 dark:text-purple-400">
+                  {salaryType === 'Hourly' ? 'Working Hours' : 'Working Days'}
+                </div>
+                <div className="text-base font-extrabold font-mono text-purple-700 dark:text-purple-300 mt-0.5">
+                  {activeUnits} {salaryType === 'Hourly' ? 'hrs' : 'days'}
+                </div>
+                <span className="text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
+                  From Attendance ({monthAttForSalary.length} logs)
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl border bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 text-center">
                 <div className="text-[9px] font-extrabold uppercase text-rose-600 dark:text-rose-400">Advance Balance</div>
                 <div className="text-base font-extrabold font-mono text-rose-700 dark:text-rose-300 mt-0.5">
                   {inr(advanceBalance)}
                 </div>
+                <span className="text-[9px] text-rose-500 font-semibold">Pending recovery</span>
               </div>
-              <div className="p-3.5 rounded-2xl border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/60 text-center col-span-2">
-                <div className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Net Payable (This Entry)</div>
+              <div className="p-3 rounded-2xl border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/60 text-center">
+                <div className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Net Payable</div>
                 <div className="text-base font-extrabold font-mono text-emerald-700 dark:text-emerald-300 mt-0.5">
                   {inr(netPayable)}
+                </div>
+                <span className="text-[9px] text-emerald-600 font-semibold">After bonus &amp; deductions</span>
+              </div>
+            </div>
+
+            {/* Dynamic Attendance-Based Salary Calculator Module */}
+            <div className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/60 via-purple-50/30 to-white dark:from-indigo-950/30 dark:to-slate-900 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-900/40 pb-2">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-indigo-600" />
+                  <span className="font-extrabold text-indigo-900 dark:text-indigo-200 text-xs">
+                    {salaryType} Salary Calculation Workflow ({payForm.salary_month})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={applyAttendanceCalculation}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[11px] shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95"
+                  title="Recalculate and fill salary amount automatically"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Sync Attendance Calculation</span>
+                </button>
+              </div>
+
+              {/* Attendance metrics pills */}
+              <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-bold rounded-lg">
+                  Present: {salPresent}d
+                </span>
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-bold rounded-lg">
+                  Half Days: {salHalfDay}d
+                </span>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-bold rounded-lg">
+                  Paid Leave: {salPaidLeave}d
+                </span>
+                {salUnpaidLeave > 0 && (
+                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-bold rounded-lg">
+                    Unpaid Leave: {salUnpaidLeave}d
+                  </span>
+                )}
+                {salAbsent > 0 && (
+                  <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold rounded-lg">
+                    Absent: {salAbsent}d
+                  </span>
+                )}
+                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 ml-auto">
+                  Effective Days: <strong className="text-indigo-600">{effectiveDaysFromAtt}</strong>
+                </span>
+              </div>
+
+              {/* Working Hours & Overtime Controls */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                {salaryType === 'Hourly' ? (
+                  <>
+                    <div>
+                      <label className={`font-bold block mb-1 text-[10px] ${textSecondary}`}>Daily Standard Hrs</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="24"
+                        value={workingHoursPerDay}
+                        onChange={(e) => setWorkingHoursPerDay(Number(e.target.value) || 8)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={`font-bold block mb-1 text-[10px] ${textSecondary}`}>Override Total Hrs (Optional)</label>
+                      <input
+                        type="number"
+                        placeholder={`Att: ${effectiveHoursFromAtt}h`}
+                        value={customUnits}
+                        onChange={(e) => setCustomUnits(e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                  </>
+                ) : salaryType === 'Daily' ? (
+                  <div>
+                    <label className={`font-bold block mb-1 text-[10px] ${textSecondary}`}>Override Working Days</label>
+                    <input
+                      type="number"
+                      placeholder={`Att: ${effectiveDaysFromAtt}d`}
+                      value={customUnits}
+                      onChange={(e) => setCustomUnits(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                ) : null}
+
+                <div>
+                  <label className="font-bold text-amber-700 dark:text-amber-300 block mb-1 text-[10px]">Overtime / Extra Hrs</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={overtimeHours || ''}
+                    onChange={(e) => setOvertimeHours(Number(e.target.value) || 0)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-amber-700 dark:text-amber-300 block mb-1 text-[10px]">Overtime Rate (₹/hr)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder={String(overtimeRate || 0)}
+                    value={overtimeRate || ''}
+                    onChange={(e) => setOvertimeRate(Number(e.target.value) || 0)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* Calculation Summary Box */}
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-900/60 flex items-center justify-between text-[11px] shadow-2xs">
+                <div>
+                  <span className="font-semibold text-slate-500 block">Formula Breakdown:</span>
+                  <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                    {formulaDescription}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Calculated Total</span>
+                  <span className="font-black font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                    {inr(computedBaseSalary)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -426,7 +641,7 @@ export default function TeacherProfileModal({
                     setPayForm((prev: any) => ({
                       ...prev,
                       payment_type: pType,
-                      salary_amount: pType === 'Salary' ? (prev.salary_amount || String(teacher.monthly_salary || '')) : prev.salary_amount
+                      salary_amount: pType === 'Salary' ? (prev.salary_amount || String(computedBaseSalary || teacher.monthly_salary || '')) : prev.salary_amount
                     }))
                   }}
                   className={inputCls}
@@ -438,10 +653,12 @@ export default function TeacherProfileModal({
                 </select>
               </div>
               <div>
-                <label className={`font-bold block mb-1 ${textSecondary}`}>Salary Amount (₹)</label>
+                <label className={`font-bold block mb-1 ${textSecondary}`}>
+                  {salaryType === 'Hourly' ? 'Hourly Salary (₹)' : salaryType === 'Daily' ? 'Daily Salary (₹)' : 'Monthly Salary (₹)'}
+                </label>
                 <input
                   type="number"
-                  placeholder="e.g. 25000"
+                  placeholder={String(computedBaseSalary || teacher.monthly_salary || 0)}
                   value={payForm.salary_amount}
                   onChange={(e) => setPayForm({ ...payForm, salary_amount: e.target.value })}
                   className={inputCls}
@@ -614,7 +831,11 @@ export default function TeacherProfileModal({
                         <FileDown className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => onDeletePayment(p.id)}
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
+                            onDeletePayment(p.id)
+                          }
+                        }}
                         className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition cursor-pointer"
                         title="Delete Payment Record"
                       >

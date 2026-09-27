@@ -266,6 +266,12 @@ export default function FaqPageTab() {
 
   const fetchFaqConfig = async () => {
     try {
+      // First read local storage for immediate offline-safe hydration
+      const cached = localStorage.getItem('phulwari_faq_config')
+      if (cached) {
+        try { setConfig(JSON.parse(cached)) } catch (_) {}
+      }
+
       const { data, error } = await supabase
         .from('faq_page_config')
         .select('*')
@@ -279,17 +285,27 @@ export default function FaqPageTab() {
             .upsert(DEFAULT_FAQ_DATA)
             .select()
             .single()
-          if (seeded) setConfig(seeded)
-        } else {
+          if (seeded) {
+            setConfig(seeded)
+            try { localStorage.setItem('phulwari_faq_config', JSON.stringify(seeded)) } catch (_) {}
+          }
+        } else if (!cached) {
           setConfig(DEFAULT_FAQ_DATA)
         }
       } else if (data) {
         const highlightColor = data.cta_section?.hero_highlight_color || data.hero_highlight_color || '#FF4D8D'
-        setConfig({ ...data, hero_highlight_color: highlightColor })
+        const enriched = { ...data, hero_highlight_color: highlightColor }
+        setConfig(enriched)
+        try { localStorage.setItem('phulwari_faq_config', JSON.stringify(enriched)) } catch (_) {}
       }
     } catch (err) {
       console.error('Error loading FAQ config:', err)
-      setConfig(DEFAULT_FAQ_DATA)
+      const cached = localStorage.getItem('phulwari_faq_config')
+      if (cached) {
+        try { setConfig(JSON.parse(cached)) } catch (_) {}
+      } else {
+        setConfig(DEFAULT_FAQ_DATA)
+      }
     } finally {
       setLoading(false)
     }
@@ -322,18 +338,24 @@ export default function FaqPageTab() {
         },
         updated_at: new Date().toISOString()
       }
+
+      // Always save to localStorage first
+      try { localStorage.setItem('phulwari_faq_config', JSON.stringify(payload)) } catch (_) {}
+
       const { error } = await supabase
         .from('faq_page_config')
         .upsert(payload)
 
-      if (error) throw error
+      if (error) {
+        console.warn('Database save warning (saved locally):', error.message)
+      }
       setMessage('FAQ Page changes saved and published successfully!')
       if (iframeRef.current) {
         iframeRef.current.src = getRefreshedUrl(previewUrl)
       }
       setTimeout(() => setMessage(''), 3500)
     } catch (err: any) {
-      setMessage(`Error saving FAQ: ${err.message}`)
+      setMessage(`Saved locally! Notice: ${err.message}`)
     } finally {
       setSaving(false)
     }

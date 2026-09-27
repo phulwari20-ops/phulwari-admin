@@ -230,20 +230,33 @@ export default function AddTeacherModal({
                     <div>
                       <label className={`font-bold ${textSecondary}`}>Salary Type</label>
                       <select value={teacherForm.salary_type || 'Monthly'} onChange={(e) => setTeacherForm({ ...teacherForm, salary_type: e.target.value })} className={cls}>
-                        <option>Monthly</option>
-                        <option>Daily</option>
-                        <option>Hourly</option>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Hourly">Hourly</option>
                       </select>
                     </div>
                     <div>
-                      <label className={`font-bold ${textSecondary}`}>Monthly Salary (₹)</label>
-                      <input type="number" placeholder="e.g. 25000" value={teacherForm.monthly_salary || ''} onChange={(e) => setTeacherForm({ ...teacherForm, monthly_salary: e.target.value })} className={cls} />
+                      <label className={`font-bold ${textSecondary}`}>
+                        {teacherForm.salary_type === 'Hourly' ? 'Hourly Rate (₹)' : teacherForm.salary_type === 'Daily' ? 'Daily Rate (₹)' : 'Monthly Salary (₹)'}
+                      </label>
+                      <input
+                        type="number"
+                        placeholder={teacherForm.salary_type === 'Hourly' ? 'e.g. 500 / hr' : teacherForm.salary_type === 'Daily' ? 'e.g. 1000 / day' : 'e.g. 25000'}
+                        value={teacherForm.monthly_salary || ''}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, monthly_salary: e.target.value })}
+                        className={cls}
+                      />
                     </div>
                     <div>
                       <label className={`font-bold ${textSecondary}`}>Effective From</label>
                       <input type="date" value={teacherForm.salary_effective_from || ''} onChange={(e) => setTeacherForm({ ...teacherForm, salary_effective_from: e.target.value })} className={cls} />
                     </div>
                   </div>
+                  <p className={`text-[10px] mt-1.5 italic ${textSecondary}`}>
+                    {teacherForm.salary_type === 'Hourly' && '⚡ Hourly Mode: Calculated automatically as Total Working Hours × Hourly Rate + Overtime.'}
+                    {teacherForm.salary_type === 'Daily' && '📅 Daily Mode: Calculated automatically as Total Working Days × Daily Rate + Overtime.'}
+                    {(!teacherForm.salary_type || teacherForm.salary_type === 'Monthly') && '💼 Monthly Mode: Fixed monthly salary based on full month attendance.'}
+                  </p>
                 </div>
 
                 <div>

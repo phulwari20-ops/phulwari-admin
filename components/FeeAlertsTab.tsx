@@ -31,12 +31,32 @@ function feeLabel(diff: number | null) {
   return { text: `Fee due in ${diff} days`, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' }
 }
 
+function cleanPhoneNumber(rawPhone: string | number | undefined | null): string {
+  if (!rawPhone) return '919999999999'
+  let phone = String(rawPhone).replace(/[^0-9]/g, '')
+  if (phone.startsWith('0')) {
+    phone = phone.replace(/^0+/, '')
+  }
+  if (phone.length === 10) {
+    phone = `91${phone}`
+  }
+  return phone || '919999999999'
+}
+
+function getWhatsappUrl(rawPhone: string | number | undefined | null, msg: string): string {
+  const target = cleanPhoneNumber(rawPhone)
+  const encoded = encodeURIComponent(msg)
+  const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  if (isMobile) {
+    return `https://api.whatsapp.com/send?phone=${target}&text=${encoded}`
+  }
+  return `https://web.whatsapp.com/send?phone=${target}&text=${encoded}`
+}
+
 function buildFeeWhatsapp(st: any, pendingAmt: number, totalFee: number, dueDate: string) {
-  const phone = (st.parent_phone || '').replace(/[^0-9]/g, '')
-  const target = phone.length === 10 ? `91${phone}` : phone || '919999999999'
   const formattedDue = dueDate ? new Date(dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
   const msg = `Dear ${st.parent_name || 'Parent'},\n\nWe would like to remind you about the pending fee for your child at Phulwari Mother & Child Activity Centre.\n\n🎓 Student: ${st.full_name} (${st.admission_id})\n💰 Total Fee: ₹${totalFee.toLocaleString('en-IN')}\n✅ Paid: ₹${(totalFee - pendingAmt).toLocaleString('en-IN')}\n❗ Pending: ₹${pendingAmt.toLocaleString('en-IN')}\n📅 Due Date: ${formattedDue}\n\nKindly clear the pending fee at your earliest convenience to avoid any disruption in classes.\n\nThank you for your prompt response.\n\n🌸 Phulwari Mother & Child Activity Centre\nM/32, Road No. 25, Sri Krishna Nagar, Patna — 800001`
-  return `https://wa.me/${target}?text=${encodeURIComponent(msg)}`
+  return getWhatsappUrl(st.parent_phone, msg)
 }
 
 function buildFeeSmsLink(st: any, pendingAmt: number, dueDate: string) {
@@ -218,6 +238,11 @@ export default function FeeAlertsTab({
                             href={buildFeeWhatsapp(st, st.pendingAmount, st.totalFee, st.latestDueDate)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              const url = buildFeeWhatsapp(st, st.pendingAmount, st.totalFee, st.latestDueDate)
+                              window.open(url, '_blank', 'noopener,noreferrer')
+                            }}
                             className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-600 border border-emerald-500/20 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
                             title="Send WhatsApp reminder"
                           >
