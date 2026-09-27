@@ -57,18 +57,19 @@ async function handleProxy(req: NextRequest) {
 
     response.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
-      if (!['transfer-encoding', 'content-encoding', 'connection'].includes(lower)) {
+      if (!['transfer-encoding', 'content-encoding', 'connection', 'content-length', 'keep-alive'].includes(lower)) {
         respHeaders.set(key, value);
       }
     });
 
     respHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 
-    return new NextResponse(respText, {
+    const isNoBody = response.status === 204 || response.status === 304;
+    return new NextResponse(isNoBody ? null : respText, {
       status: response.status,
-      statusText: response.statusText,
       headers: respHeaders,
     });
+
   } catch (err: any) {
     console.error('Supabase Proxy Error (phulwari-admin):', err);
     return NextResponse.json(

@@ -176,6 +176,11 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null)
   const [videoStats, setVideoStats] = useState<{ original: number; compressed: number; saved: number } | null>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
+  const customThumbnailInputRef = useRef<HTMLInputElement>(null)
+  const [activeThumbnailIndex, setActiveThumbnailIndex] = useState<number | null>(null)
+  const [showLinkVideoModal, setShowLinkVideoModal] = useState(false)
+  const [linkVideoForm, setLinkVideoForm] = useState({ url: '', title: '', poster: '', duration: '0:30' })
+  const [showGalleryVideoModal, setShowGalleryVideoModal] = useState(false)
 
   // Filter activities based on the current active mode
   const displayedActivities = useMemo(() => {
@@ -520,6 +525,100 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
       is_featured: v.id === videoId,
     }))
     updateCurrent('videos', updated)
+  }
+
+  // Auto-extract thumbnail frame from video URL using canvas
+  const handleAutoExtractPoster = async (idx: number, videoUrl: string) => {
+    if (!videoUrl || !currentActivity) return
+    try {
+      const posterDataUrl = await new Promise<string>((resolve) => {
+        const video = document.createElement('video')
+        video.crossOrigin = 'anonymous'
+        video.preload = 'metadata'
+        video.muted = true
+        video.playsInline = true
+        video.src = videoUrl
+
+        video.onloadedmetadata = () => {
+          video.currentTime = Math.min(1.0, (video.duration || 2) / 2)
+        }
+
+        video.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = video.videoWidth || 640
+            canvas.height = video.videoHeight || 360
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+              resolve(canvas.toDataURL('image/jpeg', 0.82))
+            } else {
+              resolve('')
+            }
+          } catch {
+            resolve('')
+          }
+        }
+
+        video.onerror = () => resolve('')
+        setTimeout(() => resolve(''), 5000)
+      })
+
+      if (posterDataUrl) {
+        const copy = [...(currentActivity.videos || [])]
+        copy[idx] = { ...copy[idx], poster: posterDataUrl }
+        updateCurrent('videos', copy)
+        alert('Thumbnail extracted from first frame successfully!')
+      } else {
+        alert('Could not auto-extract frame from this video URL (likely cross-origin restricted). Please use the "Upload Custom Thumbnail" button.')
+      }
+    } catch (err: any) {
+      alert(`Thumbnail extraction error: ${err?.message || err}`)
+    }
+  }
+
+  // Upload and compress custom thumbnail image for a specific video
+  const handleCustomThumbnailUpload = async (idx: number, file: File) => {
+    if (!file || !currentActivity) return
+    try {
+      const compressedPoster = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const img = new Image()
+          img.onload = () => {
+            let width = img.width
+            let height = img.height
+            const maxWidth = 900
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width)
+              width = maxWidth
+            }
+            const canvas = document.createElement('canvas')
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height)
+              resolve(canvas.toDataURL('image/webp', 0.82))
+            } else {
+              resolve(e.target?.result as string)
+            }
+          }
+          img.onerror = () => resolve(e.target?.result as string)
+          img.src = e.target?.result as string
+        }
+        reader.onerror = () => resolve('')
+        reader.readAsDataURL(file)
+      })
+
+      if (compressedPoster) {
+        const copy = [...(currentActivity.videos || [])]
+        copy[idx] = { ...copy[idx], poster: compressedPoster }
+        updateCurrent('videos', copy)
+      }
+    } catch (e: any) {
+      alert(`Thumbnail upload error: ${e?.message || e}`)
+    }
   }
 
   // Delete activity
@@ -1468,7 +1567,22 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
 
                     {/* Videos List */}
                     <div className="space-y-4 pt-2 border-t border-gray-100">
-                      <div className="flex items-center justify-between">
+                      {/* Hidden input for custom video thumbnail upload */}
+                      <input
+                        type="file"
+                        ref={customThumbnailInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && activeThumbnailIndex !== null) {
+                            handleCustomThumbnailUpload(activeThumbnailIndex, file);
+                          }
+                          if (e.target) e.target.value = '';
+                        }}
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <h4 className="text-sm font-bold text-gray-900">
                             Active Activity Videos ({(currentActivity.videos || []).length})
@@ -1477,15 +1591,111 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                             Videos featured here appear in the frontend action showcase section.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddVideoByUrl('/videos/birthday_party.mp4', 'New Video')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Video Link</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLinkVideoForm({ url: '', title: '', poster: '', duration: '0:30' });
+                              setShowLinkVideoModal(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 text-xs font-bold transition cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Upload via Link</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Modal / Dialog for Upload via Link */}
+                      {showLinkVideoModal && (
+                        <div className="p-4 rounded-2xl bg-purple-50/50 border-2 border-purple-200 space-y-3 animate-fadeIn">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-xs font-bold text-purple-900 uppercase tracking-wider">
+                              🔗 Add Video via Public Link / URL
+                            </h5>
+                            <button
+                              type="button"
+                              onClick={() => setShowLinkVideoModal(false)}
+                              className="text-xs font-bold text-gray-400 hover:text-gray-700 cursor-pointer"
+                            >
+                              ✕ Close
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                                Video URL (Direct MP4, WebM, Cloudflare R2, or Stream link) *
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="https://.../video.mp4 or /videos/dance.mp4"
+                                value={linkVideoForm.url}
+                                onChange={(e) => setLinkVideoForm({ ...linkVideoForm, url: e.target.value })}
+                                className="w-full font-mono text-xs border border-gray-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                                Video Title (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Dance Practice Session"
+                                value={linkVideoForm.title}
+                                onChange={(e) => setLinkVideoForm({ ...linkVideoForm, title: e.target.value })}
+                                className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                                Thumbnail / Poster URL (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="https://.../thumb.jpg or leave blank for default"
+                                value={linkVideoForm.poster}
+                                onChange={(e) => setLinkVideoForm({ ...linkVideoForm, poster: e.target.value })}
+                                className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                                Duration (e.g. 0:45)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="0:30"
+                                value={linkVideoForm.duration}
+                                onChange={(e) => setLinkVideoForm({ ...linkVideoForm, duration: e.target.value })}
+                                className="w-full text-xs font-mono border border-gray-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-purple-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowLinkVideoModal(false)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!linkVideoForm.url.trim()) {
+                                  alert('Please enter a valid video URL.');
+                                  return;
+                                }
+                                handleAddVideoByUrl(linkVideoForm.url, linkVideoForm.title, linkVideoForm.poster);
+                                setShowLinkVideoModal(false);
+                              }}
+                              className="px-4 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 shadow-xs cursor-pointer"
+                            >
+                              Add Video to Activity
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {(currentActivity.videos || []).length === 0 ? (
                         <div className="p-8 rounded-2xl border-2 border-dashed border-gray-200 text-center space-y-3 bg-gray-50/50">
@@ -1596,7 +1806,31 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                                     </div>
 
                                     <div>
-                                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-0.5">Poster Image</label>
+                                      <div className="flex items-center justify-between mb-0.5">
+                                        <label className="text-[10px] font-bold uppercase text-gray-400">Poster / Thumbnail</label>
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveThumbnailIndex(idx);
+                                              customThumbnailInputRef.current?.click();
+                                            }}
+                                            className="text-[10px] font-bold text-purple-600 hover:underline cursor-pointer"
+                                            title="Upload Custom Image Thumbnail"
+                                          >
+                                            📁 Upload Custom
+                                          </button>
+                                          <span>•</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAutoExtractPoster(idx, vid.url)}
+                                            className="text-[10px] font-bold text-pink-600 hover:underline cursor-pointer"
+                                            title="Capture First Frame as Poster"
+                                          >
+                                            ⚡ Auto Frame
+                                          </button>
+                                        </div>
+                                      </div>
                                       <input
                                         type="text"
                                         value={vid.poster || ''}

@@ -50,6 +50,43 @@ export default function BlogsTab({
     fetchBlogs();
   }, []);
 
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const compressed = canvas.toDataURL('image/webp', quality);
+            resolve(compressed);
+          } catch {
+            const compressedJpeg = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedJpeg);
+          }
+        };
+        img.onerror = () => resolve(event.target?.result as string);
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   const fetchBlogs = async () => {
     setLoading(true);
     setErrorMsg('');
@@ -563,17 +600,13 @@ export default function BlogsTab({
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const f = e.target.files?.[0] || null;
                       setThumbnailFile(f);
                       if (f) {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          const base64Url = ev.target?.result as string;
-                          if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: base64Url });
-                          else setBlogForm({ ...blogForm, featured_image: base64Url });
-                        };
-                        reader.readAsDataURL(f);
+                        const compressedBase64 = await compressImage(f);
+                        if (editingBlog) setEditingBlog({ ...editingBlog, featured_image: compressedBase64 });
+                        else setBlogForm({ ...blogForm, featured_image: compressedBase64 });
                       }
                     }}
                   />

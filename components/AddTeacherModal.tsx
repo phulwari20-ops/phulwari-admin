@@ -127,19 +127,61 @@ export default function AddTeacherModal({
               />
             </div>
 
-            <div>
-              <label className={`font-bold ${textSecondary}`}>Assigned Batch</label>
-              <select
-                value={teacherForm.assigned_batch}
-                onChange={(e) => setTeacherForm({ ...teacherForm, assigned_batch: e.target.value })}
-                className={`w-full border rounded-xl px-3 py-2 font-semibold outline-none ${
-                  isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
-                }`}
-              >
-                {batches.map(b => (
-                  <option key={b.id} value={b.batch_name}>{b.batch_name}</option>
-                ))}
-              </select>
+            <div className="col-span-1 md:col-span-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className={`font-bold ${textSecondary}`}>
+                  Assigned Batches / Classes (Multi-Select)
+                </label>
+                {teacherForm.assigned_batch && (
+                  <button
+                    type="button"
+                    onClick={() => setTeacherForm({ ...teacherForm, assigned_batch: '' })}
+                    className="text-[10px] font-bold text-rose-500 hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+              <div className={`p-2.5 rounded-xl border max-h-36 overflow-y-auto flex flex-wrap gap-2 ${
+                isLight ? 'bg-slate-50 border-slate-300' : 'bg-slate-950 border-slate-800'
+              }`}>
+                {batches.map(b => {
+                  const currentSelected = (teacherForm.assigned_batch || '')
+                    .split(',')
+                    .map((s: string) => s.trim())
+                    .filter(Boolean);
+                  const isChecked = currentSelected.includes(b.batch_name);
+
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        let nextSelected: string[];
+                        if (isChecked) {
+                          nextSelected = currentSelected.filter((name: string) => name !== b.batch_name);
+                        } else {
+                          nextSelected = [...currentSelected, b.batch_name];
+                        }
+                        setTeacherForm({ ...teacherForm, assigned_batch: nextSelected.join(', ') });
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isChecked
+                          ? 'bg-blue-600 text-white shadow-xs scale-102 border border-blue-500'
+                          : isLight
+                          ? 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                          : 'bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{isChecked ? '✓' : '+'}</span>
+                      <span>{b.batch_name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className={`text-[10px] ${textSecondary}`}>
+                Selected: <span className="font-bold text-blue-600">{teacherForm.assigned_batch || 'None'}</span>
+              </p>
             </div>
           </div>
 

@@ -35,7 +35,7 @@ export default function TeachersTab({
   const [accountModalTeacher, setAccountModalTeacher] = useState<any>(null);
 
   // Extract all unique assigned batch names from teachers list
-  const uniqueBatches = Array.from(new Set(teachers.map(t => t.assigned_batch).filter(Boolean)));
+  const uniqueBatches = Array.from(new Set(teachers.flatMap(t => (t.assigned_batch || '').split(',').map((s: string) => s.trim())).filter(Boolean)));
 
   return (
     <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
@@ -89,7 +89,7 @@ export default function TeachersTab({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teachers.filter(t => selectedBatchNameFilter === 'All' || t.assigned_batch === selectedBatchNameFilter).map((tch) => (
+        {teachers.filter(t => selectedBatchNameFilter === 'All' || (t.assigned_batch || '').split(',').map((s: string) => s.trim()).includes(selectedBatchNameFilter)).map((tch) => (
           <div key={tch.id} className={`relative p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 space-y-5 ${bgSubCard} shadow-sm hover:shadow-xl hover:border-indigo-400/50 transition-all duration-300 group`}>
             
             {/* Status Badge - Absolute Top Right */}
@@ -113,8 +113,14 @@ export default function TeachersTab({
 
             <div className={`text-xs font-medium space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800/80`}>
               <div className="flex flex-col">
-                <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Assigned Batch</span>
-                <strong className={`text-sm ${textPrimary}`}>{tch.assigned_batch}</strong>
+                <span className={`text-[10px] uppercase font-bold tracking-wider ${textSecondary} mb-1`}>Assigned Batches</span>
+                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                  {(tch.assigned_batch || 'None').split(',').map((b: string) => b.trim()).filter(Boolean).map((b: string) => (
+                    <span key={b} className="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20">
+                      {b}
+                    </span>
+                  ))}
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-3">

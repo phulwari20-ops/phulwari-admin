@@ -169,20 +169,135 @@ export default function AttendanceTab({
       }
     });
 
+  // State for Section 2: Unscheduled / Additional Attendance
+  const [selectedStudentForExtra, setSelectedStudentForExtra] = useState<any | null>(null);
+  const [extraActivity, setExtraActivity] = useState<string>('Extra Activity');
+  const [customExtraActivity, setCustomExtraActivity] = useState<string>('');
+  const [extraTimeSlot, setExtraTimeSlot] = useState<string>('10:30 AM - 11:30 AM');
+  const [customExtraTimeSlot, setCustomExtraTimeSlot] = useState<string>('');
+  const [extraStatus, setExtraStatus] = useState<'present' | 'absent' | 'halfday' | 'leave' | 'holiday'>('present');
+  const [extraDuplicateError, setExtraDuplicateError] = useState<string>('');
+  const [extraSuccessMsg, setExtraSuccessMsg] = useState<string>('');
+
+  const STANDARD_ACTIVITIES = [
+    'Dance',
+    'Zumba',
+    'Art & Craft',
+    'Music / Singing',
+    'Mother & Toddler Program',
+    'Early Learning / Playgroup',
+    'Day Care Session',
+    'Extra Remedial Class',
+    'Special Workshop',
+    'Other (Custom)'
+  ];
+
+  const STANDARD_TIME_SLOTS = [
+    '09:30 AM - 10:30 AM',
+    '10:30 AM - 11:30 AM',
+    '11:30 AM - 12:30 PM',
+    '02:00 PM - 03:00 PM',
+    '03:30 PM - 04:30 PM',
+    '04:30 PM - 05:30 PM',
+    '05:30 PM - 06:30 PM',
+    'Other (Custom)'
+  ];
+
+  // Helper to identify scheduled items matching a student on attendanceDate
+  const isScheduledSession = (studentId: string, className: string, classTime: string) => {
+    return attendanceItems.some(
+      item => item.student.id === studentId &&
+              (item.class_name || '').toLowerCase() === (className || '').toLowerCase() &&
+              (item.class_time || '').toLowerCase() === (classTime || '').toLowerCase()
+    );
+  };
+
+  // Find all attendance records for attendanceDate that are unscheduled / additional sessions
+  const unscheduledAttendanceRecords = attendance.filter((a: any) => {
+    if (a.date !== attendanceDate) return false;
+    return !isScheduledSession(a.student_id, a.class_name || '', a.class_time || '');
+  });
+
+  // Handle adding an unscheduled attendance record with strict duplicate prevention
+  const handleAddUnscheduledSession = () => {
+    setExtraDuplicateError('');
+    setExtraSuccessMsg('');
+
+    if (!selectedStudentForExtra) {
+      setExtraDuplicateError('Please select a student first.');
+      return;
+    }
+
+    const finalActivity = extraActivity === 'Other (Custom)' 
+      ? customExtraActivity.trim() 
+      : extraActivity.trim();
+    
+    if (!finalActivity) {
+      setExtraDuplicateError('Please specify an activity / class name.');
+      return;
+    }
+
+    const finalTime = extraTimeSlot === 'Other (Custom)'
+      ? customExtraTimeSlot.trim()
+      : extraTimeSlot.trim();
+
+    if (!finalTime) {
+      setExtraDuplicateError('Please specify a time slot.');
+      return;
+    }
+
+    // Exact Duplicate Prevention: check if Student + Date + Time + Activity already exists
+    const duplicateInDb = attendance.some((a: any) =>
+      a.student_id === selectedStudentForExtra.id &&
+      a.date === attendanceDate &&
+      (a.class_name || '').trim().toLowerCase() === finalActivity.toLowerCase() &&
+      (a.class_time || '').trim().toLowerCase() === finalTime.toLowerCase()
+    );
+
+    const duplicateInScheduled = attendanceItems.some((item) =>
+      item.student.id === selectedStudentForExtra.id &&
+      (item.class_name || '').trim().toLowerCase() === finalActivity.toLowerCase() &&
+      (item.class_time || '').trim().toLowerCase() === finalTime.toLowerCase()
+    );
+
+    if (duplicateInDb || duplicateInScheduled) {
+      setExtraDuplicateError(
+        `Duplicate session detected: "${selectedStudentForExtra.full_name}" already has an attendance record for "${finalActivity}" at "${finalTime}" on ${attendanceDate}. Please select a different activity or time.`
+      );
+      return;
+    }
+
+    // Mark attendance
+    handleMarkAttendance(
+      selectedStudentForExtra.id,
+      attendanceDate,
+      extraStatus,
+      finalActivity,
+      finalTime,
+      extraStatus === 'leave' ? 'Extra Session Leave' : undefined
+    );
+
+    setExtraSuccessMsg(`Recorded ${extraStatus.toUpperCase()} for ${selectedStudentForExtra.full_name} (${finalActivity})!`);
+    setSelectedStudentForExtra(null);
+    setUnscheduledSearch('');
+    setTimeout(() => setExtraSuccessMsg(''), 4000);
+  };
+
   return (
-    <div className={`${bgCard} rounded-2xl p-6 space-y-4`}>
+    <div className={`${bgCard} rounded-2xl p-6 space-y-6`}>
+      {/* ─────────────────────────────────────────────────────────────
+          HEADER & FILTERS
+         ───────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h3 className={`text-sm font-bold ${textPrimary} flex items-center gap-1.5`}>
-            <span>📅</span> Daily Attendance Marker ({dayName})
+          <h3 className={`text-base font-black ${textPrimary} flex items-center gap-2`}>
+            <span>📅</span> Daily Attendance Console
           </h3>
-          <p className={`text-xs ${textSecondary}`}>
-            {searchQuery 
-              ? `Showing search results for "${searchQuery}"`
-              : `Showing ${displayItems.length} classes scheduled for ${dayName}.`}
+          <p className={`text-xs ${textSecondary} mt-0.5`}>
+            Selected Date: <span className="font-bold text-blue-600 font-mono">{attendanceDate}</span> ({dayName})
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-2 text-xs">
             <span className={`font-semibold ${textSecondary}`}>Search:</span>
             <input
@@ -231,7 +346,7 @@ export default function AttendanceTab({
               type="date"
               value={attendanceDate}
               onChange={(e) => setAttendanceDate(e.target.value)}
-              className={`border rounded-xl px-3 py-1.5 font-mono font-bold outline-none ${
+              className={`border rounded-xl px-3 py-1.5 font-mono font-bold outline-none cursor-pointer ${
                 isLight ? 'bg-slate-100 border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-800 text-slate-100'
               }`}
             />
@@ -295,9 +410,24 @@ export default function AttendanceTab({
         </div>
       )}
 
-      <div className="space-y-3 pt-2">
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 1: SCHEDULED ATTENDANCE (Auto populated by dayName)
+         ───────────────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black">1</span>
+            <h4 className={`text-sm font-black uppercase tracking-wider ${textPrimary}`}>
+              Scheduled Attendance ({dayName})
+            </h4>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-bold">
+              {displayItems.length} {displayItems.length === 1 ? 'student' : 'students'} scheduled
+            </span>
+          </div>
+        </div>
+
         {isHoliday ? (
-          <div className="text-center py-12 text-slate-400 font-bold border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/20">
+          <div className="text-center py-10 text-slate-400 font-bold border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/20">
             🏖️ This date is marked as a Holiday. Attendance marking is blocked.
           </div>
         ) : displayItems.length === 0 ? (
@@ -427,137 +557,317 @@ export default function AttendanceTab({
         )}
       </div>
 
-      {/* ── UNSCHEDULED STUDENTS ATTENDANCE SECTION ── */}
-      <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 2: UNSCHEDULED / ADDITIONAL SESSIONS
+         ───────────────────────────────────────────────────────────── */}
+      <div className="pt-6 border-t-2 border-slate-200 dark:border-slate-800 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h4 className={`text-xs font-black uppercase tracking-wider ${textPrimary} flex items-center gap-1.5`}>
-              <span>➕</span> Mark Unscheduled Student Attendance
-            </h4>
-            <p className={`text-[11px] ${textSecondary}`}>
-              Search and mark attendance for students not scheduled for {dayName}.
-            </p>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-black">2</span>
+            <div>
+              <h4 className={`text-sm font-black uppercase tracking-wider ${textPrimary} flex items-center gap-1.5`}>
+                <span>➕</span> Unscheduled / Additional Attendance
+              </h4>
+              <p className={`text-[11px] ${textSecondary}`}>
+                Add extra sessions for any student (including already scheduled students taking an additional class). Prevents duplicate entry for identical activity and time.
+              </p>
+            </div>
           </div>
-          <div className="relative w-full sm:w-80">
-            <input
-              type="text"
-              placeholder="Search unscheduled student name or ID..."
-              value={unscheduledSearch}
-              onChange={(e) => setUnscheduledSearch(e.target.value)}
-              className={`w-full text-xs font-semibold px-3 py-2 rounded-xl border outline-none ${
-                isLight ? 'bg-white border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
-              }`}
-            />
-          </div>
+          {unscheduledAttendanceRecords.length > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+              {unscheduledAttendanceRecords.length} additional {unscheduledAttendanceRecords.length === 1 ? 'record' : 'records'} marked
+            </span>
+          )}
         </div>
 
-        {/* 1. Show existing unscheduled marked attendance records for this date */}
-        {(() => {
-          const scheduledStudentIds = new Set(attendanceItems.map(i => i.student.id))
-          const existingUnscheduledMarked = attendance.filter((a: any) => 
-            a.date === attendanceDate && 
-            !scheduledStudentIds.has(a.student_id)
-          )
-
-          if (existingUnscheduledMarked.length === 0 && unscheduledSearch.trim() === '') {
-            return null
-          }
-
-          const searchFilteredUnscheduled = filteredStudents.filter(st => {
-            if (st.status === 'deactivated' || scheduledStudentIds.has(st.id)) return false
-            if (!unscheduledSearch.trim()) return existingUnscheduledMarked.some((a: any) => a.student_id === st.id)
-            const q = unscheduledSearch.toLowerCase().trim()
-            return st.full_name.toLowerCase().includes(q) || st.admission_id.toLowerCase().includes(q)
-          })
-
-          if (searchFilteredUnscheduled.length === 0) {
-            return (
-              <div className="p-4 text-center text-slate-400 text-xs font-semibold border border-dashed rounded-xl">
-                No unscheduled students match &quot;{unscheduledSearch}&quot;.
+        {/* Action Form to Add Additional / Unscheduled Session */}
+        <div className={`p-4 sm:p-5 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-800'} space-y-4`}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. Student Selector */}
+            <div className="space-y-1">
+              <label className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>
+                Select Student:
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Type name or ID to search..."
+                  value={selectedStudentForExtra ? `${selectedStudentForExtra.full_name} (${selectedStudentForExtra.admission_id})` : unscheduledSearch}
+                  onChange={(e) => {
+                    setSelectedStudentForExtra(null);
+                    setUnscheduledSearch(e.target.value);
+                  }}
+                  className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
+                    selectedStudentForExtra
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : isLight
+                      ? 'bg-white border-slate-300 text-slate-900 focus:border-blue-500'
+                      : 'bg-slate-950 border-slate-700 text-slate-100 focus:border-blue-500'
+                  }`}
+                />
+                {selectedStudentForExtra && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStudentForExtra(null);
+                      setUnscheduledSearch('');
+                    }}
+                    className="absolute right-2 top-2 text-xs font-bold text-slate-400 hover:text-rose-500 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+                {/* Autocomplete dropdown */}
+                {!selectedStudentForExtra && unscheduledSearch.trim().length > 0 && (
+                  <div className={`absolute z-30 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl border shadow-xl ${
+                    isLight ? 'bg-white border-slate-200 divide-y divide-slate-100' : 'bg-slate-900 border-slate-700 divide-y divide-slate-800'
+                  }`}>
+                    {filteredStudents
+                      .filter(s => s.status !== 'deactivated' && (
+                        s.full_name?.toLowerCase().includes(unscheduledSearch.toLowerCase()) ||
+                        s.admission_id?.toLowerCase().includes(unscheduledSearch.toLowerCase())
+                      ))
+                      .slice(0, 8)
+                      .map(st => (
+                        <div
+                          key={st.id}
+                          onClick={() => {
+                            setSelectedStudentForExtra(st);
+                            setUnscheduledSearch('');
+                            setExtraDuplicateError('');
+                          }}
+                          className={`p-2.5 text-xs cursor-pointer flex items-center justify-between ${
+                            isLight ? 'hover:bg-blue-50' : 'hover:bg-slate-800'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold">{st.full_name}</span>
+                            <span className="text-[10px] text-blue-500 ml-1.5 font-mono">({st.admission_id})</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-semibold">{st.batch_name || 'General'}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
-            )
-          }
+            </div>
 
-          return (
-            <div className="space-y-2">
-              <span className="block font-bold text-[10px] uppercase text-blue-600 tracking-wider">Unscheduled Students ({searchFilteredUnscheduled.length})</span>
-              {searchFilteredUnscheduled.map(st => {
-                const defaultClass = st.batch_name ? `${st.batch_name} Extra` : 'General Extra Class'
-                const defaultTime = 'Custom Session'
-                const currentAtt = attendance.find(
-                  (a: any) => a.student_id === st.id && a.date === attendanceDate
-                )
-                const currentStatus = currentAtt?.status || 'unmarked'
-                const liveSt = filteredStudents.find((s: any) => s.id === st.id) || st
-                const classesLeft = (liveSt.classes_total || 12) - (liveSt.classes_consumed || 0)
+            {/* 2. Activity / Class Selector */}
+            <div className="space-y-1">
+              <label className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>
+                Activity / Class:
+              </label>
+              <select
+                value={extraActivity}
+                onChange={(e) => setExtraActivity(e.target.value)}
+                className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
+                }`}
+              >
+                {STANDARD_ACTIVITIES.map(act => (
+                  <option key={act} value={act}>{act}</option>
+                ))}
+              </select>
+              {extraActivity === 'Other (Custom)' && (
+                <input
+                  type="text"
+                  placeholder="Enter custom activity name..."
+                  value={customExtraActivity}
+                  onChange={(e) => setCustomExtraActivity(e.target.value)}
+                  className={`w-full text-xs font-bold px-3 py-1.5 mt-1 rounded-xl border outline-none ${
+                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
+                  }`}
+                />
+              )}
+            </div>
 
-                return (
-                  <div key={`unsched-${st.id}`} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}>
-                    <div>
-                      <h4 className={`text-xs font-bold ${textPrimary} flex items-center gap-2`}>
-                        <span>{st.full_name}</span>
-                        <span className="text-blue-500 font-mono">({st.admission_id})</span>
-                        <span className="text-[9px] bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1.5 py-0.5 rounded font-bold uppercase">Unscheduled</span>
-                        {currentAtt?.remarks && (
-                          <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-semibold italic">
-                            {currentAtt.remarks}
-                          </span>
-                        )}
-                      </h4>
-                      <div className={`text-[11px] ${textSecondary} mt-1 flex flex-wrap gap-x-3 gap-y-1 items-center`}>
-                        <span>Batch: <strong className={textPrimary}>{st.batch_name || 'General'}</strong></span>
-                        <span>|</span>
-                        <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500' : 'text-green-600'}`}>{classesLeft}</span></span>
-                      </div>
+            {/* 3. Time Slot & Status */}
+            <div className="space-y-1">
+              <label className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>
+                Time Slot:
+              </label>
+              <select
+                value={extraTimeSlot}
+                onChange={(e) => setExtraTimeSlot(e.target.value)}
+                className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
+                  isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
+                }`}
+              >
+                {STANDARD_TIME_SLOTS.map(ts => (
+                  <option key={ts} value={ts}>{ts}</option>
+                ))}
+              </select>
+              {extraTimeSlot === 'Other (Custom)' && (
+                <input
+                  type="text"
+                  placeholder="e.g. 01:00 PM - 02:00 PM"
+                  value={customExtraTimeSlot}
+                  onChange={(e) => setCustomExtraTimeSlot(e.target.value)}
+                  className={`w-full text-xs font-bold px-3 py-1.5 mt-1 rounded-xl border outline-none ${
+                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
+                  }`}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Action Row: Status Picker & Submit Button */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              <span className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>Status:</span>
+              <div className="flex items-center gap-1">
+                {(['present', 'absent', 'halfday', 'leave'] as const).map(st => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setExtraStatus(st)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase transition cursor-pointer ${
+                      extraStatus === st
+                        ? st === 'present' ? 'bg-emerald-600 text-white shadow-xs'
+                        : st === 'absent' ? 'bg-rose-600 text-white shadow-xs'
+                        : st === 'halfday' ? 'bg-amber-500 text-white shadow-xs'
+                        : 'bg-blue-600 text-white shadow-xs'
+                        : isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {st === 'present' ? 'Present' : st === 'absent' ? 'Absent' : st === 'halfday' ? 'Half Day' : 'Leave'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={isHoliday}
+              onClick={handleAddUnscheduledSession}
+              className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              + Record Additional Attendance
+            </button>
+          </div>
+
+          {/* Error & Success Messages */}
+          {extraDuplicateError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+              <span>⚠️</span>
+              <span>{extraDuplicateError}</span>
+            </div>
+          )}
+          {extraSuccessMsg && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+              <span>✓</span>
+              <span>{extraSuccessMsg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* List of Marked Unscheduled / Additional Attendance Records */}
+        <div className="space-y-2">
+          <span className={`block font-bold text-[11px] uppercase tracking-wider ${textSecondary}`}>
+            Recorded Additional / Unscheduled Sessions ({unscheduledAttendanceRecords.length})
+          </span>
+
+          {unscheduledAttendanceRecords.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-xs font-semibold border border-dashed rounded-xl">
+              No additional or unscheduled sessions marked for {attendanceDate}.
+            </div>
+          ) : (
+            unscheduledAttendanceRecords.map((attRec: any, idx: number) => {
+              const student = filteredStudents.find(s => s.id === attRec.student_id) || attRec.students || { full_name: 'Student', admission_id: '' };
+              const currentStatus = attRec.status || 'present';
+              const classesLeft = (student.classes_total || 12) - (student.classes_consumed || 0);
+
+              return (
+                <div
+                  key={`extra-rec-${attRec.id || idx}`}
+                  className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}
+                >
+                  <div>
+                    <h4 className={`text-xs font-bold ${textPrimary} flex items-center gap-2`}>
+                      <span>{student.full_name}</span>
+                      <span className="text-blue-500 font-mono">({student.admission_id})</span>
+                      <span className="text-[9px] bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1.5 py-0.5 rounded font-bold uppercase">
+                        Additional Session
+                      </span>
+                      {attRec.remarks && (
+                        <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-semibold italic">
+                          {attRec.remarks}
+                        </span>
+                      )}
+                    </h4>
+                    <div className={`text-[11px] ${textSecondary} mt-1 flex flex-wrap gap-x-3 gap-y-1 items-center`}>
+                      <span className="flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                        <span>📖</span> Activity: {attRec.class_name || 'Extra Class'}
+                      </span>
+                      <span>|</span>
+                      <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono">
+                        <span>⏰</span> Time: {attRec.class_time || 'Custom Time'}
+                      </span>
+                      <span>|</span>
+                      <span>Classes Left: <span className={`font-bold ${classesLeft <= 3 ? 'text-red-500' : 'text-green-600'}`}>{classesLeft}</span></span>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50 self-start sm:self-auto">
-                      {/* P Button */}
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {/* Status Toggles */}
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
                       <button
                         disabled={isHoliday}
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'present' ? 'unmarked' : 'present', defaultClass, defaultTime)}
-                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
-                          currentStatus === 'present' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-600 hover:bg-emerald-500/10'
+                        onClick={() => handleMarkAttendance(attRec.student_id, attendanceDate, currentStatus === 'present' ? 'unmarked' : 'present', attRec.class_name, attRec.class_time)}
+                        className={`h-7 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'present' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-600 hover:bg-emerald-500/10'
                         }`}
                         title="Present"
                       >P</button>
 
-                      {/* A Button */}
                       <button
                         disabled={isHoliday}
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'absent' ? 'unmarked' : 'absent', defaultClass, defaultTime)}
-                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
-                          currentStatus === 'absent' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-600 hover:bg-rose-500/10'
+                        onClick={() => handleMarkAttendance(attRec.student_id, attendanceDate, currentStatus === 'absent' ? 'unmarked' : 'absent', attRec.class_name, attRec.class_time)}
+                        className={`h-7 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'absent' ? 'bg-rose-600 text-white shadow-xs' : 'text-rose-600 hover:bg-rose-500/10'
                         }`}
                         title="Absent"
                       >A</button>
 
-                      {/* HD Button */}
                       <button
                         disabled={isHoliday}
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday', defaultClass, defaultTime)}
-                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
-                          currentStatus === 'halfday' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-600 hover:bg-amber-500/10'
+                        onClick={() => handleMarkAttendance(attRec.student_id, attendanceDate, currentStatus === 'halfday' ? 'unmarked' : 'halfday', attRec.class_name, attRec.class_time)}
+                        className={`h-7 px-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'halfday' ? 'bg-amber-500 text-white shadow-xs' : 'text-amber-600 hover:bg-amber-500/10'
                         }`}
                         title="Half Day"
                       >HD</button>
 
-                      {/* L Button */}
                       <button
                         disabled={isHoliday}
-                        onClick={() => handleMarkAttendance(st.id, attendanceDate, currentStatus === 'leave' ? 'unmarked' : 'leave', defaultClass, defaultTime, 'Leave')}
-                        className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
-                          currentStatus === 'leave' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-600 hover:bg-blue-500/10'
+                        onClick={() => handleMarkAttendance(attRec.student_id, attendanceDate, currentStatus === 'leave' ? 'unmarked' : 'leave', attRec.class_name, attRec.class_time, 'Leave')}
+                        className={`h-7 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                          currentStatus === 'leave' ? 'bg-blue-600 text-white shadow-xs' : 'text-blue-600 hover:bg-blue-500/10'
                         }`}
-                        title="Leave - Single click toggle"
+                        title="Leave"
                       >L</button>
                     </div>
+
+                    {/* Delete / Remove this additional session */}
+                    <button
+                      type="button"
+                      disabled={isHoliday}
+                      onClick={() => {
+                        if (confirm(`Remove this additional session (${attRec.class_name}) for ${student.full_name}?`)) {
+                          handleMarkAttendance(attRec.student_id, attendanceDate, 'unmarked', attRec.class_name, attRec.class_time);
+                        }
+                      }}
+                      className="h-7 px-2 rounded-lg text-xs font-bold text-rose-500 hover:bg-rose-500/10 transition cursor-pointer border border-rose-500/20"
+                      title="Remove Session"
+                    >
+                      🗑️
+                    </button>
                   </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );
