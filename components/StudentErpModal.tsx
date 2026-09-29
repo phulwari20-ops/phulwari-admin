@@ -549,7 +549,7 @@ export default function StudentErpModal({
       } catch(err) { console.error('Fee save failed:', err) }
     }
 
-    // Update student validity date and total_fee if customized or cleared
+    // Update student validity date, classes_total, and total_fee on payment
     try {
       const studentUpdates: any = {}
       if (planValidityEnd) {
@@ -563,10 +563,55 @@ export default function StudentErpModal({
           studentUpdates.total_fee = monthlyRow.total_fee
         }
       }
+
+      // ── Package Auto-Renewal on Payment (Issue 11) ──
+      // Payment ke baad package auto-renew hoga, purane package ki used classes count hongi.
+      // Formula: Remaining Classes = New Package Entitlement - Total Classes Consumed
+      const hasPaidFee = feeRows.some(r => Number(r.paid_amount || 0) > 0 || r.status === 'paid');
+      if (hasPaidFee) {
+        let packageClasses = 12;
+        if (student.custom_days) {
+          const daysCount = student.custom_days.split(', ').filter(Boolean).length;
+          if (daysCount > 0) packageClasses = daysCount * 4;
+        } else if (student.classes_assigned && Number(student.classes_assigned) > 0) {
+          packageClasses = Number(student.classes_assigned);
+        } else if (student.batch_id) {
+          const bObj = allAvailableBatches?.find((b: any) => b.id === student.batch_id);
+          if (bObj?.classes_total) packageClasses = Number(bObj.classes_total);
+        } else if (student.classes_total && Number(student.classes_total) > 0) {
+          packageClasses = Number(student.classes_total);
+        }
+
+        const oldTotal = Number(student.classes_total || 0);
+        const oldConsumed = Number(student.classes_consumed || 0);
+
+        let newTotal = packageClasses;
+        if (oldTotal > 0) {
+          if (oldConsumed > oldTotal) {
+            newTotal = oldTotal + packageClasses;
+          } else {
+            newTotal = Math.max(oldTotal, oldConsumed) + packageClasses;
+          }
+        }
+
+        studentUpdates.classes_total = newTotal;
+
+        // Auto-renew validity if not explicitly specified
+        if (!planValidityEnd) {
+          const baseDate = student.validity_end_date && new Date(student.validity_end_date) > new Date()
+            ? new Date(student.validity_end_date)
+            : new Date();
+          baseDate.setDate(baseDate.getDate() + 30);
+          studentUpdates.validity_end_date = baseDate.toISOString().split('T')[0];
+        }
+      }
+
       if (Object.keys(studentUpdates).length > 0) {
         await supabase.from('students').update(studentUpdates).eq('id', student.id)
       }
-    } catch(_) {}
+    } catch(err) {
+      console.error('Failed to update student package on renewal:', err)
+    }
 
     await loadAllAdminData()
     setLoadingSubmit(false)

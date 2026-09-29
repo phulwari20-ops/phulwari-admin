@@ -34,9 +34,23 @@ export async function GET() {
   });
 }
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const rawBody = await req.json();
+    if (!rawBody.image_url) {
+      return NextResponse.json({ success: false, error: 'image_url is required' }, { status: 400 });
+    }
+
+    const payload = {
+      image_url: rawBody.image_url,
+      title: (rawBody.title || 'Phulwari Activity Photo').trim(),
+      category: rawBody.category || 'Activities',
+      sort_order: Number.isInteger(rawBody.sort_order) ? rawBody.sort_order : 0,
+      created_at: new Date().toISOString()
+    };
+
     const supabaseUrl = getSupabaseUrl().replace(/\/+$/, '');
     const supabaseKey = getSupabaseKey();
 
@@ -48,17 +62,19 @@ export async function POST(req: Request) {
         'Authorization': `Bearer ${supabaseKey}`,
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
       const errText = await res.text();
+      console.error('Gallery POST Supabase error:', errText);
       return NextResponse.json({ success: false, error: errText }, { status: res.status });
     }
 
     const data = await res.json();
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
+    console.error('Gallery POST server error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

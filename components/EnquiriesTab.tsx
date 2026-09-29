@@ -215,12 +215,13 @@ export default function EnquiriesTab({
               </tr>
             </thead>
             <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
-              {loading ? (
+              {loading && enquiries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-slate-400 font-semibold">
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin text-pink-500" />
-                      <span>Loading leads from database...</span>
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-pink-500" />
+                      <span className="text-sm">Loading leads from database...</span>
+                      <span className="text-[11px] text-slate-400">Connecting securely to Phulwari CRM...</span>
                     </div>
                   </td>
                 </tr>

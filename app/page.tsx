@@ -4,8 +4,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '../lib/supabase/client'
 import { getSupabaseKey, getSupabaseUrl } from '../lib/supabase/env'
+import { optimizeImageForUpload } from '../lib/imageOptimizer'
+import { playNotificationSound } from '../lib/notificationSound'
+import { requestFcmToken, onMessageListener } from '../lib/firebase'
 import {
   LayoutDashboard,
+  Volume2,
   Users,
   UserPlus,
   Calendar,
@@ -958,6 +962,7 @@ export default function AdminDashboardPage() {
   // Load All ERP Data
   useEffect(() => {
     loadAllAdminData()
+    fetchEnquiries().catch(() => {})
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -983,8 +988,9 @@ export default function AdminDashboardPage() {
       // Keep the enquiries list live
       setEnquiries(prev => (prev.some(e => e.id === lead.id) ? prev : [lead, ...prev]))
 
-      // In-app banner
+      // In-app banner & chime sound
       setLeadAlert({ name, phone, service, id: lead.id })
+      playNotificationSound()
 
       // Browser push notification
       try {
@@ -1010,6 +1016,35 @@ export default function AdminDashboardPage() {
 
     return () => {
       subHandle.unsubscribe()
+    }
+  }, [])
+
+  // ── Firebase Cloud Messaging (FCM) & Push Notification Listener ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    // Register FCM Token
+    requestFcmToken().catch(() => {})
+
+    // Listen for incoming foreground FCM messages
+    const unsubscribe = onMessageListener((payload: any) => {
+      const title = payload?.notification?.title || payload?.data?.title || '🔔 New Notification'
+      const body = payload?.notification?.body || payload?.data?.body || 'New alert from Phulwari Centre'
+
+      // Play audio chime
+      playNotificationSound()
+
+      // Show in-app notification banner
+      setLeadAlert({
+        name: title,
+        phone: '',
+        service: body,
+        id: `fcm-${Date.now()}`
+      })
+    })
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe()
     }
   }, [])
 
@@ -2242,41 +2277,48 @@ Management Phulwari Mother and Child Activity Centre`
     })
   }
 
-  // Device File Image Picker Upload Handler (100% Original Photo Quality - Zero Compression)
-  const handleDeviceImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Device File Image Picker Upload Handler (Optimized for Maya OS / Linux / Mobile / Web)
+  const handleDeviceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const targetInput = e.target
     setIsUploadingGallery(true)
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const base64Url = event.target?.result as string
-      if (base64Url) {
-        const titleText = file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo';
 
-        try {
-          // Post photo via server-side /api/gallery (Maya OS / Linux compatible)
-          const res = await fetch('/api/gallery', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ image_url: base64Url, title: titleText, category: 'Activities' })
-          });
-          if (res.ok) {
-            console.log('✅ Photo saved via /api/gallery to database!')
-            await fetchAdminGallery();
-          }
-        } catch (err) {
-          console.error('Gallery upload error:', err)
-        } finally {
-          setIsUploadingGallery(false)
-        }
+    try {
+      // Clean and compress image via HTML5 Canvas (keeps crystal-clear quality under ~250KB)
+      const base64Url = await optimizeImageForUpload(file, 1600, 0.85)
+      const titleText = file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo';
+
+      const res = await fetch('/api/gallery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          image_url: base64Url, 
+          title: titleText, 
+          category: 'Activities',
+          sort_order: (galleryImages.length || 0) + 1
+        })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+
+      if (res.ok && resData.success !== false) {
+        console.log('✅ Photo saved via /api/gallery to database!')
+        await fetchAdminGallery();
       } else {
-        setIsUploadingGallery(false)
+        console.error('Gallery upload failed:', resData.error || res.statusText);
+        alert(`❌ Photo upload failed: ${resData.error || 'Server error, please try again.'}`);
       }
+    } catch (err: any) {
+      console.error('Gallery upload error:', err);
+      alert(`❌ Photo upload failed: ${err.message || 'Network error'}`);
+    } finally {
+      setIsUploadingGallery(false);
+      if (targetInput) targetInput.value = '';
     }
-    reader.readAsDataURL(file)
   }
 
   const confirmDeleteGalleryImage = async () => {
@@ -2517,6 +2559,54 @@ Management Phulwari Mother and Child Activity Centre`
       delete (dbRow as any).students
       await supabase.from('fees').insert([dbRow])
     } catch (err) {}
+
+    // Auto-renew package entitlement & validity when fee is marked paid (Issue 11)
+    if (feeForm.status === 'paid' && selectedERPStudent) {
+      let packageClasses = 12;
+      if (selectedERPStudent.custom_days) {
+        const daysCount = selectedERPStudent.custom_days.split(', ').filter(Boolean).length;
+        if (daysCount > 0) packageClasses = daysCount * 4;
+      } else if (selectedERPStudent.classes_assigned && Number(selectedERPStudent.classes_assigned) > 0) {
+        packageClasses = Number(selectedERPStudent.classes_assigned);
+      } else if (selectedERPStudent.batch_id) {
+        const bObj = batches?.find((b: any) => b.id === selectedERPStudent.batch_id);
+        if (bObj?.classes_total) packageClasses = Number(bObj.classes_total);
+      } else if (selectedERPStudent.classes_total && Number(selectedERPStudent.classes_total) > 0) {
+        packageClasses = Number(selectedERPStudent.classes_total);
+      }
+
+      const oldTotal = Number(selectedERPStudent.classes_total || 0);
+      const oldConsumed = Number(selectedERPStudent.classes_consumed || 0);
+
+      let newTotal = packageClasses;
+      if (oldTotal > 0) {
+        if (oldConsumed > oldTotal) {
+          newTotal = oldTotal + packageClasses;
+        } else {
+          newTotal = Math.max(oldTotal, oldConsumed) + packageClasses;
+        }
+      }
+
+      const baseDate = selectedERPStudent.validity_end_date && new Date(selectedERPStudent.validity_end_date) > new Date()
+        ? new Date(selectedERPStudent.validity_end_date)
+        : new Date();
+      baseDate.setDate(baseDate.getDate() + 30);
+      const newValidity = baseDate.toISOString().split('T')[0];
+
+      // Optimistic state
+      setStudents(prev => prev.map(s => s.id === selectedERPStudent.id ? { ...s, classes_total: newTotal, validity_end_date: newValidity } : s));
+
+      // Persist to Supabase
+      (async () => {
+        try {
+          const supabase = createClient();
+          await supabase.from('students').update({
+            classes_total: newTotal,
+            validity_end_date: newValidity
+          }).eq('id', selectedERPStudent.id);
+        } catch (_) {}
+      })();
+    }
 
     setReceiptModalFee(newFeeObj)
     setSelectedERPStudent(null)
@@ -3891,7 +3981,20 @@ Management Phulwari Mother and Child Activity Centre`
             <p className={`text-xs ${textSecondary}`}>Phulwari Mother & Child Activity Centre ERP System</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* FCM Notification Sound Test Button */}
+            <button
+              type="button"
+              onClick={() => playNotificationSound()}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+                isLight ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+              }`}
+              title="Test Push Notification & FCM Chime Sound"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-pink-500" />
+              <span className="hidden sm:inline">Chime Sound</span>
+            </button>
+
             {/* Quick Access to Activities CMS */}
             <button
               onClick={() => setActiveTab('activities_cms')}
@@ -4299,7 +4402,7 @@ Management Phulwari Mother and Child Activity Centre`
             isLight={isLight}
             enquiries={enquiries}
             loading={loadingEnquiries}
-            onRefresh={fetchEnquiries}
+            onRefresh={() => fetchEnquiries(true)}
             onUpdateStatus={handleUpdateEnquiryStatus}
             onUpdateFollowUpDate={handleUpdateFollowUpDate}
             onUpdateNotes={handleUpdateEnquiryNotes}
@@ -5195,7 +5298,7 @@ Management Phulwari Mother and Child Activity Centre`
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div>
                 <h3 className={`text-base font-bold ${textPrimary} flex items-center gap-2`}>
-                  <CalendarDays className="w-5 h-5 text-blue-500" /> Attendance Details: {selectedCalendarDate}
+                  <CalendarDays className="w-5 h-5 text-blue-500" /> Attendance: {new Date(selectedCalendarDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
                 </h3>
                 <p className={`text-xs ${textSecondary}`}>Batch Filter: <strong className="text-blue-500">{selectedBatchId}</strong></p>
               </div>
