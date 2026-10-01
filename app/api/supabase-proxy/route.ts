@@ -9,14 +9,16 @@ async function handleProxy(req: NextRequest) {
     const supabaseKey = getSupabaseKey();
     const url = new URL(req.url);
 
-    // Extract target path from query param "path"
-    const targetPath = url.searchParams.get('path') || '';
+    // Extract target path from query param "path" or "endpoint"
+    const targetParam = url.searchParams.get('path') || url.searchParams.get('endpoint') || '';
     url.searchParams.delete('path');
-
-    // Build remaining query string
-    const remainingQuery = url.searchParams.toString();
-    const cleanPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
-    const destinationUrl = `${supabaseUrl}${cleanPath}${remainingQuery ? `?${remainingQuery}` : ''}`;
+    url.searchParams.delete('endpoint');
+    let cleanPath = targetParam.startsWith('/') ? targetParam : `/${targetParam}`;
+    // If endpoint was passed as just "batches", normalize to "/rest/v1/batches"
+    if (!cleanPath.startsWith('/rest/v1') && !cleanPath.startsWith('/auth') && !cleanPath.startsWith('/storage')) {
+      cleanPath = `/rest/v1${cleanPath}`;
+    }
+    const destinationUrl = `${supabaseUrl}${cleanPath}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''}`;
 
     // Clone incoming headers, ensuring Supabase apikey & auth
     const headers = new Headers();

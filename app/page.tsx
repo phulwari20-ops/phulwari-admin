@@ -1542,94 +1542,73 @@ export default function AdminDashboardPage() {
     console.log('📡 [BATCH INSERT] Sending to Supabase:', dbPayload)
 
     try {
-      const supabaseUrl = getSupabaseUrl()
-      const supabaseKey = getSupabaseKey()
-      if (!supabaseUrl || !supabaseKey) throw new Error('Supabase config missing')
+      const supabase = createClient()
+      const { data: savedBatch, error: batchErr } = await supabase
+        .from('batches')
+        .insert([dbPayload])
+        .select()
 
-      const res = await fetch(`${supabaseUrl}/rest/v1/batches`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify([dbPayload])
-      })
+      if (batchErr) throw batchErr
 
-      if (res.ok) {
-        const savedBatch = await res.json()
-        const inserted = savedBatch[0] || dbPayload
-        console.log('✅ [BATCH INSERT SUCCESS]:', inserted)
+      const inserted = (savedBatch && savedBatch[0]) || dbPayload
+      console.log('✅ [BATCH INSERT SUCCESS]:', inserted)
 
-        // Insert schedules to batch_schedules table
-        if (newBatchForm.schedules && newBatchForm.schedules.length > 0) {
-          const supabase = createClient()
-          const schedulesPayload = newBatchForm.schedules.map(sch => ({
-            batch_id: batchUuid,
-            day_of_week: sch.day_of_week,
-            start_time: sch.start_time,
-            end_time: sch.end_time,
-            class_name: sch.class_name
-          }))
-          const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schedulesPayload).select()
-          if (schErr) {
-            console.error('❌ [BATCH SCHEDULES INSERT ERROR]:', schErr)
-          } else if (schData) {
-            setBatchSchedules(prev => [...prev, ...schData])
-          }
+      // Insert schedules to batch_schedules table
+      if (newBatchForm.schedules && newBatchForm.schedules.length > 0) {
+        const schedulesPayload = newBatchForm.schedules.map(sch => ({
+          batch_id: batchUuid,
+          day_of_week: sch.day_of_week,
+          start_time: sch.start_time,
+          end_time: sch.end_time,
+          class_name: sch.class_name
+        }))
+        const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schedulesPayload).select()
+        if (schErr) {
+          console.error('❌ [BATCH SCHEDULES INSERT ERROR]:', schErr)
+        } else if (schData) {
+          setBatchSchedules(prev => [...prev, ...schData])
         }
-
-        // Auto sync batch fee to dynamic fee heads table
-        ;(async () => {
-          try {
-            const supabase = createClient()
-            const batchFeeHead = {
-              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              name: `${inserted.batch_name} Fee`,
-              default_amount: parseFloat(newBatchForm.fee_amount) || 3500,
-              is_system: false
-            }
-            const { data: headData, error: headErr } = await supabase.from('fee_heads').insert([batchFeeHead]).select()
-            if (!headErr && headData) {
-              setFeeHeads(prev => [...prev, headData[0]])
-            }
-          } catch (headSyncErr) {
-            console.error('Failed to sync new batch fee to fee_heads:', headSyncErr)
-          }
-        })()
-
-        // Only update UI AFTER DB confirms success
-        setBatches(prev => [inserted, ...prev])
-
-        // Reset form and close
-        setNewBatchForm({
-          category: 'Activities',
-          subcategory: 'Toddler Program',
-          location: 'Kidwaipuri Main Branch',
-          batch_name: '',
-          batch_time: '10:30 AM - 11:30 AM',
-          days_schedule: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-          validity_days: '30',
-          fee_amount: '3500',
-          age_group: '1 - 3 Years',
-          capacity: '20',
-          schedules: []
-        })
-        setIsAddBatchOpen(false)
-      } else {
-        const errText = await res.text()
-        console.error('❌ [BATCH INSERT FAILED]:', errText)
-        let friendlyMsg = 'Failed to save batch to database.'
-        try {
-          const parsed = JSON.parse(errText)
-          if (parsed.message) friendlyMsg = `DB Error: ${parsed.message}`
-        } catch (_) {}
-        alert(`❌ Could not create batch.\n${friendlyMsg}`)
       }
-    } catch (err) {
+
+      // Auto sync batch fee to dynamic fee heads table
+      ;(async () => {
+        try {
+          const batchFeeHead = {
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            name: `${inserted.batch_name} Fee`,
+            default_amount: parseFloat(newBatchForm.fee_amount) || 3500,
+            is_system: false
+          }
+          const { data: headData, error: headErr } = await supabase.from('fee_heads').insert([batchFeeHead]).select()
+          if (!headErr && headData) {
+            setFeeHeads(prev => [...prev, headData[0]])
+          }
+        } catch (headSyncErr) {
+          console.error('Failed to sync new batch fee to fee_heads:', headSyncErr)
+        }
+      })()
+
+      // Only update UI AFTER DB confirms success
+      setBatches(prev => [inserted, ...prev])
+
+      // Reset form and close
+      setNewBatchForm({
+        category: 'Activities',
+        subcategory: 'Toddler Program',
+        location: 'Kidwaipuri Main Branch',
+        batch_name: '',
+        batch_time: '10:30 AM - 11:30 AM',
+        days_schedule: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        validity_days: '30',
+        fee_amount: '3500',
+        age_group: '1 - 3 Years',
+        capacity: '20',
+        schedules: []
+      })
+      setIsAddBatchOpen(false)
+    } catch (err: any) {
       console.error('❌ [BATCH INSERT EXCEPTION]:', err)
-      alert('❌ Network error while creating batch. Please check your connection.')
+      alert(`❌ Could not create batch: ${err.message || 'Please check your connection.'}`)
     }
   }
 
@@ -2611,16 +2590,20 @@ Management Phulwari Mother and Child Activity Centre`
         packageClasses = Number(selectedERPStudent.classes_total);
       }
 
-      const oldTotal = Number(selectedERPStudent.classes_total || 0);
+      const oldTotal = Number(selectedERPStudent.classes_total || packageClasses);
       const oldConsumed = Number(selectedERPStudent.classes_consumed || 0);
 
-      let newTotal = packageClasses;
-      if (oldTotal > 0) {
-        if (oldConsumed > oldTotal) {
-          newTotal = oldTotal + packageClasses;
-        } else {
-          newTotal = Math.max(oldTotal, oldConsumed) + packageClasses;
-        }
+      // 1. Entitlement is reset to the new package count
+      const newTotal = packageClasses;
+
+      // 2. Consumed classes persist based on formula
+      let newConsumed = 0;
+      if (oldConsumed > oldTotal) {
+        newConsumed = oldConsumed - oldTotal; // Extra sessions carry over
+      } else if (oldConsumed > 0 && oldConsumed < oldTotal) {
+        newConsumed = oldConsumed; // In-progress sessions stay consumed
+      } else {
+        newConsumed = 0;
       }
 
       const baseDate = selectedERPStudent.validity_end_date && new Date(selectedERPStudent.validity_end_date) > new Date()
@@ -2629,8 +2612,13 @@ Management Phulwari Mother and Child Activity Centre`
       baseDate.setDate(baseDate.getDate() + 30);
       const newValidity = baseDate.toISOString().split('T')[0];
 
-      // Optimistic state
-      setStudents(prev => prev.map(s => s.id === selectedERPStudent.id ? { ...s, classes_total: newTotal, validity_end_date: newValidity } : s));
+      // Update local optimistic state
+      setStudents(prev => prev.map(s => s.id === selectedERPStudent.id ? {
+        ...s,
+        classes_total: newTotal,
+        classes_consumed: newConsumed,
+        validity_end_date: newValidity
+      } : s));
 
       // Persist to Supabase
       (async () => {
@@ -2638,9 +2626,12 @@ Management Phulwari Mother and Child Activity Centre`
           const supabase = createClient();
           await supabase.from('students').update({
             classes_total: newTotal,
+            classes_consumed: newConsumed,
             validity_end_date: newValidity
           }).eq('id', selectedERPStudent.id);
-        } catch (_) {}
+        } catch (err) {
+          console.error('Error updating renewed student classes:', err);
+        }
       })();
     }
 
@@ -2961,11 +2952,17 @@ Management Phulwari Mother and Child Activity Centre`
     const targetStudent = students.find(s => s.id === studentId || s.admission_id === studentId)
 
     // Find previous status of this student's attendance strictly on this date/class/time slot
+    const norm = (s: any) => (s || '').toString().trim().toLowerCase();
     const prevAtt = attendance.find(
-      a => a.student_id === studentId && a.date === targetDate && a.class_name === className && a.class_time === classTime
-    ) || (className && classTime ? undefined : attendance.find(
-      a => a.student_id === studentId && a.date === targetDate
-    ));
+      a => a.student_id === studentId && 
+           a.date === targetDate && 
+           norm(a.class_name) === norm(className) && 
+           norm(a.class_time) === norm(classTime)
+    ) || attendance.find(
+      a => a.student_id === studentId && 
+           a.date === targetDate && 
+           norm(a.class_name) === norm(className)
+    );
     const prevStatus = prevAtt?.status || null
 
     // Both present and absent count as a consumed class session
@@ -2983,7 +2980,7 @@ Management Phulwari Mother and Child Activity Centre`
     const isMatchingEntry = (a: any) => {
       if (a.student_id !== studentId || a.date !== targetDate) return false;
       if (prevAtt?.id && a.id === prevAtt.id) return true;
-      return a.class_name === className && a.class_time === classTime;
+      return norm(a.class_name) === norm(className) && (norm(a.class_time) === norm(classTime) || (!classTime && !a.class_time));
     };
 
     const supabase = createClient()

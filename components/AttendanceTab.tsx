@@ -503,18 +503,16 @@ export default function AttendanceTab({
         ) : (
           displayItems.map((item, idx) => {
             const liveStudent = filteredStudents.find((s: any) => s.id === item.student.id) || item.student;
+            const norm = (s: any) => (s || '').toString().trim().toLowerCase();
             const currentAtt = attendance.find(
               (a: any) => a.student_id === item.student.id && 
                           a.date === attendanceDate && 
-                          a.class_name === item.class_name && 
-                          a.class_time === item.class_time
+                          norm(a.class_name) === norm(item.class_name) && 
+                          norm(a.class_time) === norm(item.class_time)
             ) || attendance.find(
               (a: any) => a.student_id === item.student.id && 
                           a.date === attendanceDate && 
-                          a.class_name === item.class_name
-            ) || attendance.find(
-              (a: any) => a.student_id === item.student.id && 
-                          a.date === attendanceDate
+                          norm(a.class_name) === norm(item.class_name)
             );
             const currentStatus = currentAtt?.status || 'unmarked';
             const classesLeft = (liveStudent.classes_total || 12) - (liveStudent.classes_consumed || 0);
