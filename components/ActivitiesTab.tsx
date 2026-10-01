@@ -36,7 +36,10 @@ import {
   Play,
   RotateCcw,
   Clock,
-  Radio
+  Radio,
+  ArrowUp,
+  ArrowDown,
+  X
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { compressVideo, formatBytes, generateVideoPoster } from '@/lib/videoCompressor'
@@ -181,6 +184,14 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
   const [showLinkVideoModal, setShowLinkVideoModal] = useState(false)
   const [linkVideoForm, setLinkVideoForm] = useState({ url: '', title: '', poster: '', duration: '0:30' })
   const [showGalleryVideoModal, setShowGalleryVideoModal] = useState(false)
+
+  // Image Management State
+  const [uploadingHeroImage, setUploadingHeroImage] = useState(false)
+  const [uploadingGalleryImages, setUploadingGalleryImages] = useState(false)
+  const heroImageInputRef = useRef<HTMLInputElement>(null)
+  const galleryImageInputRef = useRef<HTMLInputElement>(null)
+  const replaceGalleryImageInputRef = useRef<HTMLInputElement>(null)
+  const [replacingGalleryIndex, setReplacingGalleryIndex] = useState<number | null>(null)
 
   // Filter activities based on the current active mode
   const displayedActivities = useMemo(() => {
@@ -619,6 +630,144 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
     } catch (e: any) {
       alert(`Thumbnail upload error: ${e?.message || e}`)
     }
+  }
+
+  // Upload image to Supabase Storage ('gallery' bucket) with client-side fallback
+  const uploadImageFile = async (file: File): Promise<string> => {
+    try {
+      const supabase = createClient()
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+      const filePath = `activities/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${cleanName}`
+
+      // Attempt 1: Upload to Supabase Storage 'gallery' bucket
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('gallery')
+        .upload(filePath, file, {
+          contentType: file.type || 'image/png',
+          upsert: true,
+        })
+
+      if (!uploadErr && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from('gallery').getPublicUrl(filePath)
+        if (publicUrlData?.publicUrl) {
+          return publicUrlData.publicUrl
+        }
+      }
+
+      // Attempt 2: Fallback to client-side compressed base64 data URL
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const img = new Image()
+          img.onload = () => {
+            let width = img.width
+            let height = img.height
+            const maxWidth = 1280
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width)
+              width = maxWidth
+            }
+            const canvas = document.createElement('canvas')
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height)
+              resolve(canvas.toDataURL('image/webp', 0.85))
+            } else {
+              resolve((e.target?.result as string) || '')
+            }
+          }
+          img.onerror = () => resolve((e.target?.result as string) || '')
+          img.src = e.target?.result as string
+        }
+        reader.onerror = () => resolve('')
+        reader.readAsDataURL(file)
+      })
+    } catch (err) {
+      console.error('Image upload error:', err)
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve((e.target?.result as string) || '')
+        reader.onerror = () => resolve('')
+        reader.readAsDataURL(file)
+      })
+    }
+  }
+
+  // Hero image upload handler
+  const handleHeroImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !currentActivity) return
+    setUploadingHeroImage(true)
+    try {
+      const url = await uploadImageFile(file)
+      if (url) {
+        updateCurrent('hero_image', url)
+      }
+    } catch (err: any) {
+      alert(`Hero image upload failed: ${err?.message || err}`)
+    } finally {
+      setUploadingHeroImage(false)
+      if (heroImageInputRef.current) heroImageInputRef.current.value = ''
+    }
+  }
+
+  // Gallery images multi-upload handler
+  const handleGalleryImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0 || !currentActivity) return
+    setUploadingGalleryImages(true)
+    try {
+      const uploadedUrls: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        const url = await uploadImageFile(files[i])
+        if (url) uploadedUrls.push(url)
+      }
+      if (uploadedUrls.length > 0) {
+        const cur = currentActivity.gallery_images || []
+        updateCurrent('gallery_images', [...cur, ...uploadedUrls])
+      }
+    } catch (err: any) {
+      alert(`Gallery upload failed: ${err?.message || err}`)
+    } finally {
+      setUploadingGalleryImages(false)
+      if (galleryImageInputRef.current) galleryImageInputRef.current.value = ''
+    }
+  }
+
+  // Replace single gallery image handler
+  const handleReplaceGalleryImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || replacingGalleryIndex === null || !currentActivity) return
+    setUploadingGalleryImages(true)
+    try {
+      const url = await uploadImageFile(file)
+      if (url) {
+        const copy = [...(currentActivity.gallery_images || [])]
+        copy[replacingGalleryIndex] = url
+        updateCurrent('gallery_images', copy)
+      }
+    } catch (err: any) {
+      alert(`Replace image failed: ${err?.message || err}`)
+    } finally {
+      setUploadingGalleryImages(false)
+      setReplacingGalleryIndex(null)
+      if (replaceGalleryImageInputRef.current) replaceGalleryImageInputRef.current.value = ''
+    }
+  }
+
+  // Move gallery image position
+  const moveGalleryImage = (index: number, direction: 'up' | 'down') => {
+    if (!currentActivity) return
+    const list = [...(currentActivity.gallery_images || [])]
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= list.length) return
+    const temp = list[index]
+    list[index] = list[targetIndex]
+    list[targetIndex] = temp
+    updateCurrent('gallery_images', list)
   }
 
   // Delete activity
@@ -1353,101 +1502,254 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
                 {activeSubTab === 'media' && (
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                        Primary Hero Image Path / URL
-                      </label>
-                      <div className="flex gap-3 items-center">
-                        <input
-                          type="text"
-                          value={currentActivity.hero_image || ''}
-                          onChange={(e) => updateCurrent('hero_image', e.target.value)}
-                          placeholder="/music/image.png"
-                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono"
-                        />
-                        {currentActivity.hero_image && (
-                          <div className="w-12 h-12 rounded-xl border overflow-hidden relative shrink-0 bg-gray-50 flex items-center justify-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={currentActivity.hero_image}
-                              alt="Hero preview"
-                              className="w-full h-full object-cover"
-                              onError={(e: any) => {
-                                const target = e.target as HTMLImageElement
-                                if (!target.dataset.triedFallback && currentActivity.hero_image?.startsWith('/')) {
-                                  target.dataset.triedFallback = 'true'
-                                  target.src = `https://phulwari.co.in${currentActivity.hero_image}`
-                                } else {
-                                  target.src = '/phulwari_logo.webp'
-                                }
-                              }}
-                            />
-                          </div>
-                        )}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Primary Hero Image Path / URL
+                        </label>
+                        <span className="text-xs text-gray-400">Featured banner on page header</span>
                       </div>
-                    </div>
-
-                    <div className="space-y-3 pt-4 border-t border-gray-100">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-bold text-gray-900">Gallery Images Showcase</h4>
-                          <p className="text-xs text-gray-500">Interactive carousel photos displayed on the activity page.</p>
+                      <input
+                        type="file"
+                        ref={heroImageInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleHeroImageChange}
+                      />
+                      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                        <div className="flex-1 flex gap-2 w-full">
+                          <input
+                            type="text"
+                            value={currentActivity.hero_image || ''}
+                            onChange={(e) => updateCurrent('hero_image', e.target.value)}
+                            placeholder="/music/image.png or https://..."
+                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => heroImageInputRef.current?.click()}
+                            disabled={uploadingHeroImage}
+                            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+                          >
+                            {uploadingHeroImage ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Upload Hero</span>
+                              </>
+                            )}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const cur = currentActivity.gallery_images || []
-                            updateCurrent('gallery_images', [...cur, '/music/image.png'])
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Image Path</span>
-                        </button>
-                      </div>
 
-                      <div className="space-y-2">
-                        {(currentActivity.gallery_images || []).map((imgUrl, idx) => (
-                          <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-gray-200 bg-gray-50">
-                            <div className="w-10 h-10 rounded-lg border overflow-hidden relative shrink-0 bg-white flex items-center justify-center">
+                        {currentActivity.hero_image && (
+                          <div className="relative group shrink-0">
+                            <div className="w-14 h-14 rounded-xl border border-gray-200 overflow-hidden relative bg-gray-50 flex items-center justify-center shadow-xs">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
-                                src={imgUrl}
-                                alt={`Gallery ${idx + 1}`}
+                                src={currentActivity.hero_image}
+                                alt="Hero preview"
                                 className="w-full h-full object-cover"
                                 onError={(e: any) => {
                                   const target = e.target as HTMLImageElement
-                                  if (!target.dataset.triedFallback && imgUrl?.startsWith('/')) {
+                                  if (!target.dataset.triedFallback && currentActivity.hero_image?.startsWith('/')) {
                                     target.dataset.triedFallback = 'true'
-                                    target.src = `https://phulwari.co.in${imgUrl}`
+                                    target.src = `https://phulwari.co.in${currentActivity.hero_image}`
                                   } else {
                                     target.src = '/phulwari_logo.webp'
                                   }
                                 }}
                               />
                             </div>
-                            <input
-                              type="text"
-                              value={imgUrl}
-                              onChange={(e) => {
-                                const copy = [...(currentActivity.gallery_images || [])]
-                                copy[idx] = e.target.value
-                                updateCurrent('gallery_images', copy)
-                              }}
-                              className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-mono bg-white"
-                            />
                             <button
                               type="button"
-                              onClick={() => {
-                                const copy = (currentActivity.gallery_images || []).filter((_, i) => i !== idx)
-                                updateCurrent('gallery_images', copy)
-                              }}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              onClick={() => updateCurrent('hero_image', '')}
+                              title="Clear Hero Image"
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs hover:bg-rose-600 transition shadow-xs opacity-0 group-hover:opacity-100 cursor-pointer"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <X className="w-3 h-3" />
                             </button>
                           </div>
-                        ))}
+                        )}
                       </div>
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                      <input
+                        type="file"
+                        ref={galleryImageInputRef}
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleGalleryImagesUpload}
+                      />
+                      <input
+                        type="file"
+                        ref={replaceGalleryImageInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleReplaceGalleryImage}
+                      />
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-gray-900">Gallery Images Showcase</h4>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                              {(currentActivity.gallery_images || []).length} photos
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Interactive carousel photos displayed on the activity page.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => galleryImageInputRef.current?.click()}
+                            disabled={uploadingGalleryImages}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition shadow-xs disabled:opacity-50 cursor-pointer"
+                          >
+                            {uploadingGalleryImages ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Upload Photo(s)</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = currentActivity.gallery_images || []
+                              updateCurrent('gallery_images', [...cur, ''])
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Image Path</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {uploadingGalleryImages && (
+                        <div className="p-3 rounded-xl bg-purple-50 border border-purple-100 text-purple-800 text-xs flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-purple-600 shrink-0" />
+                          <span>Processing and uploading image(s) to gallery storage...</span>
+                        </div>
+                      )}
+
+                      {(!currentActivity.gallery_images || currentActivity.gallery_images.length === 0) ? (
+                        <div
+                          onClick={() => galleryImageInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-200 hover:border-purple-400 bg-gray-50/60 hover:bg-purple-50/30 rounded-2xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2.5"
+                        >
+                          <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-xs">
+                            <Upload className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-800">No photos in gallery yet</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Click to upload photos directly from your device or use &quot;Add Image Path&quot;.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                          {currentActivity.gallery_images.map((imgUrl, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200 bg-gray-50/80 hover:bg-gray-50 transition"
+                            >
+                              <div className="w-12 h-12 rounded-xl border border-gray-200 overflow-hidden relative shrink-0 bg-white flex items-center justify-center shadow-xs">
+                                {imgUrl ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Gallery photo ${idx + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onError={(e: any) => {
+                                      const target = e.target as HTMLImageElement
+                                      if (!target.dataset.triedFallback && imgUrl?.startsWith('/')) {
+                                        target.dataset.triedFallback = 'true'
+                                        target.src = `https://phulwari.co.in${imgUrl}`
+                                      } else {
+                                        target.src = '/phulwari_logo.webp'
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-5 h-5 text-gray-300" />
+                                )}
+                              </div>
+
+                              <input
+                                type="text"
+                                value={imgUrl}
+                                onChange={(e) => {
+                                  const copy = [...(currentActivity.gallery_images || [])]
+                                  copy[idx] = e.target.value
+                                  updateCurrent('gallery_images', copy)
+                                }}
+                                placeholder="/music/image.png or https://..."
+                                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              />
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplacingGalleryIndex(idx)
+                                    replaceGalleryImageInputRef.current?.click()
+                                  }}
+                                  title="Replace with new photo upload"
+                                  className="p-1.5 text-purple-600 hover:bg-purple-100/60 rounded-lg transition cursor-pointer"
+                                >
+                                  <Upload className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => moveGalleryImage(idx, 'up')}
+                                  disabled={idx === 0}
+                                  title="Move Up"
+                                  className="p-1.5 text-gray-500 hover:bg-gray-200 disabled:opacity-20 rounded-lg transition cursor-pointer"
+                                >
+                                  <ArrowUp className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => moveGalleryImage(idx, 'down')}
+                                  disabled={idx === currentActivity.gallery_images.length - 1}
+                                  title="Move Down"
+                                  className="p-1.5 text-gray-500 hover:bg-gray-200 disabled:opacity-20 rounded-lg transition cursor-pointer"
+                                >
+                                  <ArrowDown className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = (currentActivity.gallery_images || []).filter((_, i) => i !== idx)
+                                    updateCurrent('gallery_images', copy)
+                                  }}
+                                  title="Delete photo"
+                                  className="p-1.5 text-rose-500 hover:bg-rose-100/70 rounded-lg transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

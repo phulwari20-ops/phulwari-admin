@@ -104,11 +104,23 @@ export default function RenewalAlertsTab({
   const analyzed = useMemo(() => {
     return students
       .map(st => {
-        const totalClasses = Number(st.classes_total !== undefined && st.classes_total !== null ? st.classes_total : 12)
-        const consumed = Number(st.classes_consumed || 0)
-        const remaining = Math.max(0, totalClasses - consumed)
+        let totalClasses = Number(st.classes_total !== undefined && st.classes_total !== null ? st.classes_total : 12)
         const batchObj = batches.find((b: any) => b.id === st.batch_id || (b.batch_name && st.batch_name && b.batch_name.toLowerCase().trim() === st.batch_name?.toLowerCase().trim()))
         const batchName = st.batch_name || batchObj?.batch_name || 'N/A'
+
+        // Normalize total if legacy record was multiplied/doubled (e.g. 40 -> 20)
+        if (totalClasses > 24) {
+          if (batchObj?.classes_total) totalClasses = Number(batchObj.classes_total)
+          else if (totalClasses % 20 === 0) totalClasses = 20
+          else if (totalClasses % 12 === 0) totalClasses = 12
+          else if (totalClasses % 16 === 0) totalClasses = 16
+          else if (totalClasses % 8 === 0) totalClasses = 8
+          else totalClasses = 20
+        }
+
+        const consumed = Number(st.classes_consumed || 0)
+        // Formula: Remaining Classes = New Package Entitlement − Total Classes Consumed
+        const remaining = totalClasses - consumed
 
         // Use validity_end_date as Plan Expiry Date
         const renewalDate = st.validity_end_date || st.plan_validity_date || st.renewal_date || null
@@ -129,7 +141,7 @@ export default function RenewalAlertsTab({
       })
   }, [students, batches])
 
-  const overdueCount = analyzed.filter(s => (s.daysDiff !== null && s.daysDiff < 0) || s.remaining === 0).length
+  const overdueCount = analyzed.filter(s => (s.daysDiff !== null && s.daysDiff < 0) || s.remaining <= 0).length
   const urgentCount = analyzed.filter(s => s.daysDiff !== null && s.daysDiff >= 0 && s.daysDiff <= 3).length
   const upcomingCount = analyzed.filter(s => s.remaining > 0 && s.remaining <= 3 && (s.daysDiff === null || s.daysDiff > 3)).length
 
@@ -216,9 +228,12 @@ export default function RenewalAlertsTab({
                       <td className="py-3 px-3 text-center font-bold text-slate-500">{st.totalClasses || '—'}</td>
                       <td className="py-3 px-3 text-center font-bold text-orange-500">{st.consumed}</td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`font-extrabold text-sm ${st.remaining === 0 ? 'text-rose-600' : st.remaining <= 3 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        <span className={`font-extrabold text-sm ${st.remaining <= 0 ? 'text-rose-600' : st.remaining <= 3 ? 'text-amber-600' : 'text-emerald-600'}`}>
                           {st.remaining}
                         </span>
+                        {st.remaining < 0 && (
+                          <div className="text-[9px] font-bold text-rose-500">({Math.abs(st.remaining)} extra)</div>
+                        )}
                       </td>
                       <td className="py-3 px-3 font-mono text-[10px] text-slate-400">
                         {st.renewalDate
@@ -228,8 +243,12 @@ export default function RenewalAlertsTab({
                       <td className="py-3 px-3">
                         <div className="flex flex-col gap-1">
                           {st.remaining <= 3 && (
-                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-350 border border-rose-200 dark:border-rose-900 rounded-full font-bold text-[9px] w-fit">
-                              ⚠️ {st.remaining} Classes Left
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] w-fit border ${
+                              st.remaining < 0
+                                ? 'bg-rose-200 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border-rose-300'
+                                : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-350 border-rose-200 dark:border-rose-900'
+                            }`}>
+                              {st.remaining < 0 ? `⚠️ ${Math.abs(st.remaining)} Extra Used` : st.remaining === 0 ? '⚠️ 0 Classes Left' : `⚠️ ${st.remaining} Classes Left`}
                             </span>
                           )}
                           {st.daysDiff !== null && st.daysDiff <= 3 && (

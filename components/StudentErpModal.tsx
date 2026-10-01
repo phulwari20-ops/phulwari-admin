@@ -564,9 +564,17 @@ export default function StudentErpModal({
         }
       }
 
-      // ── Package Auto-Renewal on Payment (Issue 11) ──
-      // Payment ke baad package auto-renew hoga, purane package ki used classes count hongi.
-      // Formula: Remaining Classes = New Package Entitlement - Total Classes Consumed
+      // ── Package Auto-Renewal on Payment (Issue 11 & Issue 20) ──
+      // Payment ke baad package auto-renew hoga, lekin purane package ki used/consumed classes bhi count hongi.
+      // Example:
+      // Package = 20 classes
+      // Already consumed = 3 classes
+      // Payment ke baad new entitlement = 20 classes
+      // Used = 3 classes
+      // Remaining = 20 − 3 = 17 classes
+      // Yaani payment karne par entitlement reset/add hoga, lekin “used classes” reset nahi hongi.
+      // Agar pehle se extra classes consume ho chuki hain, woh bhi used count mein bani rahengi.
+      // Formula: Remaining Classes = New Package Entitlement − Total Classes Consumed
       const hasPaidFee = feeRows.some(r => Number(r.paid_amount || 0) > 0 || r.status === 'paid');
       if (hasPaidFee) {
         let packageClasses = 12;
@@ -579,22 +587,37 @@ export default function StudentErpModal({
           const bObj = allAvailableBatches?.find((b: any) => b.id === student.batch_id);
           if (bObj?.classes_total) packageClasses = Number(bObj.classes_total);
         } else if (student.classes_total && Number(student.classes_total) > 0) {
-          packageClasses = Number(student.classes_total);
-        }
-
-        const oldTotal = Number(student.classes_total || 0);
-        const oldConsumed = Number(student.classes_consumed || 0);
-
-        let newTotal = packageClasses;
-        if (oldTotal > 0) {
-          if (oldConsumed > oldTotal) {
-            newTotal = oldTotal + packageClasses;
+          const raw = Number(student.classes_total);
+          // Normalize if classes_total was previously multiplied/doubled (e.g., 40, 48)
+          if (raw > 24) {
+            if (raw % 20 === 0) packageClasses = 20;
+            else if (raw % 12 === 0) packageClasses = 12;
+            else if (raw % 16 === 0) packageClasses = 16;
+            else if (raw % 8 === 0) packageClasses = 8;
+            else packageClasses = 20;
           } else {
-            newTotal = Math.max(oldTotal, oldConsumed) + packageClasses;
+            packageClasses = raw;
           }
         }
 
-        studentUpdates.classes_total = newTotal;
+        const oldTotal = Number(student.classes_total || packageClasses);
+        const oldConsumed = Number(student.classes_consumed || 0);
+
+        // New entitlement is the packageClasses (never inflated to 40)
+        studentUpdates.classes_total = packageClasses;
+
+        // Consumed classes carry over:
+        // If student consumed extra classes past old total, the extra count stays consumed in the new package.
+        // If student was partially through (e.g. consumed 3), the 3 classes stay consumed.
+        let newConsumed = 0;
+        if (oldConsumed > oldTotal) {
+          newConsumed = oldConsumed - oldTotal;
+        } else if (oldConsumed > 0 && oldConsumed < oldTotal) {
+          newConsumed = oldConsumed;
+        } else {
+          newConsumed = 0;
+        }
+        studentUpdates.classes_consumed = newConsumed;
 
         // Auto-renew validity if not explicitly specified
         if (!planValidityEnd) {

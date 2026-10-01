@@ -1289,6 +1289,7 @@ export default function AdminDashboardPage() {
   const handleAddEnquiry = async (form: any) => {
     const supabase = createClient()
     const newEnq: any = {
+      serial_no: form.serial_no || String(enquiries.length + 1),
       child_name: form.child_name,
       age: form.age,
       parent_name: form.parent_name,
@@ -1296,9 +1297,10 @@ export default function AdminDashboardPage() {
       email: form.email,
       program_interested: form.program_interested,
       notes: form.notes,
-      status: 'New',
+      status: form.status || 'New',
       date: form.date || new Date().toISOString().split('T')[0],
-      next_follow_up_date: form.next_follow_up_date || null
+      next_follow_up_date: form.next_follow_up_date || null,
+      source: form.source || 'Direct Entry'
     }
 
     try {
@@ -1347,6 +1349,40 @@ export default function AdminDashboardPage() {
       setEnquiries(updated)
       try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
       alert('🎉 Enquiry saved successfully!')
+    }
+  }
+
+  const handleUpdateEnquiry = async (updatedLead: any) => {
+    const updated = enquiries.map(e => e.id === updatedLead.id ? { ...e, ...updatedLead } : e)
+    setEnquiries(updated)
+    try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(updated)) } catch (_) {}
+    try {
+      const supabase = createClient()
+      const payload: any = {
+        serial_no: updatedLead.serial_no || null,
+        child_name: updatedLead.child_name,
+        age: updatedLead.age,
+        parent_name: updatedLead.parent_name,
+        phone: updatedLead.phone,
+        email: updatedLead.email,
+        program_interested: updatedLead.program_interested,
+        status: updatedLead.status,
+        date: updatedLead.date,
+        next_follow_up_date: updatedLead.next_follow_up_date || null,
+        notes: updatedLead.notes,
+        source: updatedLead.source
+      }
+      const { error } = await supabase.from('enquiries').update(payload).eq('id', updatedLead.id)
+      if (error) {
+        if (error.message?.includes('serial_no')) {
+          delete payload.serial_no
+          await supabase.from('enquiries').update(payload).eq('id', updatedLead.id)
+        } else {
+          console.error('❌ [UPDATE ENQUIRY ERROR]:', error.message)
+        }
+      }
+    } catch (err: any) {
+      console.error('Exception updating enquiry:', err)
     }
   }
 
@@ -3662,7 +3698,7 @@ Management Phulwari Mother and Child Activity Centre`
                     type={showAdminPw ? 'text' : 'password'}
                     required
                     maxLength={6}
-                    placeholder="Enter 4-6 digit PIN (e.g. 1295)"
+                    placeholder="Enter 4-6 digit Security PIN"
                     value={adminPinInput}
                     onChange={(e) => setAdminPinInput(e.target.value)}
                     className={`w-full border rounded-2xl pl-10 pr-10 py-3 font-mono font-bold text-center tracking-widest text-sm outline-none transition ${
@@ -4407,6 +4443,7 @@ Management Phulwari Mother and Child Activity Centre`
             onUpdateFollowUpDate={handleUpdateFollowUpDate}
             onUpdateNotes={handleUpdateEnquiryNotes}
             onAddEnquiry={handleAddEnquiry}
+            onUpdateEnquiry={handleUpdateEnquiry}
             onConvertToAdmission={handleConvertToAdmission}
             onDeleteEnquiry={handleDeleteEnquiry}
           />

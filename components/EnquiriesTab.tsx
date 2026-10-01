@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle, RefreshCw, Loader2, Edit3, Hash, Check } from 'lucide-react';
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '—';
@@ -34,19 +34,39 @@ interface EnquiriesTabProps {
   onUpdateFollowUpDate?: (id: string, date: string) => void;
   onUpdateNotes?: (id: string, notes: string) => void;
   onAddEnquiry: (enquiry: any) => void;
+  onUpdateEnquiry?: (enquiry: any) => void;
   onConvertToAdmission: (enquiry: any) => void;
   onDeleteEnquiry?: (id: string) => void;
 }
 
 export default function EnquiriesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, badgePassword, isLight,
-  enquiries, loading = false, onRefresh, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onConvertToAdmission, onDeleteEnquiry
+  enquiries, loading = false, onRefresh, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onUpdateEnquiry, onConvertToAdmission, onDeleteEnquiry
 }: EnquiriesTabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [logModalEnq, setLogModalEnq] = useState<any | null>(null);
   const [newLogText, setNewLogText] = useState('');
   const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Edit Lead Modal State
+  const [editModalEnq, setEditModalEnq] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({
+    serial_no: '',
+    child_name: '',
+    age: '',
+    parent_name: '',
+    phone: '',
+    email: '',
+    program_interested: 'Gymnastics & MMA',
+    status: 'New',
+    date: new Date().toISOString().split('T')[0],
+    next_follow_up_date: '',
+    notes: '',
+    source: 'Direct Entry'
+  });
+
   const [form, setForm] = useState({
+    serial_no: '',
     date: new Date().toISOString().split('T')[0],
     child_name: '',
     age: '',
@@ -55,13 +75,15 @@ export default function EnquiriesTab({
     email: '',
     program_interested: 'Gymnastics & MMA',
     notes: '',
-    next_follow_up_date: ''
+    next_follow_up_date: '',
+    source: 'Direct Entry'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAddEnquiry(form);
     setForm({
+      serial_no: '',
       date: new Date().toISOString().split('T')[0],
       child_name: '',
       age: '',
@@ -70,7 +92,8 @@ export default function EnquiriesTab({
       email: '',
       program_interested: 'Gymnastics & MMA',
       notes: '',
-      next_follow_up_date: ''
+      next_follow_up_date: '',
+      source: 'Direct Entry'
     });
     setIsOpen(false);
   };
@@ -205,6 +228,7 @@ export default function EnquiriesTab({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className={`border-b font-bold uppercase tracking-wider ${isLight ? 'bg-slate-550/10 text-slate-600' : 'bg-slate-800/20 text-slate-400'}`}>
+                <th className="py-3 px-3 text-center">S.No</th>
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Child Details</th>
                 <th className="py-3 px-4">Parent Details</th>
@@ -217,7 +241,7 @@ export default function EnquiriesTab({
             <tbody className={`divide-y ${isLight ? 'divide-slate-200 text-slate-800' : 'divide-slate-800/80 text-slate-200'}`}>
               {loading && enquiries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400 font-semibold">
+                  <td colSpan={8} className="text-center py-12 text-slate-400 font-semibold">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-pink-500" />
                       <span className="text-sm">Loading leads from database...</span>
@@ -227,7 +251,7 @@ export default function EnquiriesTab({
                 </tr>
               ) : enquiries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400 font-semibold">
+                  <td colSpan={8} className="text-center py-10 text-slate-400 font-semibold">
                     <div className="space-y-1">
                       <p className="text-sm">No enquiries tracked yet.</p>
                       <p className="text-[11px] text-slate-400">Click &quot;Add New Enquiry&quot; above to log an inquiry.</p>
@@ -235,10 +259,15 @@ export default function EnquiriesTab({
                   </td>
                 </tr>
               ) : (
-                enquiries.map((enq) => (
+                enquiries.map((enq, idx) => (
                   <tr key={enq.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                    <td className="py-3.5 px-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-lg text-xs font-mono font-bold border ${isLight ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-slate-800 text-slate-200 border-slate-700'}`}>
+                        {enq.serial_no || (idx + 1)}
+                      </span>
+                    </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-slate-500">
-                      <div>{enq.created_at ? formatDateToDisplay(enq.created_at) : 'N/A'}</div>
+                      <div>{enq.created_at ? formatDateToDisplay(enq.created_at) : (enq.date ? formatDateToDisplay(enq.date) : 'N/A')}</div>
                       {enq.source && (
                         <div className="mt-1 text-[10px] font-sans px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 inline-block text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                           {enq.source}
@@ -259,7 +288,7 @@ export default function EnquiriesTab({
                         <a href={`sms:${enq.phone}`} title="SMS" className="p-1 bg-purple-50 text-purple-500 hover:bg-purple-100 rounded transition cursor-pointer">
                           <MessageSquare className="w-3 h-3" />
                         </a>
-                        <a href={`https://wa.me/${enq.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1 bg-green-50 text-green-500 hover:bg-green-100 rounded transition cursor-pointer">
+                        <a href={`https://wa.me/${enq.phone ? String(enq.phone).replace(/\D/g, '') : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1 bg-green-50 text-green-500 hover:bg-green-100 rounded transition cursor-pointer">
                           <MessageCircle className="w-3 h-3" />
                         </a>
                       </div>
@@ -275,7 +304,7 @@ export default function EnquiriesTab({
                           💬 {enq.message}
                         </div>
                       )}
-                      {/* Log replies timeline list preview (spreadsheet-like timeline matching Image 4) */}
+                      {/* Log replies timeline list preview */}
                       {(() => {
                         let logsList: any[] = [];
                         try {
@@ -286,8 +315,8 @@ export default function EnquiriesTab({
                         if (logsList.length > 0) {
                           return (
                             <div className="mt-1.5 space-y-1">
-                              {logsList.map((lg, idx) => (
-                                <div key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-650 dark:text-slate-350 font-medium">
+                              {logsList.map((lg, lIdx) => (
+                                <div key={lIdx} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 text-slate-650 dark:text-slate-350 font-medium">
                                   📎 {lg.text} <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500 ml-1">({lg.date})</span>
                                 </div>
                               ))}
@@ -328,6 +357,34 @@ export default function EnquiriesTab({
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Edit Complete Details & Serial Number Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditModalEnq(enq);
+                            setEditForm({
+                              id: enq.id,
+                              serial_no: enq.serial_no || String(idx + 1),
+                              date: enq.date || (enq.created_at ? String(enq.created_at).split('T')[0] : new Date().toISOString().split('T')[0]),
+                              child_name: enq.child_name || '',
+                              age: enq.age || '',
+                              parent_name: enq.parent_name || '',
+                              phone: enq.phone || '',
+                              email: enq.email || '',
+                              program_interested: enq.program_interested || 'Gymnastics & MMA',
+                              status: enq.status || 'New',
+                              next_follow_up_date: enq.next_follow_up_date ? String(enq.next_follow_up_date).split('T')[0] : '',
+                              notes: enq.notes || '',
+                              source: enq.source || 'Website'
+                            });
+                          }}
+                          className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                            isLight ? 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-600' : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-blue-400'
+                          }`}
+                          title="Edit Complete Lead Details & Serial Number"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => setLogModalEnq(enq)}
                           className={`p-1.5 rounded-lg border transition cursor-pointer ${
@@ -437,7 +494,17 @@ export default function EnquiriesTab({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={`font-bold ${textSecondary}`}>Serial Number (S.No)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1"
+                    value={form.serial_no || String(enquiries.length + 1)}
+                    onChange={(e) => setForm({ ...form, serial_no: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
                 <div>
                   <label className={`font-bold ${textSecondary}`}>Enquiry Date</label>
                   <input
@@ -500,6 +567,216 @@ export default function EnquiriesTab({
                   className="px-5 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
                 >
                   Log Enquiry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: EDIT COMPLETE LEAD DETAILS & SERIAL NUMBER ── */}
+      {editModalEnq && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className={`${bgCard} rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl my-8 border border-slate-200 dark:border-slate-800 animate-fadeIn`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className={`text-sm font-bold ${textPrimary}`}>Edit Complete Lead Details</h3>
+                  <p className={`text-[10px] ${textSecondary}`}>Update child info, parent contact, serial number, and status</p>
+                </div>
+              </div>
+              <button onClick={() => setEditModalEnq(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (onUpdateEnquiry) {
+                  onUpdateEnquiry(editForm);
+                }
+                setEditModalEnq(null);
+                alert('✅ Lead details updated successfully!');
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              {/* Row 1: S.No, Date, Source */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Serial Number (S.No)</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.serial_no || ''}
+                    onChange={(e) => setEditForm({ ...editForm, serial_no: e.target.value })}
+                    placeholder="e.g. 1, 2, L-01"
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono font-bold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Enquiry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={editForm.date || ''}
+                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Lead Source</label>
+                  <select
+                    value={editForm.source || 'Website'}
+                    onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  >
+                    <option value="Website">Website Form</option>
+                    <option value="Direct Entry">Direct Entry</option>
+                    <option value="Phone Call">Phone Call</option>
+                    <option value="Walk-in">Center Walk-in</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Referral">Referral</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Child Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Child's Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.child_name || ''}
+                    onChange={(e) => setEditForm({ ...editForm, child_name: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Child's Age / DOB</label>
+                  <input
+                    type="text"
+                    value={editForm.age || ''}
+                    onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
+                    placeholder="e.g. 4 Years"
+                    className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Parent Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Parent / Guardian Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.parent_name || ''}
+                    onChange={(e) => setEditForm({ ...editForm, parent_name: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Phone Number</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editForm.phone || ''}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Email Address</label>
+                  <input
+                    type="email"
+                    value={editForm.email || ''}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Program, Status, Next Follow-up Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Interested Program</label>
+                  <select
+                    value={editForm.program_interested || 'Gymnastics & MMA'}
+                    onChange={(e) => setEditForm({ ...editForm, program_interested: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${isLight ? 'bg-slate-100 border-slate-300 text-pink-600' : 'bg-slate-950 border-slate-800 text-pink-400'}`}
+                  >
+                    <option value="Music Classes">Music Classes</option>
+                    <option value="Dance Classes">Dance Classes</option>
+                    <option value="Gymnastics & MMA">Gymnastics &amp; MMA</option>
+                    <option value="Roller Skating">Roller Skating</option>
+                    <option value="Karate Academy">Karate Academy</option>
+                    <option value="Art & Craft Studio">Art &amp; Craft Studio</option>
+                    <option value="Cricket Academy">Cricket Academy</option>
+                    <option value="Chess Academy">Chess Academy</option>
+                    <option value="Indoor Play Zone">Indoor Play Zone</option>
+                    <option value="Mother & Toddler Program">Mother &amp; Toddler Program</option>
+                    <option value="Mother Zumba & Yoga">Mother Zumba &amp; Yoga</option>
+                    <option value="General Activity">General Activity</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Follow-up Status</label>
+                  <select
+                    value={editForm.status || 'New'}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-bold ${getStatusColor(editForm.status || 'New')}`}
+                  >
+                    <option value="New">New Lead</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="Trial Scheduled">Trial Scheduled</option>
+                    <option value="Admission Done">Admission Done</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`block font-bold mb-1 ${textSecondary}`}>Next Follow-up Date</label>
+                  <input
+                    type="date"
+                    value={editForm.next_follow_up_date || ''}
+                    onChange={(e) => setEditForm({ ...editForm, next_follow_up_date: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 outline-none font-mono ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Notes */}
+              <div>
+                <label className={`block font-bold mb-1 ${textSecondary}`}>Notes / Details</label>
+                <textarea
+                  rows={2}
+                  value={editForm.notes || ''}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  placeholder="Inquiry background or special notes..."
+                  className={`w-full border rounded-xl px-3 py-2 outline-none ${isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-800 text-white'}`}
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditModalEnq(null)}
+                  className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Lead Details</span>
                 </button>
               </div>
             </form>

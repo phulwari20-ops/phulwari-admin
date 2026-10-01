@@ -20,6 +20,21 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+// User-gesture audio unlocker for Chrome and Maya OS
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch (_) {}
+  };
+  ['click', 'touchstart', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, unlockAudio, { once: true, passive: true });
+  });
+}
+
 /**
  * Play a high quality notification sound (Two-tone melodious bell chime)
  */
