@@ -5,16 +5,18 @@ import Link from 'next/link'
 import { createClient } from '../lib/supabase/client'
 import { getSupabaseKey, getSupabaseUrl } from '../lib/supabase/env'
 import { optimizeImageForUpload } from '../lib/imageOptimizer'
-import { playNotificationSound } from '../lib/notificationSound'
+import { playNotificationSound, playLoudLeadAlert, isSoundAlertEnabled, setSoundAlertEnabled, testLeadSoundAlert } from '../lib/notificationSound'
 import { requestFcmToken, onMessageListener } from '../lib/firebase'
 import {
   LayoutDashboard,
   Volume2,
+  VolumeX,
   Users,
   UserPlus,
   Calendar,
   CreditCard,
   Bell,
+  BellRing,
   Clock,
   CheckCircle2,
   XCircle,
@@ -322,6 +324,17 @@ export default function AdminDashboardPage() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All')
   const [waReminderModal, setWaReminderModal] = useState({ isOpen: false, phone: '', message: '' })
   const [leadAlert, setLeadAlert] = useState<{ name: string; phone: string; service: string; id: string } | null>(null)
+  const [soundAlertEnabled, setSoundAlertEnabledState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') return isSoundAlertEnabled()
+    return true
+  })
+  const [notificationPerm, setNotificationPerm] = useState<string>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) return Notification.permission
+    return 'default'
+  })
+  const [isRealtimeActive, setIsRealtimeActive] = useState<boolean>(true)
+  const knownLeadIdsRef = useRef<Set<string>>(new Set())
+  const initialLeadLoadDoneRef = useRef<boolean>(false)
 
   const [batches, setBatches] = useState<any[]>([])
   const [batchSchedules, setBatchSchedules] = useState<any[]>([])
@@ -965,43 +978,137 @@ export default function AdminDashboardPage() {
     fetchEnquiries().catch(() => {})
   }, [])
 
+  // ── Lead Notification & Loud Sound Alert Handlers ──
+  const handleToggleSoundAlert = () => {
+    const next = !soundAlertEnabled
+    setSoundAlertEnabledState(next)
+    setSoundAlertEnabled(next)
+    if (next) {
+      testLeadSoundAlert()
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(setNotificationPerm).catch(() => {})
+      }
+    }
+  }
+
+  const handleRequestNotificationPermission = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      Notification.requestPermission().then((perm) => {
+        setNotificationPerm(perm)
+        if (perm === 'granted') {
+          try {
+            new Notification('🔔 Notifications Enabled!', {
+              body: 'You will now receive instant push alerts for all new leads.',
+              icon: '/favicon.ico'
+            })
+          } catch (_) {}
+        }
+      }).catch(() => {})
+    }
+  }
+
+  // Master Lead Alert Trigger: plays loud sound, shows banner, sends push notification, flashes browser tab title
+  const triggerLeadAlert = (lead: any) => {
+    const name = lead.parent_name || lead.child_name || 'New Lead'
+    const phone = lead.phone || ''
+    const service = lead.program_interested || 'General Inquiry'
+    const id = lead.id || `lead-${Date.now()}`
+
+    // 1. Play Loud Sound Alert (Ding-Dong / Bell chime)
+    playLoudLeadAlert()
+
+    // 2. In-App Banner Alert
+    setLeadAlert({ name, phone, service, id })
+
+    // 3. Browser Desktop Push Notification (even if minimized / background tab)
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const notif = new Notification(`🔔 New Lead: ${name}`, {
+          body: `${phone ? `📞 ${phone} • ` : ''}Interested in: ${service}`,
+          tag: `lead-${id}`,
+          requireInteraction: true,
+        })
+        notif.onclick = () => {
+          window.focus()
+          setActiveTab('enquiries')
+          setLeadAlert(null)
+          notif.close()
+        }
+      }
+    } catch (e) {
+      console.warn('Browser push notification could not be shown:', e)
+    }
+
+    // 4. Flashing Browser Document Title for 30 seconds
+    try {
+      if (typeof document !== 'undefined') {
+        let flashCount = 0
+        const originalTitle = document.title || 'Phulwari Admin ERP'
+        const interval = setInterval(() => {
+          flashCount++
+          if (flashCount > 30 || (document.hasFocus && document.hasFocus())) {
+            clearInterval(interval)
+            document.title = originalTitle
+          } else {
+            document.title = (flashCount % 2 === 0)
+              ? `🔔 (1) NEW LEAD: ${name}`
+              : `⚠️ Urgent Action Needed! - Phulwari`
+          }
+        }, 1000)
+      }
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // Lead / Enquiry push notifications.
   // When a new enquiry row is inserted, the admin gets an immediate alert:
-  //   • a browser push notification (Name, Mobile, Service) that, when clicked,
-  //     jumps straight to the Lead & Enquiry Manager, and
-  //   • an in-app banner (leadAlert) as a fallback when notifications are off.
+  //   • a loud multi-tone bell chime (Ding-Dong)
+  //   • a browser push notification with sound that jumps straight to Leads Manager
+  //   • an in-app banner (leadAlert) with instant Call & View buttons
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {})
+    if (typeof window === 'undefined') return
+
+    if ('Notification' in window) {
+      setNotificationPerm(Notification.permission)
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(setNotificationPerm).catch(() => {})
+      }
     }
 
     const supabase = createClient()
+
     const handleNewEnquiry = (payload: any) => {
       const lead = payload?.new || {}
-      const name = lead.parent_name || lead.child_name || 'New lead'
-      const phone = lead.phone || ''
-      const service = lead.program_interested || 'General Inquiry'
+      if (!lead?.id) return
+
+      const leadIdStr = String(lead.id)
+      const isAlreadyKnown = knownLeadIdsRef.current.has(leadIdStr)
+      knownLeadIdsRef.current.add(leadIdStr)
 
       // Keep the enquiries list live
       setEnquiries(prev => (prev.some(e => e.id === lead.id) ? prev : [lead, ...prev]))
 
-      // In-app banner & chime sound
-      setLeadAlert({ name, phone, service, id: lead.id })
-      playNotificationSound()
+      // Trigger alert if not already alerted
+      if (!isAlreadyKnown) {
+        triggerLeadAlert(lead)
+      }
+    }
 
-      // Browser push notification
-      try {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          const n = new Notification('🔔 New Lead Enquiry', {
-            body: `${name}${phone ? ` • ${phone}` : ''}\nInterested in: ${service}`,
-            tag: `lead-${lead.id}`,
-          })
-          n.onclick = () => { window.focus(); setActiveTab('enquiries'); n.close() }
-        }
-      } catch (e) { /* notifications unavailable */ }
+    const handleNewBooking = (payload: any) => {
+      const b = payload?.new || {}
+      if (!b?.id || b.booking_type === 'Staff Account') return
+      const bookingLeadId = `booking-${b.id}`
+      if (knownLeadIdsRef.current.has(bookingLeadId)) return
+      knownLeadIdsRef.current.add(bookingLeadId)
+
+      triggerLeadAlert({
+        id: b.id,
+        parent_name: b.parent_name || 'Party / Camp Lead',
+        phone: b.phone || '',
+        program_interested: b.booking_type || 'Event Booking',
+        created_at: b.created_at || new Date().toISOString()
+      })
     }
 
     const subHandle = subscribeWithFallback({
@@ -1010,12 +1117,29 @@ export default function AdminDashboardPage() {
       table: 'enquiries',
       event: 'INSERT',
       onDataChange: handleNewEnquiry,
-      pollFn: fetchEnquiries,
-      pollIntervalMs: 15000,
+      pollFn: () => fetchEnquiries(true),
+      pollIntervalMs: 10000,
     })
 
+    const bookingsSubHandle = subscribeWithFallback({
+      supabase,
+      channelName: 'bookings-lead-inserts',
+      table: 'bookings',
+      event: 'INSERT',
+      onDataChange: handleNewBooking,
+      pollFn: () => {},
+      pollIntervalMs: 20000,
+    })
+
+    setIsRealtimeActive(subHandle.isRealtimeActive())
+    const realtimeCheckInterval = setInterval(() => {
+      setIsRealtimeActive(subHandle.isRealtimeActive())
+    }, 5000)
+
     return () => {
+      clearInterval(realtimeCheckInterval)
       subHandle.unsubscribe()
+      bookingsSubHandle.unsubscribe()
     }
   }, [])
 
@@ -1031,8 +1155,8 @@ export default function AdminDashboardPage() {
       const title = payload?.notification?.title || payload?.data?.title || '🔔 New Notification'
       const body = payload?.notification?.body || payload?.data?.body || 'New alert from Phulwari Centre'
 
-      // Play audio chime
-      playNotificationSound()
+      // Play loud sound alert
+      playLoudLeadAlert()
 
       // Show in-app notification banner
       setLeadAlert({
@@ -1049,8 +1173,8 @@ export default function AdminDashboardPage() {
   }, [])
 
   const fetchEnquiries = async (force: boolean = false) => {
-    // Skip redundant network calls if fetched within last 20s unless forced
-    if (!force && Date.now() - lastEnquiriesFetchTime.current < 20000 && enquiries.length > 0) {
+    // Prevent spamming requests faster than 8s unless forced
+    if (!force && Date.now() - lastEnquiriesFetchTime.current < 8000 && enquiries.length > 0) {
       return
     }
     lastEnquiriesFetchTime.current = Date.now()
@@ -1061,10 +1185,25 @@ export default function AdminDashboardPage() {
         .from('enquiries')
         .select('*')
         .order('created_at', { ascending: false })
-      if (!error && dbEnquiries && dbEnquiries.length > 0) {
-        setEnquiries(dbEnquiries)
-        try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(dbEnquiries)) } catch (_) {}
-      } else if (!error && dbEnquiries) {
+
+      if (!error && dbEnquiries) {
+        if (!initialLeadLoadDoneRef.current) {
+          // Initial mount: record all existing lead IDs so historical leads don't trigger alert storm
+          dbEnquiries.forEach((e: any) => {
+            if (e?.id) knownLeadIdsRef.current.add(String(e.id))
+          })
+          initialLeadLoadDoneRef.current = true
+        } else {
+          // Detect newly arrived leads from polling
+          const newLeads = dbEnquiries.filter((e: any) => e?.id && !knownLeadIdsRef.current.has(String(e.id)))
+          if (newLeads.length > 0) {
+            newLeads.forEach((nl: any) => {
+              knownLeadIdsRef.current.add(String(nl.id))
+              triggerLeadAlert(nl)
+            })
+          }
+        }
+
         setEnquiries(dbEnquiries)
         try { localStorage.setItem('phulwari_admin_enquiries', JSON.stringify(dbEnquiries)) } catch (_) {}
       } else {
@@ -3787,6 +3926,22 @@ Management Phulwari Mother and Child Activity Centre`
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Mobile Sound Alert Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleSoundAlert}
+            className={`p-2 rounded-xl border transition cursor-pointer ${
+              soundAlertEnabled
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-500/20 shadow-xs'
+                : isLight
+                  ? 'bg-rose-50 border-rose-300 text-rose-600'
+                  : 'bg-rose-950/40 border-rose-900 text-rose-400'
+            }`}
+            title={soundAlertEnabled ? 'Sound alert is ON. Tap to mute.' : 'Sound alert is OFF. Tap to enable.'}
+          >
+            {soundAlertEnabled ? <Volume2 className="w-4 h-4 animate-pulse" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
           <button
             onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
             className={`p-2 rounded-xl border transition ${
@@ -4015,18 +4170,51 @@ Management Phulwari Mother and Child Activity Centre`
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* FCM Notification Sound Test Button */}
-            <button
-              type="button"
-              onClick={() => playNotificationSound()}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
-                isLight ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-              }`}
-              title="Test Push Notification & FCM Chime Sound"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-pink-500" />
-              <span className="hidden sm:inline">Chime Sound</span>
-            </button>
+            {/* Lead Sound Alert & Notification Controls */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Sound Alert Toggle */}
+              <button
+                type="button"
+                onClick={handleToggleSoundAlert}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+                  soundAlertEnabled
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-emerald-500/20'
+                    : isLight
+                      ? 'bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-700'
+                      : 'bg-rose-950/40 hover:bg-rose-900/60 border-rose-900 text-rose-300'
+                }`}
+                title={soundAlertEnabled ? 'Sound alert is ON. Click to mute.' : 'Sound alert is OFF (Muted). Click to turn ON.'}
+              >
+                {soundAlertEnabled ? <Volume2 className="w-3.5 h-3.5 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">Sound: {soundAlertEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {/* Test Loud Sound Button */}
+              <button
+                type="button"
+                onClick={testLeadSoundAlert}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                }`}
+                title="Test Loud Notification Alert Sound"
+              >
+                <Bell className="w-3.5 h-3.5 text-pink-500" />
+                <span className="hidden sm:inline">Test Sound</span>
+              </button>
+
+              {/* Enable Desktop Alerts Button */}
+              {notificationPerm !== 'granted' && (
+                <button
+                  type="button"
+                  onClick={handleRequestNotificationPermission}
+                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  title="Click to enable desktop push notifications for new leads"
+                >
+                  <BellRing className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">Enable Alerts</span>
+                </button>
+              )}
+            </div>
 
             {/* Quick Access to Activities CMS */}
             <button
@@ -4443,6 +4631,12 @@ Management Phulwari Mother and Child Activity Centre`
             onUpdateEnquiry={handleUpdateEnquiry}
             onConvertToAdmission={handleConvertToAdmission}
             onDeleteEnquiry={handleDeleteEnquiry}
+            soundAlertEnabled={soundAlertEnabled}
+            onToggleSoundAlert={handleToggleSoundAlert}
+            onTestSoundAlert={testLeadSoundAlert}
+            isRealtimeActive={isRealtimeActive}
+            notificationPerm={notificationPerm}
+            onRequestNotificationPermission={handleRequestNotificationPermission}
           />
         )}
 

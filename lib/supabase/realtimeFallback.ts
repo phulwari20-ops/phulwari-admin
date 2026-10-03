@@ -59,9 +59,6 @@ export function subscribeWithFallback(options: RealtimeFallbackOptions): Realtim
     if (pollFn) {
       pollFn();
       pollTimer = setInterval(() => {
-        if (typeof document !== 'undefined' && document.hidden) {
-          return;
-        }
         if (pollFn && !isUnmounted) {
           pollFn();
         }

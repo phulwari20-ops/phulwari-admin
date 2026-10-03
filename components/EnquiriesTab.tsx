@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle, RefreshCw, Loader2, Edit3, Hash, Check } from 'lucide-react';
+import { UserPlus, MessageSquare, PhoneCall, Plus, Trash2, CalendarDays, Phone, MessageCircle, RefreshCw, Loader2, Edit3, Hash, Check, Volume2, VolumeX, Bell, BellRing } from 'lucide-react';
 
 const formatDateToDisplay = (dateStr: string): string => {
   if (!dateStr) return '—';
@@ -37,11 +37,18 @@ interface EnquiriesTabProps {
   onUpdateEnquiry?: (enquiry: any) => void;
   onConvertToAdmission: (enquiry: any) => void;
   onDeleteEnquiry?: (id: string) => void;
+  soundAlertEnabled?: boolean;
+  onToggleSoundAlert?: () => void;
+  onTestSoundAlert?: () => void;
+  isRealtimeActive?: boolean;
+  notificationPerm?: string;
+  onRequestNotificationPermission?: () => void;
 }
 
 export default function EnquiriesTab({
   bgCard, bgSubCard, textPrimary, textSecondary, badgePassword, isLight,
-  enquiries, loading = false, onRefresh, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onUpdateEnquiry, onConvertToAdmission, onDeleteEnquiry
+  enquiries, loading = false, onRefresh, onUpdateStatus, onUpdateFollowUpDate, onUpdateNotes, onAddEnquiry, onUpdateEnquiry, onConvertToAdmission, onDeleteEnquiry,
+  soundAlertEnabled = true, onToggleSoundAlert, onTestSoundAlert, isRealtimeActive = true, notificationPerm = 'granted', onRequestNotificationPermission
 }: EnquiriesTabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [logModalEnq, setLogModalEnq] = useState<any | null>(null);
@@ -221,6 +228,76 @@ export default function EnquiriesTab({
               <Plus className="w-4 h-4" />
               <span>Add New Enquiry</span>
             </button>
+          </div>
+        </div>
+
+        {/* ── REAL-TIME LEAD NOTIFICATION & LOUD SOUND ALERT BAR ── */}
+        <div className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ${
+          isLight ? 'bg-gradient-to-r from-pink-50/70 via-purple-50/70 to-blue-50/70 border-pink-200/80 shadow-xs' : 'bg-slate-900/80 border-slate-800'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="flex h-3.5 w-3.5 relative">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isRealtimeActive ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${isRealtimeActive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+            </span>
+            <div>
+              <p className={`font-bold flex items-center gap-1.5 ${isLight ? 'text-slate-800' : 'text-slate-100'}`}>
+                <span>{isRealtimeActive ? '🟢 Live Real-Time Connected' : '🟡 Auto-Sync Polling Active'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300">
+                  Instant Alerts
+                </span>
+              </p>
+              <p className={`text-[11px] ${textSecondary}`}>
+                New incoming website enquiries &amp; bookings trigger real-time loud sound alerts &amp; push notifications.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sound Alert ON/OFF Button */}
+            {onToggleSoundAlert && (
+              <button
+                type="button"
+                onClick={onToggleSoundAlert}
+                className={`px-3.5 py-2 rounded-xl border font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs text-xs ${
+                  soundAlertEnabled
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-emerald-500/20'
+                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+                }`}
+                title={soundAlertEnabled ? 'Sound alert is ON. Click to mute.' : 'Sound alert is OFF (Muted). Click to turn ON.'}
+              >
+                {soundAlertEnabled ? <Volume2 className="w-4 h-4 animate-pulse" /> : <VolumeX className="w-4 h-4" />}
+                <span>Sound Alert: {soundAlertEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+            )}
+
+            {/* Test Loud Sound Button */}
+            {onTestSoundAlert && (
+              <button
+                type="button"
+                onClick={onTestSoundAlert}
+                className={`px-3 py-2 rounded-xl border font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                  isLight ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700 shadow-xs' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                }`}
+                title="Test the loud dual-pulse chime"
+              >
+                <Bell className="w-3.5 h-3.5 text-pink-500" />
+                <span>Test Loud Sound</span>
+              </button>
+            )}
+
+            {/* Desktop Notification Request Button */}
+            {onRequestNotificationPermission && notificationPerm !== 'granted' && (
+              <button
+                type="button"
+                onClick={onRequestNotificationPermission}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs text-xs"
+                title="Click to allow desktop notifications in browser"
+              >
+                <BellRing className="w-3.5 h-3.5" />
+                <span>Enable Desktop Alerts</span>
+              </button>
+            )}
           </div>
         </div>
 
