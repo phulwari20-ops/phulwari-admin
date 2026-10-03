@@ -13,10 +13,10 @@ export interface R2Config {
 
 export function getR2Config(): R2Config {
   return {
-    accountId: process.env.R2_ACCOUNT_ID || process.env.NEXT_PUBLIC_R2_ACCOUNT_ID,
+    accountId: process.env.R2_ACCOUNT_ID || process.env.NEXT_PUBLIC_R2_ACCOUNT_ID || '98d203bfa51dd119ae438c70538c5f98',
     accessKeyId: process.env.R2_ACCESS_KEY_ID || process.env.NEXT_PUBLIC_R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    bucketName: process.env.R2_BUCKET_NAME || process.env.NEXT_PUBLIC_R2_BUCKET_NAME || 'phulwari-videos',
+    bucketName: process.env.R2_BUCKET_NAME || process.env.NEXT_PUBLIC_R2_BUCKET_NAME || 'media-storage',
     publicDomain: process.env.R2_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_R2_PUBLIC_DOMAIN,
   };
 }
@@ -32,9 +32,11 @@ export function getR2Client(): S3Client | null {
     return null;
   }
 
+  const endpoint = process.env.R2_ENDPOINT || `https://${config.accountId}.r2.cloudflarestorage.com`;
+
   return new S3Client({
-    region: 'auto',
-    endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+    region: process.env.R2_REGION || 'auto',
+    endpoint: endpoint,
     credentials: {
       accessKeyId: config.accessKeyId!,
       secretAccessKey: config.secretAccessKey!,
@@ -51,8 +53,10 @@ export async function uploadVideoFile(
   contentType = 'video/mp4'
 ): Promise<{ url: string; key: string; size: number; storage: 'r2' | 'local' }> {
   const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const uniqueKey = `videos/${Date.now()}-${cleanFilename}`;
+  const folder = contentType.startsWith('image/') ? 'images' : 'videos';
+  const uniqueKey = `${folder}/${Date.now()}-${cleanFilename}`;
   const config = getR2Config();
+  const endpoint = process.env.R2_ENDPOINT || `https://${config.accountId}.r2.cloudflarestorage.com`;
 
   if (isR2Configured()) {
     try {
@@ -69,7 +73,7 @@ export async function uploadVideoFile(
 
       const publicUrl = config.publicDomain
         ? `${config.publicDomain.replace(/\/$/, '')}/${uniqueKey}`
-        : `https://${config.bucketName}.${config.accountId}.r2.cloudflarestorage.com/${uniqueKey}`;
+        : `${endpoint.replace(/\/$/, '')}/${config.bucketName}/${uniqueKey}`;
 
       return {
         url: publicUrl,
