@@ -632,15 +632,34 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
     }
   }
 
-  // Upload image to Supabase Storage ('gallery' bucket) with client-side fallback
+  // Upload image to Cloudflare R2 / Supabase Storage with client-side fallback
   const uploadImageFile = async (file: File): Promise<string> => {
     try {
+      // Attempt 1: Upload to Cloudflare R2
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
+        const r2Res = await fetch('/api/r2/upload', {
+          method: 'POST',
+          body: formData,
+        })
+        if (r2Res.ok) {
+          const r2Data = await r2Res.json()
+          if (r2Data.url) {
+            return r2Data.url
+          }
+        }
+      } catch (r2Err) {
+        console.warn('R2 image upload warning:', r2Err)
+      }
+
       const supabase = createClient()
       const ext = (file.name.split('.').pop() || 'png').toLowerCase()
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
       const filePath = `activities/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${cleanName}`
 
-      // Attempt 1: Upload to Supabase Storage 'gallery' bucket
+      // Attempt 2: Upload to Supabase Storage 'gallery' bucket
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from('gallery')
         .upload(filePath, file, {
@@ -655,7 +674,7 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
         }
       }
 
-      // Attempt 2: Fallback to client-side compressed base64 data URL
+      // Attempt 3: Fallback to client-side compressed base64 data URL
       return new Promise<string>((resolve) => {
         const reader = new FileReader()
         reader.onload = (e) => {

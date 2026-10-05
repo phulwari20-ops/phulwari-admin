@@ -7,6 +7,7 @@ import { getSupabaseKey, getSupabaseUrl } from '../lib/supabase/env'
 import { optimizeImageForUpload } from '../lib/imageOptimizer'
 import { playNotificationSound, playLoudLeadAlert, isSoundAlertEnabled, setSoundAlertEnabled, testLeadSoundAlert } from '../lib/notificationSound'
 import { requestFcmToken, onMessageListener } from '../lib/firebase'
+import { generateUuid } from '../lib/uuid'
 import {
   LayoutDashboard,
   Volume2,
@@ -1661,20 +1662,24 @@ export default function AdminDashboardPage() {
       ? 'Monday to Sunday'
       : newBatchForm.days_schedule.join(', ')
 
-    const batchUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const batchUuid = generateUuid()
 
     const startTime = newBatchForm.batch_time?.split(' - ')[0]?.trim() || ''
     const endTime = newBatchForm.batch_time?.split(' - ')[1]?.trim() || ''
 
-    // Only send columns that exist in the Supabase batches table
     const dbPayload = {
       id: batchUuid,
       batch_name: newBatchForm.batch_name.trim(),
-      age_group: newBatchForm.age_group,
+      category: newBatchForm.category?.trim() || 'Activities',
+      subcategory: newBatchForm.subcategory?.trim() || 'Toddler Program',
+      location: newBatchForm.location?.trim() || 'Kidwaipuri Main Branch',
+      age_group: newBatchForm.age_group || '1 - 3 Years',
       start_time: startTime,
       end_time: endTime,
       days: daysStr,
       capacity: parseInt(newBatchForm.capacity) || 20,
+      fee_amount: parseFloat(newBatchForm.fee_amount) || 3500,
+      validity_days: parseInt(newBatchForm.validity_days) || 30,
       is_visible: true
     }
 
@@ -1698,8 +1703,8 @@ export default function AdminDashboardPage() {
           batch_id: batchUuid,
           day_of_week: sch.day_of_week,
           start_time: sch.start_time,
-          end_time: sch.end_time,
-          class_name: sch.class_name
+          end_time: sch.end_time || '',
+          class_name: sch.class_name || ''
         }))
         const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schedulesPayload).select()
         if (schErr) {
@@ -1713,7 +1718,7 @@ export default function AdminDashboardPage() {
       ;(async () => {
         try {
           const batchFeeHead = {
-            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            id: generateUuid(),
             name: `${inserted.batch_name} Fee`,
             default_amount: parseFloat(newBatchForm.fee_amount) || 3500,
             is_system: false
@@ -1745,6 +1750,7 @@ export default function AdminDashboardPage() {
         schedules: []
       })
       setIsAddBatchOpen(false)
+      alert('✅ Batch created successfully!')
     } catch (err: any) {
       console.error('❌ [BATCH INSERT EXCEPTION]:', err)
       alert(`❌ Could not create batch: ${err.message || 'Please check your connection.'}`)
@@ -3299,20 +3305,47 @@ Management Phulwari Mother and Child Activity Centre`
       return
     }
 
-    // Create a version without schedules for batches table upsert
-    const { schedules, ...dbBatchDetails } = editingBatch
+    const sanitizedBatch = {
+      id: editingBatch.id,
+      batch_name: (editingBatch.batch_name || '').trim(),
+      category: editingBatch.category || 'Activities',
+      subcategory: editingBatch.subcategory || 'Toddler Program',
+      location: editingBatch.location || 'Kidwaipuri Main Branch',
+      age_group: editingBatch.age_group || '1 - 3 Years',
+      start_time: editingBatch.start_time || '',
+      end_time: editingBatch.end_time || '',
+      days: editingBatch.days || '',
+      capacity: parseInt(editingBatch.capacity) || 20,
+      validity_days: parseInt(editingBatch.validity_days) || 30,
+      fee_amount: parseFloat(editingBatch.fee_amount) || 3500,
+      is_visible: editingBatch.is_visible !== false,
+      emoji: editingBatch.emoji || '⚡',
+      tagline: editingBatch.tagline || 'Flexible child activity & learning sessions',
+      description: editingBatch.description || 'Specially designed schedule for kids activity engagement.',
+      best_for: editingBatch.best_for || 'Children seeking a fun, safe, and engaging environment.',
+    }
 
-    setBatches(prev => prev.map(b => b.id === editingBatch.id ? dbBatchDetails : b))
     try {
       const supabase = createClient()
-      
+      const { data: updatedData, error: batchErr } = await supabase
+        .from('batches')
+        .upsert([sanitizedBatch])
+        .select()
+
+      if (batchErr) {
+        throw batchErr
+      }
+
+      // Update UI state
+      setBatches(prev => prev.map(b => b.id === editingBatch.id ? { ...b, ...sanitizedBatch } : b))
+
       // Auto sync edited batch fee to fee_heads table
       ;(async () => {
         try {
           const oldBatch = batches.find(b => b.id === editingBatch.id)
           const oldHeadName = oldBatch ? `${oldBatch.batch_name} Fee` : `${editingBatch.batch_name} Fee`
-          const newHeadName = `${editingBatch.batch_name} Fee`
-          const newAmount = parseFloat(editingBatch.fee_amount) || 3500
+          const newHeadName = `${sanitizedBatch.batch_name} Fee`
+          const newAmount = sanitizedBatch.fee_amount
 
           const { data: matchedHeads } = await supabase.from('fee_heads').select('*').eq('name', oldHeadName)
           if (matchedHeads && matchedHeads.length > 0) {
@@ -3327,7 +3360,7 @@ Management Phulwari Mother and Child Activity Centre`
             }
           } else {
             const newHead = {
-              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              id: generateUuid(),
               name: newHeadName,
               default_amount: newAmount,
               is_system: false
@@ -3342,17 +3375,15 @@ Management Phulwari Mother and Child Activity Centre`
         }
       })()
 
-      await supabase.from('batches').upsert([dbBatchDetails])
-
       // Delete existing and insert new schedules
       await supabase.from('batch_schedules').delete().eq('batch_id', editingBatch.id)
-      if (schedules && schedules.length > 0) {
-        const schPayload = schedules.map((sch: any) => ({
+      if (editingBatch.schedules && editingBatch.schedules.length > 0) {
+        const schPayload = editingBatch.schedules.map((sch: any) => ({
           batch_id: editingBatch.id,
           day_of_week: sch.day_of_week,
           start_time: sch.start_time,
-          end_time: sch.end_time,
-          class_name: sch.class_name
+          end_time: sch.end_time || '',
+          class_name: sch.class_name || ''
         }))
         const { data: schData, error: schErr } = await supabase.from('batch_schedules').insert(schPayload).select()
         if (schErr) {
@@ -3363,11 +3394,13 @@ Management Phulwari Mother and Child Activity Centre`
       } else {
         setBatchSchedules(prev => prev.filter(s => s.batch_id !== editingBatch.id))
       }
-    } catch (err) {
-      console.error('❌ [BATCH SAVE EXCEPTION]:', err)
-    }
 
-    setEditingBatch(null)
+      setEditingBatch(null)
+      alert('✅ Batch updated successfully!')
+    } catch (err: any) {
+      console.error('❌ [BATCH SAVE EXCEPTION]:', err)
+      alert(`❌ Could not save batch changes: ${err.message || 'Please check your connection.'}`)
+    }
   }
 
   const handleStartEditBatch = (batch: any) => {

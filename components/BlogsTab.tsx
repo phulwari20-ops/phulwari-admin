@@ -55,6 +55,25 @@ export default function BlogsTab({
   const uploadBlogImage = async (file: File): Promise<string> => {
     setUploadingImage(true);
     try {
+      // 1. Try Cloudflare R2 direct upload
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+        const r2Res = await fetch('/api/r2/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        if (r2Res.ok) {
+          const r2Data = await r2Res.json();
+          if (r2Data.url) {
+            return r2Data.url;
+          }
+        }
+      } catch (r2Err) {
+        console.warn('R2 blog image upload warning:', r2Err);
+      }
+
       const supabase = createClient();
       const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `blog_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;

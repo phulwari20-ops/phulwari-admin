@@ -211,6 +211,20 @@ export async function compressVideo(
         const compressedBlob = new Blob(chunks, { type: supportedMime });
         const compressedSize = compressedBlob.size;
 
+        // If compressed file is tiny/empty (< 50KB for a video that was > 100KB), it failed or was blocked. Fallback to original!
+        if (compressedSize < 50_000 && originalSize > 50_000) {
+          onProgress?.(100, 'Compression produced incomplete stream. Using original file.');
+          resolve({
+            file: videoFile,
+            originalSize,
+            compressedSize: originalSize,
+            duration,
+            poster,
+            compressionRatio: 0,
+          });
+          return;
+        }
+
         // If compressed file is somehow larger than original, stick with original
         if (compressedSize >= originalSize) {
           onProgress?.(100, 'Original file is already optimal.');
@@ -243,8 +257,35 @@ export async function compressVideo(
         });
       };
 
+      // Watchdog timer (max 60 seconds for video compression before graceful fallback)
+      const timeoutId = setTimeout(() => {
+        try {
+          if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+          }
+        } catch (_) {}
+      }, 60000);
+
       recorder.start();
-      video.play();
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Video play for canvas compression was blocked or unsupported:', err);
+          clearTimeout(timeoutId);
+          try {
+            if (recorder && recorder.state !== 'inactive') recorder.stop();
+          } catch (_) {}
+          URL.revokeObjectURL(url);
+          resolve({
+            file: videoFile,
+            originalSize,
+            compressedSize: originalSize,
+            duration,
+            poster,
+            compressionRatio: 0,
+          });
+        });
+      }
 
       const drawFrame = () => {
         if (video.paused || video.ended) return;
@@ -261,12 +302,16 @@ export async function compressVideo(
       };
 
       video.onended = () => {
-        recorder.stop();
+        clearTimeout(timeoutId);
+        try {
+          if (recorder && recorder.state !== 'inactive') recorder.stop();
+        } catch (_) {}
       };
 
       video.onerror = () => {
+        clearTimeout(timeoutId);
         try {
-          recorder.stop();
+          if (recorder && recorder.state !== 'inactive') recorder.stop();
         } catch (_) {}
         URL.revokeObjectURL(url);
         resolve({
