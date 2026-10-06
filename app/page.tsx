@@ -1665,8 +1665,22 @@ export default function AdminDashboardPage() {
 
     const batchUuid = generateUuid()
 
-    const startTime = newBatchForm.batch_time?.split(' - ')[0]?.trim() || ''
-    const endTime = newBatchForm.batch_time?.split(' - ')[1]?.trim() || ''
+    let startTime = ''
+    let endTime = ''
+    if (newBatchForm.batch_time) {
+      if (newBatchForm.batch_time.includes(' - ')) {
+        const parts = newBatchForm.batch_time.split(' - ')
+        startTime = parts[0]?.trim() || ''
+        endTime = parts[1]?.trim() || ''
+      } else if (newBatchForm.batch_time.includes('-')) {
+        const parts = newBatchForm.batch_time.split('-')
+        startTime = parts[0]?.trim() || ''
+        endTime = parts[1]?.trim() || ''
+      } else {
+        startTime = newBatchForm.batch_time.trim()
+        endTime = ''
+      }
+    }
 
     const dbPayload = {
       id: batchUuid,
@@ -1681,7 +1695,14 @@ export default function AdminDashboardPage() {
       capacity: parseInt(newBatchForm.capacity) || 20,
       fee_amount: parseFloat(newBatchForm.fee_amount) || 3500,
       validity_days: parseInt(newBatchForm.validity_days) || 30,
-      is_visible: true
+      is_visible: true,
+      emoji: '⚡',
+      tagline: 'Flexible child activity & learning sessions',
+      description: 'Specially designed schedule for kids activity engagement.',
+      best_for: 'Children seeking a fun, safe, and engaging environment.',
+      includes: [],
+      child_benefits: [],
+      mother_benefits: []
     }
 
     console.log('📡 [BATCH INSERT] Sending to Supabase:', dbPayload)
@@ -3310,6 +3331,12 @@ Management Phulwari Mother and Child Activity Centre`
       return
     }
 
+    const parseList = (val: any) => {
+      if (Array.isArray(val)) return val.map((s: any) => String(s).trim()).filter(Boolean);
+      if (typeof val === 'string') return val.split('\n').map((s: string) => s.trim()).filter(Boolean);
+      return [];
+    };
+
     const sanitizedBatch = {
       id: editingBatch.id,
       batch_name: (editingBatch.batch_name || '').trim(),
@@ -3328,6 +3355,9 @@ Management Phulwari Mother and Child Activity Centre`
       tagline: editingBatch.tagline || 'Flexible child activity & learning sessions',
       description: editingBatch.description || 'Specially designed schedule for kids activity engagement.',
       best_for: editingBatch.best_for || 'Children seeking a fun, safe, and engaging environment.',
+      includes: parseList(editingBatch.includes),
+      child_benefits: parseList(editingBatch.child_benefits),
+      mother_benefits: parseList(editingBatch.mother_benefits),
     }
 
     try {
@@ -3341,7 +3371,7 @@ Management Phulwari Mother and Child Activity Centre`
         throw batchErr
       }
 
-      // Update UI state
+      // Update UI state with complete updated batch data
       setBatches(prev => prev.map(b => b.id === editingBatch.id ? { ...b, ...sanitizedBatch } : b))
 
       // Auto sync edited batch fee to fee_heads table
@@ -3411,8 +3441,16 @@ Management Phulwari Mother and Child Activity Centre`
   const handleStartEditBatch = (batch: any) => {
     setBatchEditTab('core')
     const schedulesForBatch = batchSchedules.filter(s => s.batch_id === batch.id)
+    const normalizeList = (val: any) => {
+      if (Array.isArray(val)) return val.map((s: any) => String(s).trim()).filter(Boolean);
+      if (typeof val === 'string') return val.split('\n').map((s: string) => s.trim()).filter(Boolean);
+      return [];
+    };
     setEditingBatch({
       ...batch,
+      includes: normalizeList(batch.includes),
+      child_benefits: normalizeList(batch.child_benefits),
+      mother_benefits: normalizeList(batch.mother_benefits),
       schedules: schedulesForBatch
     })
   }
@@ -4731,6 +4769,9 @@ Management Phulwari Mother and Child Activity Centre`
             studentCustomSchedules={studentCustomSchedules}
             holidays={holidays}
             handleToggleHoliday={handleToggleHoliday}
+            classes={classes}
+            classMasterNames={classMasterNames}
+            batches={batches}
           />
         )}
 
@@ -5303,8 +5344,8 @@ Management Phulwari Mother and Child Activity Centre`
                 <textarea
                   rows={3}
                   placeholder="e.g. Standard Gym access&#10;Trainer Guidance&#10;Complimentary assessment"
-                  value={Array.isArray(editingBatch.includes) ? editingBatch.includes.join('\n') : ''}
-                  onChange={(e) => setEditingBatch({ ...editingBatch, includes: e.target.value.split('\n').filter(Boolean) })}
+                  value={Array.isArray(editingBatch.includes) ? editingBatch.includes.join('\n') : (typeof editingBatch.includes === 'string' ? editingBatch.includes : '')}
+                  onChange={(e) => setEditingBatch({ ...editingBatch, includes: e.target.value.split('\n') })}
                   className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
                     isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                   }`}
@@ -5317,8 +5358,8 @@ Management Phulwari Mother and Child Activity Centre`
                   <textarea
                     rows={3}
                     placeholder="e.g. Cognitive growth&#10;Physical flexibility"
-                    value={Array.isArray(editingBatch.child_benefits) ? editingBatch.child_benefits.join('\n') : ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, child_benefits: e.target.value.split('\n').filter(Boolean) })}
+                    value={Array.isArray(editingBatch.child_benefits) ? editingBatch.child_benefits.join('\n') : (typeof editingBatch.child_benefits === 'string' ? editingBatch.child_benefits : '')}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, child_benefits: e.target.value.split('\n') })}
                     className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                     }`}
@@ -5329,8 +5370,8 @@ Management Phulwari Mother and Child Activity Centre`
                   <textarea
                     rows={3}
                     placeholder="e.g. Social connectivity&#10;Relaxed waiting zone"
-                    value={Array.isArray(editingBatch.mother_benefits) ? editingBatch.mother_benefits.join('\n') : ''}
-                    onChange={(e) => setEditingBatch({ ...editingBatch, mother_benefits: e.target.value.split('\n').filter(Boolean) })}
+                    value={Array.isArray(editingBatch.mother_benefits) ? editingBatch.mother_benefits.join('\n') : (typeof editingBatch.mother_benefits === 'string' ? editingBatch.mother_benefits : '')}
+                    onChange={(e) => setEditingBatch({ ...editingBatch, mother_benefits: e.target.value.split('\n') })}
                     className={`w-full border rounded-xl px-3 py-2 outline-none font-semibold ${
                       isLight ? 'bg-slate-100 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                     }`}

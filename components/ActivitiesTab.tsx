@@ -646,20 +646,11 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
   // Upload image to Cloudflare R2 / Supabase Storage with client-side fallback
   const uploadImageFile = async (file: File): Promise<string> => {
     try {
-      // Attempt 1: Upload to Cloudflare R2
+      // Attempt 1: Upload to Cloudflare R2 via chunked uploader
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
-        const r2Res = await fetch('/api/r2/upload', {
-          method: 'POST',
-          body: formData,
-        })
-        if (r2Res.ok) {
-          const r2Data = await r2Res.json()
-          if (r2Data.url) {
-            return r2Data.url
-          }
+        const r2Result = await uploadMediaFile(file, file.name, file.type || 'image/jpeg')
+        if (r2Result?.url) {
+          return r2Result.url
         }
       } catch (r2Err) {
         console.warn('R2 image upload warning:', r2Err)

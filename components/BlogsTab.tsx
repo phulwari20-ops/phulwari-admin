@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Plus, Trash2, Edit, Save, RefreshCw, BarChart2, Eye, FileText, CheckCircle, Clock, ExternalLink } from 'lucide-react';
 import { createClient } from '../lib/supabase/client';
+import { uploadMediaFile } from '../lib/r2/uploader';
 
 interface BlogsTabProps {
   bgCard: string;
@@ -55,20 +56,11 @@ export default function BlogsTab({
   const uploadBlogImage = async (file: File): Promise<string> => {
     setUploadingImage(true);
     try {
-      // 1. Try Cloudflare R2 direct upload
+      // 1. Try Cloudflare R2 chunked upload
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
-        const r2Res = await fetch('/api/r2/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        if (r2Res.ok) {
-          const r2Data = await r2Res.json();
-          if (r2Data.url) {
-            return r2Data.url;
-          }
+        const r2Result = await uploadMediaFile(file, file.name, file.type || 'image/jpeg');
+        if (r2Result?.url) {
+          return r2Result.url;
         }
       } catch (r2Err) {
         console.warn('R2 blog image upload warning:', r2Err);

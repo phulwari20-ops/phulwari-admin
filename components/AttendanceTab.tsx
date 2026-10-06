@@ -18,13 +18,17 @@ interface AttendanceTabProps {
   studentCustomSchedules: any[];
   holidays: any[];
   handleToggleHoliday: (date: string, description?: string) => void;
+  classes?: any[];
+  classMasterNames?: string[];
+  batches?: any[];
 }
 
 export default function AttendanceTab({
   bgCard, bgSubCard, textPrimary, textSecondary, isLight,
   filteredStudents, attendance, attendanceDate, setAttendanceDate,
   setActiveTab, handleMarkAttendance, searchQuery,
-  batchSchedules, studentCustomSchedules, holidays, handleToggleHoliday
+  batchSchedules, studentCustomSchedules, holidays, handleToggleHoliday,
+  classes = [], classMasterNames = [], batches = []
 }: AttendanceTabProps) {
   
   const [selectedBatchIdFilter, setSelectedBatchIdFilter] = React.useState<string>('All');
@@ -194,37 +198,97 @@ export default function AttendanceTab({
 
   // State for Section 2: Unscheduled / Additional Attendance
   const [selectedStudentForExtra, setSelectedStudentForExtra] = useState<any | null>(null);
-  const [extraActivity, setExtraActivity] = useState<string>('Extra Activity');
+  const [extraActivity, setExtraActivity] = useState<string>('');
   const [customExtraActivity, setCustomExtraActivity] = useState<string>('');
-  const [extraTimeSlot, setExtraTimeSlot] = useState<string>('10:30 AM - 11:30 AM');
+  const [extraTimeSlot, setExtraTimeSlot] = useState<string>('');
   const [customExtraTimeSlot, setCustomExtraTimeSlot] = useState<string>('');
   const [extraStatus, setExtraStatus] = useState<'present' | 'absent' | 'halfday' | 'leave' | 'holiday'>('present');
   const [extraDuplicateError, setExtraDuplicateError] = useState<string>('');
   const [extraSuccessMsg, setExtraSuccessMsg] = useState<string>('');
 
-  const STANDARD_ACTIVITIES = [
-    'Dance',
-    'Zumba',
-    'Art & Craft',
-    'Music / Singing',
-    'Mother & Toddler Program',
-    'Early Learning / Playgroup',
-    'Day Care Session',
-    'Extra Remedial Class',
-    'Special Workshop',
-    'Other (Custom)'
-  ];
+  // 1. Activity / Class dropdown: linked to Class Master.
+  // Any new class added to Class Master automatically appears here.
+  const availableClassMasterActivities = React.useMemo(() => {
+    const fromClasses = (classes || [])
+      .map((c: any) => (typeof c === 'string' ? c : c?.class_name))
+      .filter((n: any): n is string => typeof n === 'string' && n.trim() !== '');
 
-  const STANDARD_TIME_SLOTS = [
-    '09:30 AM - 10:30 AM',
-    '10:30 AM - 11:30 AM',
-    '11:30 AM - 12:30 PM',
-    '02:00 PM - 03:00 PM',
-    '03:30 PM - 04:30 PM',
-    '04:30 PM - 05:30 PM',
-    '05:30 PM - 06:30 PM',
-    'Other (Custom)'
-  ];
+    const fromMasterNames = (classMasterNames || [])
+      .filter((n: any): n is string => typeof n === 'string' && n.trim() !== '');
+
+    const merged = Array.from(new Set([...fromClasses, ...fromMasterNames]))
+      .filter(n => n.toLowerCase() !== 'other' && n.toLowerCase() !== 'other (custom)');
+
+    if (merged.length === 0) {
+      merged.push('Gymnastics', 'Skating', 'Chess', 'Cricket', 'Art & Craft', 'Karate', 'Dance', 'Zumba', 'Yoga');
+    }
+
+    return [...merged, 'Other (Custom)'];
+  }, [classes, classMasterNames]);
+
+  // 2. Time / Slot dropdown: linked to Batch Schedule.
+  // Shows ALL timings available in Batch Schedule — NOT filtered by the selected Activity/Class.
+  const availableBatchTimings = React.useMemo(() => {
+    const rawSet = new Set<string>();
+
+    (batchSchedules || []).forEach((sch: any) => {
+      const s = (sch?.start_time || '').trim();
+      const e = (sch?.end_time || '').trim();
+      if (s && e) rawSet.add(`${s} - ${e}`);
+      if (s) rawSet.add(s);
+    });
+
+    (batches || []).forEach((bt: any) => {
+      const s = (bt?.start_time || '').trim();
+      const e = (bt?.end_time || '').trim();
+      if (s && e) rawSet.add(`${s} - ${e}`);
+      if (s) rawSet.add(s);
+    });
+
+    // Helper to sort timings chronologically
+    const parseTimeToMinutes = (timeStr: string): number => {
+      if (!timeStr) return 9999;
+      const match = timeStr.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(AM|PM)/i);
+      if (!match) return 9999;
+      let hours = parseInt(match[1], 10);
+      const minutes = match[2] ? parseInt(match[2], 10) : 0;
+      const period = match[3].toUpperCase();
+      if (period === 'PM' && hours < 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    const validTimings = Array.from(rawSet)
+      .filter(t => t.length > 0 && parseTimeToMinutes(t) !== 9999)
+      .sort((a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b));
+
+    if (validTimings.length === 0) {
+      validTimings.push(
+        '09:30 AM - 10:30 AM',
+        '10:30 AM - 11:30 AM',
+        '11:30 AM - 12:30 PM',
+        '04:00 PM - 05:00 PM',
+        '05:00 PM - 06:00 PM',
+        '05:30 PM - 06:30 PM',
+        '06:30 PM - 07:30 PM'
+      );
+    }
+
+    return [...validTimings, 'Other (Custom)'];
+  }, [batchSchedules, batches]);
+
+  // Set initial selections when lists load or change
+  React.useEffect(() => {
+    if (!extraActivity && availableClassMasterActivities.length > 0) {
+      setExtraActivity(availableClassMasterActivities[0]);
+    }
+  }, [availableClassMasterActivities, extraActivity]);
+
+  React.useEffect(() => {
+    if (!extraTimeSlot && availableBatchTimings.length > 0) {
+      setExtraTimeSlot(availableBatchTimings[0]);
+    }
+  }, [availableBatchTimings, extraTimeSlot]);
 
   // Helper to identify scheduled items matching a student on attendanceDate
   const isScheduledSession = (studentId: string, className: string, classTime: string) => {
@@ -251,18 +315,20 @@ export default function AttendanceTab({
       return;
     }
 
-    const finalActivity = extraActivity === 'Other (Custom)' 
+    const effectiveActivity = extraActivity || availableClassMasterActivities[0] || '';
+    const finalActivity = (effectiveActivity === 'Other (Custom)' || effectiveActivity === 'Other')
       ? customExtraActivity.trim() 
-      : extraActivity.trim();
+      : effectiveActivity.trim();
     
     if (!finalActivity) {
       setExtraDuplicateError('Please specify an activity / class name.');
       return;
     }
 
-    const finalTime = extraTimeSlot === 'Other (Custom)'
+    const effectiveTime = extraTimeSlot || availableBatchTimings[0] || '';
+    const finalTime = effectiveTime === 'Other (Custom)'
       ? customExtraTimeSlot.trim()
-      : extraTimeSlot.trim();
+      : effectiveTime.trim();
 
     if (!finalTime) {
       setExtraDuplicateError('Please specify a time slot.');
@@ -716,23 +782,23 @@ export default function AttendanceTab({
               </div>
             </div>
 
-            {/* 2. Activity / Class Selector */}
+            {/* 2. Activity / Class Selector — linked to Class Master */}
             <div className="space-y-1">
               <label className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>
                 Activity / Class:
               </label>
               <select
-                value={extraActivity}
+                value={extraActivity || (availableClassMasterActivities[0] || '')}
                 onChange={(e) => setExtraActivity(e.target.value)}
                 className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
                   isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
                 }`}
               >
-                {STANDARD_ACTIVITIES.map(act => (
+                {availableClassMasterActivities.map(act => (
                   <option key={act} value={act}>{act}</option>
                 ))}
               </select>
-              {extraActivity === 'Other (Custom)' && (
+              {(extraActivity === 'Other (Custom)' || extraActivity === 'Other') && (
                 <input
                   type="text"
                   placeholder="Enter custom activity name..."
@@ -745,26 +811,26 @@ export default function AttendanceTab({
               )}
             </div>
 
-            {/* 3. Time Slot & Status */}
+            {/* 3. Time Slot Selector — shows ALL timings from Batch Schedule, independent of activity */}
             <div className="space-y-1">
               <label className={`text-[11px] font-black uppercase tracking-wider ${textSecondary}`}>
                 Time Slot:
               </label>
               <select
-                value={extraTimeSlot}
+                value={extraTimeSlot || (availableBatchTimings[0] || '')}
                 onChange={(e) => setExtraTimeSlot(e.target.value)}
                 className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
                   isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
                 }`}
               >
-                {STANDARD_TIME_SLOTS.map(ts => (
+                {availableBatchTimings.map(ts => (
                   <option key={ts} value={ts}>{ts}</option>
                 ))}
               </select>
               {extraTimeSlot === 'Other (Custom)' && (
                 <input
                   type="text"
-                  placeholder="e.g. 01:00 PM - 02:00 PM"
+                  placeholder="e.g. 05:00 PM or 05:00 PM - 06:00 PM"
                   value={customExtraTimeSlot}
                   onChange={(e) => setCustomExtraTimeSlot(e.target.value)}
                   className={`w-full text-xs font-bold px-3 py-1.5 mt-1 rounded-xl border outline-none ${

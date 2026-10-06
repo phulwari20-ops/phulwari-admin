@@ -130,10 +130,22 @@ export async function compressVideo(
     video.playsInline = true;
     video.setAttribute('muted', '');
     video.setAttribute('playsinline', '');
-    const url = URL.createObjectURL(videoFile);
-    video.src = url;
+    // Watchdog: If browser/Maya OS cannot decode this video codec, fall back after 6 seconds
+    const metadataTimeout = setTimeout(() => {
+      console.warn('Video metadata loading timed out. Using original file directly.');
+      try { URL.revokeObjectURL(url); } catch (_) {}
+      resolve({
+        file: videoFile,
+        originalSize,
+        compressedSize: originalSize,
+        duration: 0,
+        poster,
+        compressionRatio: 0,
+      });
+    }, 6000);
 
     video.onloadedmetadata = async () => {
+      clearTimeout(metadataTimeout);
       const duration = video.duration || 1;
       let width = video.videoWidth || 1280;
       let height = video.videoHeight || 720;
@@ -322,6 +334,7 @@ export async function compressVideo(
       };
 
       video.onerror = () => {
+        clearTimeout(metadataTimeout);
         clearTimeout(timeoutId);
         try {
           if (recorder && recorder.state !== 'inactive') recorder.stop();

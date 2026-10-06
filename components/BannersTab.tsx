@@ -25,6 +25,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { createClient } from '../lib/supabase/client'
+import { uploadMediaFile } from '../lib/r2/uploader'
 
 export interface BannerItem {
   id: string
@@ -152,25 +153,16 @@ export default function BannersTab({
     else setUploadingMobile(true)
 
     try {
-      // 1. Try Cloudflare R2 direct upload
+      // 1. Try Cloudflare R2 chunked upload
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
-        const r2Res = await fetch('/api/r2/upload', {
-          method: 'POST',
-          body: formData,
-        })
-        if (r2Res.ok) {
-          const r2Data = await r2Res.json()
-          if (r2Data.url) {
-            if (target === 'main') {
-              setForm(prev => ({ ...prev, image_url: r2Data.url }))
-            } else {
-              setForm(prev => ({ ...prev, mobile_image_url: r2Data.url }))
-            }
-            return
+        const r2Result = await uploadMediaFile(file, file.name, file.type || 'image/jpeg')
+        if (r2Result?.url) {
+          if (target === 'main') {
+            setForm(prev => ({ ...prev, image_url: r2Result.url }))
+          } else {
+            setForm(prev => ({ ...prev, mobile_image_url: r2Result.url }))
           }
+          return
         }
       } catch (r2Err) {
         console.warn('R2 banner upload warning:', r2Err)

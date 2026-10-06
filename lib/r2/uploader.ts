@@ -21,8 +21,8 @@ export interface UploadMediaResult {
   title?: string;
 }
 
-const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB per slice (comfortably under Vercel's 4.5 MB limit)
-const DIRECT_UPLOAD_LIMIT = 3.5 * 1024 * 1024; // 3.5 MB
+const CHUNK_SIZE = 1.5 * 1024 * 1024; // 1.5 MB per slice (guaranteed well under Vercel 4.5MB limit)
+const DIRECT_UPLOAD_LIMIT = 1.0 * 1024 * 1024; // 1.0 MB (anything larger uses chunked pipeline)
 
 export async function uploadMediaFile(
   file: File | Blob,
