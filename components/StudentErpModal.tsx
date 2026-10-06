@@ -564,17 +564,21 @@ export default function StudentErpModal({
         }
       }
 
-      // ── Package Auto-Renewal on Payment (Issue 11 & Issue 20) ──
-      // Payment ke baad package auto-renew hoga, lekin purane package ki used/consumed classes bhi count hongi.
-      // Example:
-      // Package = 20 classes
-      // Already consumed = 3 classes
-      // Payment ke baad new entitlement = 20 classes
-      // Used = 3 classes
-      // Remaining = 20 − 3 = 17 classes
-      // Yaani payment karne par entitlement reset/add hoga, lekin “used classes” reset nahi hongi.
-      // Agar pehle se extra classes consume ho chuki hain, woh bhi used count mein bani rahengi.
-      // Formula: Remaining Classes = New Package Entitlement − Total Classes Consumed
+      // ── Package Auto-Renewal on Payment (Strict User Specification) ──
+      // Core Rule:
+      // 1. The Package/Entitlement field ALWAYS shows only the current purchased package (e.g. 20 classes).
+      //    The previous balance is NEVER added to the Package/Entitlement field.
+      // 2. The Remaining Classes field carries forward the previous balance:
+      //    Formula: New Remaining Classes = New Package Entitlement + Previous Remaining Classes
+      //    Since Remaining Classes = classes_total - classes_consumed:
+      //    classes_consumed = packageClasses - (packageClasses + previousRemaining) = -previousRemaining
+      // Examples:
+      //  - Unused: Previous Package=20, Consumed=17 -> Previous Remaining=+3. Student purchases 20.
+      //    New Package = 20 classes. New Remaining = 20 + 3 = 23 classes. newConsumed = -3.
+      //  - Over-consumed: Previous Package=20, Consumed=22 -> Previous Remaining=-2. Student purchases 20.
+      //    New Package = 20 classes. New Remaining = 20 - 2 = 18 classes. newConsumed = +2.
+      //  - Balanced: Previous Package=20, Consumed=20 -> Previous Remaining=0. Student purchases 20.
+      //    New Package = 20 classes. New Remaining = 20 + 0 = 20 classes. newConsumed = 0.
       const hasPaidFee = feeRows.some(r => Number(r.paid_amount || 0) > 0 || r.status === 'paid');
       if (hasPaidFee) {
         let packageClasses = 12;
@@ -602,21 +606,16 @@ export default function StudentErpModal({
 
         const oldTotal = Number(student.classes_total || packageClasses);
         const oldConsumed = Number(student.classes_consumed || 0);
+        const previousRemaining = oldTotal - oldConsumed;
 
-        // New entitlement is the packageClasses (never inflated to 40)
+        // 1. Package / Entitlement always stays strictly the current purchased package
         studentUpdates.classes_total = packageClasses;
 
-        // Consumed classes carry over:
-        // If student consumed extra classes past old total, the extra count stays consumed in the new package.
-        // If student was partially through (e.g. consumed 3), the 3 classes stay consumed.
-        let newConsumed = 0;
-        if (oldConsumed > oldTotal) {
-          newConsumed = oldConsumed - oldTotal;
-        } else if (oldConsumed > 0 && oldConsumed < oldTotal) {
-          newConsumed = oldConsumed;
-        } else {
-          newConsumed = 0;
-        }
+        // 2. Remaining Classes carries forward previous balance:
+        // New Remaining = packageClasses + previousRemaining
+        // newConsumed = packageClasses - (packageClasses + previousRemaining) = -previousRemaining
+        const newRemaining = packageClasses + previousRemaining;
+        const newConsumed = packageClasses - newRemaining;
         studentUpdates.classes_consumed = newConsumed;
 
         // Auto-renew validity if not explicitly specified
@@ -1561,9 +1560,9 @@ export default function StudentErpModal({
                   <h4 className="font-bold text-green-600 uppercase tracking-wider text-[10px]">4. Program & Validity</h4>
                   <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
                 </div>
-                <p><strong className={textSecondary}>Batch Name:</strong> {student.batch_name || 'N/A'}</p>
-                <p><strong className={textSecondary}>Monthly Allowed Classes:</strong> {student.classes_total || 12}</p>
+                <p><strong className={textSecondary}>Package Entitlement:</strong> {student.classes_total || 12} classes</p>
                 <p><strong className={textSecondary}>Consumed Classes:</strong> {student.classes_consumed || 0}</p>
+                <p><strong className={textSecondary}>Remaining Classes:</strong> <span className="font-extrabold text-blue-600">{(student.classes_total || 12) - (student.classes_consumed || 0)}</span> classes</p>
                 <p><strong className={textSecondary}>Validity End Date:</strong> {formatDateToDisplay(student.validity_end_date) || 'N/A'}</p>
               </div>
 

@@ -123,6 +123,7 @@ import {
   handleExportBulkRegistrationForms,
   handlePrintRegistrationForm
 } from '../lib/printUtils'
+import { uploadMediaFile } from '@/lib/r2/uploader'
 
 export default function AdminDashboardPage() {
   const generateUUID = (): string => {
@@ -2446,8 +2447,15 @@ Management Phulwari Mother and Child Activity Centre`
     setIsUploadingGallery(true)
 
     try {
-      // Clean and compress image via HTML5 Canvas (keeps crystal-clear quality under ~250KB)
-      const base64Url = await optimizeImageForUpload(file, 1600, 0.85)
+      let finalImageUrl = ''
+      try {
+        const r2Result = await uploadMediaFile(file, file.name, file.type || 'image/jpeg')
+        if (r2Result?.url) finalImageUrl = r2Result.url
+      } catch (r2Err) {
+        console.warn('R2 direct upload fallback to canvas base64:', r2Err)
+        finalImageUrl = await optimizeImageForUpload(file, 1600, 0.85)
+      }
+
       const titleText = file.name.replace(/\.[^/.]+$/, "") || 'Uploaded Activity Photo';
 
       const res = await fetch('/api/gallery', {
@@ -2456,7 +2464,7 @@ Management Phulwari Mother and Child Activity Centre`
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          image_url: base64Url, 
+          image_url: finalImageUrl, 
           title: titleText, 
           category: 'Activities',
           sort_order: (galleryImages.length || 0) + 1
@@ -2737,19 +2745,16 @@ Management Phulwari Mother and Child Activity Centre`
 
       const oldTotal = Number(selectedERPStudent.classes_total || packageClasses);
       const oldConsumed = Number(selectedERPStudent.classes_consumed || 0);
+      const previousRemaining = oldTotal - oldConsumed;
 
-      // 1. Entitlement is reset to the new package count
+      // 1. Package Entitlement remains strictly the new purchased package count (e.g. 20)
       const newTotal = packageClasses;
 
-      // 2. Consumed classes persist based on formula
-      let newConsumed = 0;
-      if (oldConsumed > oldTotal) {
-        newConsumed = oldConsumed - oldTotal; // Extra sessions carry over
-      } else if (oldConsumed > 0 && oldConsumed < oldTotal) {
-        newConsumed = oldConsumed; // In-progress sessions stay consumed
-      } else {
-        newConsumed = 0;
-      }
+      // 2. Remaining Classes carries forward previous balance:
+      // New Remaining = newTotal + previousRemaining
+      // newConsumed = newTotal - (newTotal + previousRemaining) = -previousRemaining
+      const newRemaining = newTotal + previousRemaining;
+      const newConsumed = newTotal - newRemaining;
 
       const baseDate = selectedERPStudent.validity_end_date && new Date(selectedERPStudent.validity_end_date) > new Date()
         ? new Date(selectedERPStudent.validity_end_date)

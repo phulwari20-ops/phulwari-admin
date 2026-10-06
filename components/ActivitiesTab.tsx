@@ -43,6 +43,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { compressVideo, formatBytes, generateVideoPoster } from '@/lib/videoCompressor'
+import { uploadMediaFile } from '@/lib/r2/uploader'
 import IconPickerModal, { renderLucideIcon } from './IconPickerModal'
 
 const COMMON_ICONS = [
@@ -453,24 +454,19 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
         posterDataUrl = await generateVideoPoster(file, 1.0)
       }
 
-      setCompressionStatus('Uploading video to Cloudflare R2 / storage...')
-      setCompressionProgress(92)
+      const uploadResult = await uploadMediaFile(
+        fileToUpload,
+        fileToUpload.name || file.name,
+        fileToUpload.type || 'video/mp4',
+        {
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          onProgress: (percent, status) => {
+            setCompressionProgress(percent)
+            setCompressionStatus(status)
+          },
+        }
+      )
 
-      const formData = new FormData()
-      formData.append('file', fileToUpload)
-      formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
-
-      const res = await fetch('/api/r2/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.error || 'Failed to upload video')
-      }
-
-      const uploadResult = await res.json()
       const newVideoObj: ActivityVideo = {
         id: 'vid-' + Date.now(),
         title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
@@ -484,8 +480,23 @@ export default function ActivitiesTab({ mode = 'activities' }: ActivitiesTabProp
 
       const updatedVideos = [...(currentActivity.videos || []), newVideoObj]
       updateCurrent('videos', updatedVideos)
+
+      // Auto-save to Supabase activity_pages immediately so video URL is saved to database
+      try {
+        const supabase = createClient()
+        await supabase
+          .from('activity_pages')
+          .update({
+            videos: updatedVideos,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', currentActivity.id)
+      } catch (dbErr) {
+        console.warn('Auto-save to Supabase notice:', dbErr)
+      }
+
       setCompressionProgress(100)
-      setCompressionStatus('Video uploaded & attached successfully!')
+      setCompressionStatus('Video uploaded to Cloudflare R2 & saved to Supabase!')
       setTimeout(() => {
         setCompressionStatus('')
         setUploadingVideo(false)

@@ -128,6 +128,8 @@ export async function compressVideo(
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
     const url = URL.createObjectURL(videoFile);
     video.src = url;
 
@@ -136,15 +138,26 @@ export async function compressVideo(
       let width = video.videoWidth || 1280;
       let height = video.videoHeight || 720;
 
+      // Dynamic Bitrate: Target ~2.8MB output to stay lightweight and load fast
+      // duration in seconds -> (targetBytes * 8) / duration
+      const targetMaxBytes = 2.8 * 1024 * 1024;
+      const targetBps = Math.floor((targetMaxBytes * 8) / duration);
+      const effectiveBitrate = Math.min(1_500_000, Math.max(350_000, targetBps));
+
+      // Adaptive Resolution based on duration:
+      // If video is short (< 25s), allow 720p; if longer, adapt to 540p or 480p
+      const effectiveMaxW = duration > 45 ? 854 : duration > 25 ? 960 : maxWidth;
+      const effectiveMaxH = duration > 45 ? 480 : duration > 25 ? 540 : maxHeight;
+
       // Scale down proportionally if larger than maximum dimensions
-      if (width > maxWidth || height > maxHeight) {
+      if (width > effectiveMaxW || height > effectiveMaxH) {
         const aspect = width / height;
-        if (aspect >= maxWidth / maxHeight) {
-          width = maxWidth;
-          height = Math.round(maxWidth / aspect);
+        if (aspect >= effectiveMaxW / effectiveMaxH) {
+          width = effectiveMaxW;
+          height = Math.round(effectiveMaxW / aspect);
         } else {
-          height = maxHeight;
-          width = Math.round(maxHeight * aspect);
+          height = effectiveMaxH;
+          width = Math.round(effectiveMaxH * aspect);
         }
       }
 
@@ -185,7 +198,7 @@ export async function compressVideo(
       try {
         recorder = new MediaRecorder(stream, {
           mimeType: supportedMime,
-          videoBitsPerSecond: videoBitrate,
+          videoBitsPerSecond: effectiveBitrate,
         });
       } catch (err) {
         URL.revokeObjectURL(url);
