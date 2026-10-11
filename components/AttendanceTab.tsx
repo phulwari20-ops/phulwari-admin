@@ -196,6 +196,32 @@ export default function AttendanceTab({
       }
     });
 
+  // Helper to normalize single time into 12-hour format e.g. "5:00 PM"
+  const normalizeSingleTime = (t: string): string => {
+    if (!t) return '';
+    const trimmed = t.trim();
+    // Match "06.30 PM", "5 PM", "5:00 PM", "05:00 PM", "6.15 PM"
+    const m = trimmed.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(AM|PM)$/i);
+    if (!m) return '';
+    const hours = parseInt(m[1], 10);
+    const mins = m[2] ? m[2] : '00';
+    const period = m[3].toUpperCase();
+    return `${hours}:${mins} ${period}`;
+  };
+
+  // Helper to sort timings chronologically
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 9999;
+    const match = timeStr.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(AM|PM)/i);
+    if (!match) return 9999;
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2] ? parseInt(match[2], 10) : 0;
+    const period = match[3].toUpperCase();
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  };
+
   // State for Section 2: Unscheduled / Additional Attendance
   const [selectedStudentForExtra, setSelectedStudentForExtra] = useState<any | null>(null);
   const [extraActivity, setExtraActivity] = useState<string>('');
@@ -228,54 +254,43 @@ export default function AttendanceTab({
 
   // 2. Time / Slot dropdown: linked to Batch Schedule.
   // Shows ALL timings available in Batch Schedule — NOT filtered by the selected Activity/Class.
-  const availableBatchTimings = React.useMemo(() => {
-    const rawSet = new Set<string>();
+  const { batchTimingsList, batchSlotRangesList, allAvailableTimingsCombined } = React.useMemo(() => {
+    const singleTimeSet = new Set<string>();
+    const slotRangeSet = new Set<string>();
 
-    (batchSchedules || []).forEach((sch: any) => {
-      const s = (sch?.start_time || '').trim();
-      const e = (sch?.end_time || '').trim();
-      if (s && e) rawSet.add(`${s} - ${e}`);
-      if (s) rawSet.add(s);
-    });
-
-    (batches || []).forEach((bt: any) => {
-      const s = (bt?.start_time || '').trim();
-      const e = (bt?.end_time || '').trim();
-      if (s && e) rawSet.add(`${s} - ${e}`);
-      if (s) rawSet.add(s);
-    });
-
-    // Helper to sort timings chronologically
-    const parseTimeToMinutes = (timeStr: string): number => {
-      if (!timeStr) return 9999;
-      const match = timeStr.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(AM|PM)/i);
-      if (!match) return 9999;
-      let hours = parseInt(match[1], 10);
-      const minutes = match[2] ? parseInt(match[2], 10) : 0;
-      const period = match[3].toUpperCase();
-      if (period === 'PM' && hours < 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
+    const processItem = (sch: any) => {
+      const sRaw = (sch?.start_time || '').trim();
+      const eRaw = (sch?.end_time || '').trim();
+      const sNorm = normalizeSingleTime(sRaw);
+      const eNorm = normalizeSingleTime(eRaw);
+      if (sNorm) singleTimeSet.add(sNorm);
+      if (sNorm && eNorm) slotRangeSet.add(`${sNorm} - ${eNorm}`);
     };
 
-    const validTimings = Array.from(rawSet)
-      .filter(t => t.length > 0 && parseTimeToMinutes(t) !== 9999)
-      .sort((a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b));
+    (batchSchedules || []).forEach(processItem);
+    (batches || []).forEach(processItem);
+    (studentCustomSchedules || []).forEach(processItem);
 
-    if (validTimings.length === 0) {
-      validTimings.push(
-        '09:30 AM - 10:30 AM',
-        '10:30 AM - 11:30 AM',
-        '11:30 AM - 12:30 PM',
-        '04:00 PM - 05:00 PM',
-        '05:00 PM - 06:00 PM',
-        '05:30 PM - 06:30 PM',
-        '06:30 PM - 07:30 PM'
-      );
+    // Fallbacks if nothing is found in DB
+    if (singleTimeSet.size === 0) {
+      ['5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '10:00 AM', '10:30 AM', '11:00 AM'].forEach(t => singleTimeSet.add(t));
     }
 
-    return [...validTimings, 'Other (Custom)'];
-  }, [batchSchedules, batches]);
+    const sortedSingles = Array.from(singleTimeSet).sort((a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b));
+    const sortedRanges = Array.from(slotRangeSet).sort((a, b) => {
+      const startA = a.split(' - ')[0] || '';
+      const startB = b.split(' - ')[0] || '';
+      return parseTimeToMinutes(startA) - parseTimeToMinutes(startB);
+    });
+
+    const combined = [...sortedSingles, ...sortedRanges, 'Other (Custom)'];
+
+    return {
+      batchTimingsList: sortedSingles,
+      batchSlotRangesList: sortedRanges,
+      allAvailableTimingsCombined: combined
+    };
+  }, [batchSchedules, batches, studentCustomSchedules]);
 
   // Set initial selections when lists load or change
   React.useEffect(() => {
@@ -285,17 +300,29 @@ export default function AttendanceTab({
   }, [availableClassMasterActivities, extraActivity]);
 
   React.useEffect(() => {
-    if (!extraTimeSlot && availableBatchTimings.length > 0) {
-      setExtraTimeSlot(availableBatchTimings[0]);
+    if (!extraTimeSlot && allAvailableTimingsCombined.length > 0) {
+      setExtraTimeSlot(allAvailableTimingsCombined[0]);
     }
-  }, [availableBatchTimings, extraTimeSlot]);
+  }, [allAvailableTimingsCombined, extraTimeSlot]);
+
+  // Helper to compare times loosely or exactly
+  const isMatchingTime = (t1: string, t2: string): boolean => {
+    if (!t1 || !t2) return false;
+    const clean1 = t1.trim().toLowerCase();
+    const clean2 = t2.trim().toLowerCase();
+    if (clean1 === clean2) return true;
+    
+    const start1 = normalizeSingleTime(clean1.split('-')[0]);
+    const start2 = normalizeSingleTime(clean2.split('-')[0]);
+    return Boolean(start1 && start2 && start1.toLowerCase() === start2.toLowerCase());
+  };
 
   // Helper to identify scheduled items matching a student on attendanceDate
   const isScheduledSession = (studentId: string, className: string, classTime: string) => {
     return attendanceItems.some(
       item => item.student.id === studentId &&
-              (item.class_name || '').toLowerCase() === (className || '').toLowerCase() &&
-              (item.class_time || '').toLowerCase() === (classTime || '').toLowerCase()
+              (item.class_name || '').trim().toLowerCase() === (className || '').trim().toLowerCase() &&
+              isMatchingTime(item.class_time, classTime)
     );
   };
 
@@ -325,7 +352,7 @@ export default function AttendanceTab({
       return;
     }
 
-    const effectiveTime = extraTimeSlot || availableBatchTimings[0] || '';
+    const effectiveTime = extraTimeSlot || allAvailableTimingsCombined[0] || '';
     const finalTime = effectiveTime === 'Other (Custom)'
       ? customExtraTimeSlot.trim()
       : effectiveTime.trim();
@@ -340,13 +367,13 @@ export default function AttendanceTab({
       a.student_id === selectedStudentForExtra.id &&
       a.date === attendanceDate &&
       (a.class_name || '').trim().toLowerCase() === finalActivity.toLowerCase() &&
-      (a.class_time || '').trim().toLowerCase() === finalTime.toLowerCase()
+      isMatchingTime(a.class_time, finalTime)
     );
 
     const duplicateInScheduled = attendanceItems.some((item) =>
       item.student.id === selectedStudentForExtra.id &&
       (item.class_name || '').trim().toLowerCase() === finalActivity.toLowerCase() &&
-      (item.class_time || '').trim().toLowerCase() === finalTime.toLowerCase()
+      isMatchingTime(item.class_time, finalTime)
     );
 
     if (duplicateInDb || duplicateInScheduled) {
@@ -817,15 +844,25 @@ export default function AttendanceTab({
                 Time Slot:
               </label>
               <select
-                value={extraTimeSlot || (availableBatchTimings[0] || '')}
+                value={extraTimeSlot || (allAvailableTimingsCombined[0] || '')}
                 onChange={(e) => setExtraTimeSlot(e.target.value)}
                 className={`w-full text-xs font-bold px-3 py-2 rounded-xl border outline-none ${
                   isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-slate-100'
                 }`}
               >
-                {availableBatchTimings.map(ts => (
-                  <option key={ts} value={ts}>{ts}</option>
-                ))}
+                <optgroup label="Batch Timings (All Available)">
+                  {batchTimingsList.map(ts => (
+                    <option key={ts} value={ts}>{ts}</option>
+                  ))}
+                </optgroup>
+                {batchSlotRangesList.length > 0 && (
+                  <optgroup label="Batch Slot Ranges (Start - End)">
+                    {batchSlotRangesList.map(ts => (
+                      <option key={ts} value={ts}>{ts}</option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value="Other (Custom)">Other (Custom)</option>
               </select>
               {extraTimeSlot === 'Other (Custom)' && (
                 <input

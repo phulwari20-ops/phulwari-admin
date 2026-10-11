@@ -310,6 +310,42 @@ export default function StudentErpModal({
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   const [expandedFeeHead, setExpandedFeeHead] = useState<string | null>(null)
 
+  // Issue 20: Package Renewal Logic calculation
+  const defaultPackageClasses = React.useMemo(() => {
+    if (!student) return 20;
+    if (student.custom_days) {
+      const daysCount = student.custom_days.split(', ').filter(Boolean).length;
+      if (daysCount > 0) return daysCount * 4;
+    }
+    if (student.classes_assigned && Number(student.classes_assigned) > 0) {
+      return Number(student.classes_assigned);
+    }
+    if (student.batch_id) {
+      const bObj = allAvailableBatches?.find((b: any) => b.id === student.batch_id);
+      if (bObj?.classes_total) return Number(bObj.classes_total);
+    }
+    const raw = Number(student.classes_total || 20);
+    if (raw > 24) {
+      if (raw % 20 === 0) return 20;
+      if (raw % 12 === 0) return 12;
+      if (raw % 16 === 0) return 16;
+      if (raw % 8 === 0) return 8;
+      return 20;
+    }
+    return raw > 0 ? raw : 20;
+  }, [student, allAvailableBatches]);
+
+  const [renewalPackageClasses, setRenewalPackageClasses] = useState<number>(defaultPackageClasses);
+
+  React.useEffect(() => {
+    setRenewalPackageClasses(defaultPackageClasses);
+  }, [defaultPackageClasses]);
+
+  const currentTotal = Number(student?.classes_total || defaultPackageClasses);
+  const currentConsumed = Number(student?.classes_consumed || 0);
+  const previousRemaining = currentTotal - currentConsumed;
+  const simulatedNewRemaining = (renewalPackageClasses || 20) + previousRemaining;
+
   // Money Input Edit Modal State
   const [amountEditModal, setAmountEditModal] = useState<{
     isOpen: boolean
@@ -581,34 +617,13 @@ export default function StudentErpModal({
       //    New Package = 20 classes. New Remaining = 20 + 0 = 20 classes. newConsumed = 0.
       const hasPaidFee = feeRows.some(r => Number(r.paid_amount || 0) > 0 || r.status === 'paid');
       if (hasPaidFee) {
-        let packageClasses = 12;
-        if (student.custom_days) {
-          const daysCount = student.custom_days.split(', ').filter(Boolean).length;
-          if (daysCount > 0) packageClasses = daysCount * 4;
-        } else if (student.classes_assigned && Number(student.classes_assigned) > 0) {
-          packageClasses = Number(student.classes_assigned);
-        } else if (student.batch_id) {
-          const bObj = allAvailableBatches?.find((b: any) => b.id === student.batch_id);
-          if (bObj?.classes_total) packageClasses = Number(bObj.classes_total);
-        } else if (student.classes_total && Number(student.classes_total) > 0) {
-          const raw = Number(student.classes_total);
-          // Normalize if classes_total was previously multiplied/doubled (e.g., 40, 48)
-          if (raw > 24) {
-            if (raw % 20 === 0) packageClasses = 20;
-            else if (raw % 12 === 0) packageClasses = 12;
-            else if (raw % 16 === 0) packageClasses = 16;
-            else if (raw % 8 === 0) packageClasses = 8;
-            else packageClasses = 20;
-          } else {
-            packageClasses = raw;
-          }
-        }
+        const packageClasses = Number(renewalPackageClasses || defaultPackageClasses || 20);
 
         const oldTotal = Number(student.classes_total || packageClasses);
         const oldConsumed = Number(student.classes_consumed || 0);
         const previousRemaining = oldTotal - oldConsumed;
 
-        // 1. Package / Entitlement always stays strictly the current purchased package
+        // 1. Package / Entitlement always stays strictly the current purchased package (e.g. 20)
         studentUpdates.classes_total = packageClasses;
 
         // 2. Remaining Classes carries forward previous balance:
@@ -624,7 +639,6 @@ export default function StudentErpModal({
             ? new Date(student.validity_end_date)
             : new Date();
           baseDate.setDate(baseDate.getDate() + 30);
-          studentUpdates.validity_end_date = baseDate.toISOString().split('T')[0];
         }
       }
 
@@ -969,6 +983,49 @@ export default function StudentErpModal({
                 <input type="text" readOnly
                   value={allAvailableBatches?.find(b => b.id === student.batch_id)?.name || student.class_name || 'General'}
                   className={`${inputCls} opacity-70 cursor-not-allowed`} />
+              </div>
+            </div>
+
+            {/* ── Package Renewal Entitlement & Balance Carry-Forward Banner (Issue 20) ── */}
+            <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isLight ? 'bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 border-blue-200' : 'bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 border-blue-800'
+            }`}>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm">📦</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                    Package Renewal Entitlement &amp; Balance Logic
+                  </span>
+                </div>
+                <p className={`text-[11px] ${textSecondary}`}>
+                  Purchased package stays strictly in the package field. Previous balance is carried forward into Remaining Classes.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-blue-800 dark:text-blue-200 block">
+                    Renewal Package (Classes):
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={renewalPackageClasses}
+                    onChange={e => setRenewalPackageClasses(Math.max(1, parseInt(e.target.value) || 1))}
+                    className={`w-28 text-xs font-bold px-2.5 py-1.5 rounded-xl border outline-none ${
+                      isLight ? 'bg-white border-blue-300 text-slate-900' : 'bg-slate-900 border-blue-700 text-slate-100'
+                    }`}
+                  />
+                </div>
+                <div className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border ${
+                  isLight ? 'bg-white/90 border-blue-200 text-slate-800' : 'bg-slate-900/90 border-blue-800 text-slate-200'
+                }`}>
+                  <div>New Package: <strong className="text-blue-600">{renewalPackageClasses}</strong></div>
+                  <div>Previous Remaining: <strong className={previousRemaining >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{previousRemaining >= 0 ? `+${previousRemaining}` : previousRemaining}</strong></div>
+                  <div className="border-t border-slate-200 dark:border-slate-800 pt-0.5 font-bold text-emerald-600 dark:text-emerald-400">
+                    New Remaining: <strong>{simulatedNewRemaining}</strong> classes
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1560,9 +1617,9 @@ export default function StudentErpModal({
                   <h4 className="font-bold text-green-600 uppercase tracking-wider text-[10px]">4. Program & Validity</h4>
                   <button onClick={() => setErpModalTab('edit_details')} className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5">✏️ Edit</button>
                 </div>
-                <p><strong className={textSecondary}>Package Entitlement:</strong> {student.classes_total || 12} classes</p>
-                <p><strong className={textSecondary}>Consumed Classes:</strong> {student.classes_consumed || 0}</p>
-                <p><strong className={textSecondary}>Remaining Classes:</strong> <span className="font-extrabold text-blue-600">{(student.classes_total || 12) - (student.classes_consumed || 0)}</span> classes</p>
+                <p><strong className={textSecondary}>Package Entitlement:</strong> {student.classes_total || 20} classes</p>
+                <p><strong className={textSecondary}>Consumed Classes:</strong> {student.classes_consumed !== undefined && student.classes_consumed < 0 ? `0 (${Math.abs(student.classes_consumed)} classes carried forward from previous package)` : (student.classes_consumed || 0)}</p>
+                <p><strong className={textSecondary}>Remaining Classes:</strong> <span className="font-extrabold text-blue-600">{(student.classes_total || 20) - (student.classes_consumed || 0)}</span> classes</p>
                 <p><strong className={textSecondary}>Validity End Date:</strong> {formatDateToDisplay(student.validity_end_date) || 'N/A'}</p>
               </div>
 

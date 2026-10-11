@@ -342,7 +342,15 @@ export default function AdminDashboardPage() {
   const [batchSchedules, setBatchSchedules] = useState<any[]>([])
   const [studentCustomSchedules, setStudentCustomSchedules] = useState<any[]>([])
   const [holidays, setHolidays] = useState<any[]>([])
-  const [classes, setClasses] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('phulwari_admin_classes')
+        if (cached) return JSON.parse(cached)
+      } catch (_) {}
+    }
+    return []
+  })
 
   // Class Master drives every "which class" dropdown (batch schedules, custom
   // student schedules). Falls back to the built-in list until the `classes`
@@ -1379,7 +1387,10 @@ export default function AdminDashboardPage() {
       if (batchSchRes.data) setBatchSchedules(batchSchRes.data)
       if (custSchRes.data) setStudentCustomSchedules(custSchRes.data)
       if (holidaysRes.data) setHolidays(holidaysRes.data)
-      if (classesRes.data) setClasses(classesRes.data)
+      if (classesRes.data) {
+        setClasses(classesRes.data)
+        try { localStorage.setItem('phulwari_admin_classes', JSON.stringify(classesRes.data)) } catch (_) {}
+      }
 
       // 11. Attendance
       if (attendanceRes.data) {
@@ -2751,7 +2762,7 @@ Management Phulwari Mother and Child Activity Centre`
 
     // Auto-renew package entitlement & validity when fee is marked paid (Issue 11)
     if (feeForm.status === 'paid' && selectedERPStudent) {
-      let packageClasses = 12;
+      let packageClasses = 20;
       if (selectedERPStudent.custom_days) {
         const daysCount = selectedERPStudent.custom_days.split(', ').filter(Boolean).length;
         if (daysCount > 0) packageClasses = daysCount * 4;
@@ -2761,7 +2772,16 @@ Management Phulwari Mother and Child Activity Centre`
         const bObj = batches?.find((b: any) => b.id === selectedERPStudent.batch_id);
         if (bObj?.classes_total) packageClasses = Number(bObj.classes_total);
       } else if (selectedERPStudent.classes_total && Number(selectedERPStudent.classes_total) > 0) {
-        packageClasses = Number(selectedERPStudent.classes_total);
+        const raw = Number(selectedERPStudent.classes_total);
+        if (raw > 24) {
+          if (raw % 20 === 0) packageClasses = 20;
+          else if (raw % 12 === 0) packageClasses = 12;
+          else if (raw % 16 === 0) packageClasses = 16;
+          else if (raw % 8 === 0) packageClasses = 8;
+          else packageClasses = 20;
+        } else {
+          packageClasses = raw;
+        }
       }
 
       const oldTotal = Number(selectedERPStudent.classes_total || packageClasses);
@@ -3037,7 +3057,13 @@ Management Phulwari Mother and Child Activity Centre`
         .insert([{ class_name: className }])
         .select()
       if (error) throw error
-      if (data) setClasses(prev => [...prev, ...data])
+      if (data) {
+        setClasses(prev => {
+          const next = [...prev, ...data]
+          try { localStorage.setItem('phulwari_admin_classes', JSON.stringify(next)) } catch (_) {}
+          return next
+        })
+      }
       return true
     } catch (err: any) {
       console.error('❌ [CLASS MASTER INSERT ERROR]:', err)
@@ -3162,7 +3188,8 @@ Management Phulwari Mother and Child Activity Centre`
 
       if (consumedDiff !== 0 && targetStudent) {
         const currentConsumed = Number(targetStudent.classes_consumed || 0)
-        const newConsumed = Math.max(0, currentConsumed + consumedDiff)
+        // Preserve carried over renewal balance (do not clamp to 0)
+        const newConsumed = currentConsumed + consumedDiff
         setStudents(prev => prev.map(s => s.id === targetStudent.id ? { ...s, classes_consumed: newConsumed } : s))
         try {
           await supabase.from('students').update({ classes_consumed: newConsumed }).eq('id', targetStudent.id)
@@ -3213,7 +3240,8 @@ Management Phulwari Mother and Child Activity Centre`
 
     if (consumedDiff !== 0 && targetStudent) {
       const currentConsumed = Number(targetStudent.classes_consumed || 0)
-      const newConsumed = Math.max(0, currentConsumed + consumedDiff)
+      // Preserve carried over renewal balance (do not clamp to 0)
+      const newConsumed = currentConsumed + consumedDiff
 
       // Update student local state optimistically
       setStudents(prev => prev.map(s => s.id === targetStudent.id ? { ...s, classes_consumed: newConsumed } : s))
